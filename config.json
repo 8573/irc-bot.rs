@@ -1,0 +1,10 @@
+{
+  "owners": ["c74d"],
+  "nickname": "bot74d",
+  "username": "bot74d",
+  "realname": "bot74d",
+  "server": "irc.mozilla.org",
+  "port": 6697,
+  "use_ssl": true,
+  "options": {}
+}
