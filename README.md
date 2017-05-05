@@ -1,4 +1,4 @@
-irc-bot.rs [![docs.rs][b-docs]][docs]
+irc-bot.rs [![Docs.rs][b-docs]][docs]
 ===
 
 A library for writing [Internet Relay Chat (IRC) bots] in the programming
