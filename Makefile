@@ -10,3 +10,6 @@ clean:
 
 fmt:
 	@nix-shell --run 'cargo-fmt'
+
+shell:
+	@nix-shell
