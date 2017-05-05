@@ -348,7 +348,8 @@ impl<'server, 'modl> State<'server, 'modl> {
                     match (mode, self.commands.get(feature.name())) {
                         (_, None) |
                         (ModuleLoadMode::Force, _) => None,
-                        (ModuleLoadMode::Replace, Some(old)) if old.provider == provider => None,
+                        (ModuleLoadMode::Replace, Some(old)) if old.provider.name ==
+                                                                provider.name => None,
                         (ModuleLoadMode::Replace, Some(old)) => Some(old.dbg_info()),
                         (ModuleLoadMode::Add, Some(old)) => Some(old.dbg_info()),
                     }
