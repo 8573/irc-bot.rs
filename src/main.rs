@@ -1,5 +1,7 @@
 extern crate clap;
 extern crate irc;
+extern crate itertools;
+extern crate uuid;
 
 #[macro_use]
 extern crate error_chain;
@@ -11,12 +13,15 @@ use std::io;
 use std::io::Write as IoWrite;
 
 mod core;
+mod modules;
 
 const PROGRAM_NAME: &'static str = "bot74d";
 
 fn main() {
     let args = clap::App::new(PROGRAM_NAME)
-        .arg(clap::Arg::with_name("config-file").short("c").default_value("config.json"))
+        .arg(clap::Arg::with_name("config-file")
+                 .short("c")
+                 .default_value("config.json"))
         .get_matches();
 
     let log_lvl = log::LogLevelFilter::Info;
@@ -28,8 +33,11 @@ fn main() {
             .expect("error: failed to initialize logging");
 
     core::run(args.value_of("config-file").expect("default missing?"),
-              |err| error!("{}", err),
-              vec![]);
+              |err| {
+                  error!("{}", err);
+                  core::ErrorReaction::Proceed
+              },
+              vec![modules::default(), modules::test()]);
 }
 
 
