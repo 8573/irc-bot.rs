@@ -1,19 +1,12 @@
 extern crate clap;
-extern crate irc;
-extern crate itertools;
-extern crate uuid;
-
-#[macro_use]
-extern crate error_chain;
+extern crate irc_bot;
 
 #[macro_use]
 extern crate log;
 
+use irc_bot::modules;
 use std::io;
 use std::io::Write as IoWrite;
-
-mod core;
-mod modules;
 
 const PROGRAM_NAME: &'static str = "bot74d";
 
@@ -32,12 +25,12 @@ fn main() {
                     })
             .expect("error: failed to initialize logging");
 
-    core::run(args.value_of("config-file").expect("default missing?"),
-              |err| {
-                  error!("{}", err);
-                  core::ErrorReaction::Proceed
-              },
-              &[modules::default(), modules::test()]);
+    irc_bot::run(args.value_of("config-file").expect("default missing?"),
+                 |err| {
+                     error!("{}", err);
+                     irc_bot::ErrorReaction::Proceed
+                 },
+                 &[modules::default(), modules::test()]);
 }
 
 

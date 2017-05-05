@@ -1,8 +1,3 @@
-extern crate clap;
-extern crate irc;
-extern crate itertools;
-extern crate uuid;
-
 use irc::client::prelude::*;
 use itertools::Itertools;
 use std;
