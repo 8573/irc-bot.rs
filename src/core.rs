@@ -37,7 +37,7 @@ pub struct State<'server, 'modl> {
     msg_prefix_string: String,
 }
 
-pub trait GetDebugInfo {
+trait GetDebugInfo {
     type Output;
 
     fn dbg_info(&self) -> Self::Output;
@@ -288,7 +288,7 @@ pub fn run<'modl, P, ErrF, Modls>(irc_config_json_path: P, mut error_handler: Er
 
 
 impl<'server, 'modl> State<'server, 'modl> {
-    pub fn new(server: &'server IrcServer) -> State<'server, 'modl> {
+    fn new(server: &'server IrcServer) -> State<'server, 'modl> {
         State {
             server: server,
             addressee_suffix: ": ".into(),
@@ -416,7 +416,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         };
     }
 
-    pub fn run<ErrF>(&mut self, mut error_handler: ErrF)
+    fn run<ErrF>(&mut self, mut error_handler: ErrF)
         where ErrF: FnMut(Error) -> ErrorReaction
     {
         trace!("Running bot....");
