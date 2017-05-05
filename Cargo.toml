@@ -5,6 +5,7 @@ authors = ["c74d <8573dd@gmail.com>"]
 
 [dependencies]
 clap = "2"
+env_logger = "0.4"
 error-chain = "0.10"
 irc = "0.11"
 itertools = "0.6"
