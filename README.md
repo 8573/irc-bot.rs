@@ -1,4 +1,4 @@
-irc-bot.rs [![Docs.rs][b-docs]][docs]
+irc-bot.rs [![Docs.rs][b-docs]][docs] [![Crates.io][b-crate]][crate]
 ===
 
 A library for writing [Internet Relay Chat (IRC) bots] in the programming
@@ -12,6 +12,9 @@ What documentation there is should be available [on Docs.rs][docs].
 
 [docs]: <https://docs.rs/irc-bot>
 [b-docs]: <https://docs.rs/irc-bot/badge.svg>
+
+[crate]: <https://crates.io/crates/irc-bot>
+[b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
 
 
 Quick-start
