@@ -1,8 +1,8 @@
 {
-  "owners": ["c74d"],
-  "nickname": "bot74d",
-  "username": "bot74d",
-  "realname": "bot74d",
+  "owners": [],
+  "nickname": "egbot",
+  "username": "egbot",
+  "realname": "egbot",
   "server": "irc.mozilla.org",
   "port": 6697,
   "use_ssl": true,

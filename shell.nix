@@ -11,7 +11,7 @@ let
 in
 
 stdenv.mkDerivation rec {
-  name = "bot74d";
+  name = "irc-bot.rs";
 
   nativeBuildInputs = [
     cargo

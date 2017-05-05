@@ -7,10 +7,8 @@ extern crate log;
 
 use irc_bot::modules;
 
-const PROGRAM_NAME: &'static str = "bot74d";
-
 fn main() {
-    let args = clap::App::new(PROGRAM_NAME)
+    let args = clap::App::new("egbot")
         .arg(clap::Arg::with_name("config-file")
                  .short("c")
                  .default_value("config.json"))
