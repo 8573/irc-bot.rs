@@ -45,3 +45,21 @@ the `owners` field — e.g., if one's nick is ["Ferris"]:
 [the `irc` crate]: <https://crates.io/crates/irc>
 [`irc` config]: <https://github.com/aatxe/irc#configuration>
 ["Ferris"]: <http://www.rustacean.net>
+
+
+Building
+---
+
+For most users, it should suffice to simply use **[Cargo]**:
+
+    $ cargo build
+
+[Cargo]: <http://doc.crates.io>
+
+Users of the Linux distribution **[NixOS]** may prefer to use the provided
+[`Makefile`], which wraps the tool `nix-shell`:
+
+    $ make build
+
+[NixOS]: <https://nixos.org>
+[`Makefile`]: <https://github.com/8573/irc-bot.rs/blob/master/Makefile>
