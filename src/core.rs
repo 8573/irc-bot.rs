@@ -523,6 +523,13 @@ impl<'server, 'modl> State<'server, 'modl> {
         self.server.current_nickname()
     }
 
+    pub fn have_module_feature(&self, kind: ModuleFeatureKind, name: &str) -> bool {
+        match kind {
+            ModuleFeatureKind::Command => self.commands.contains_key(name),
+            ModuleFeatureKind::Trigger => unimplemented!(),
+        }
+    }
+
     pub fn have_owner(&self, MsgPrefix { nick, user, .. }: MsgPrefix) -> Result<bool> {
         let cfg_key = "owner-auth-check-policy".to_string();
         let default = "nick-only".to_string();
