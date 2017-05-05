@@ -2,6 +2,13 @@
 name = "irc-bot"
 version = "0.1.0"
 authors = ["c74d <8573dd@gmail.com>"]
+description = "A library for writing Internet Relay Chat (IRC) bots in Rust"
+documentation = "https://docs.rs/irc-bot"
+repository = "https://github.com/8573/irc-bot.rs"
+readme = "README.md"
+keywords = ["irc", "internet-relay-chat", "internet_relay_chat", "bot", "bots"]
+categories = ["network-programming"]
+license = "Apache-2.0"
 
 [dependencies]
 clap = "2"
