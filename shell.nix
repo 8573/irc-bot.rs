@@ -6,7 +6,6 @@ let
     clang
     rustc
     rustfmt
-    ncurses
     openssl
   ;
 in
@@ -22,7 +21,6 @@ stdenv.mkDerivation rec {
   ];
 
   buildInputs = [
-    ncurses
     openssl
   ];
 
