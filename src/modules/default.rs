@@ -2,13 +2,10 @@ use core::*;
 use irc::client::prelude::*;
 use std::rc::Rc;
 
-pub fn mk() -> Module {
-    Module::new("default".into(),
-                vec![ModuleFeature::Command {
-                         name: "join".into(),
-                         usage: "<channel>".into(),
-                         handler: Rc::new(join_cmd),
-                     }])
+pub fn mk<'a>() -> Module<'a> {
+    mk_module("default")
+        .with_command("join", "<channel>", Box::new(join_cmd))
+        .end()
 }
 
 fn join_cmd(state: &State, &MsgMetadata { prefix, .. }: &MsgMetadata, arg: &str) -> BotCmdResult {

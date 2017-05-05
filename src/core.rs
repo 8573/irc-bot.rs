@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::io;
 use std::iter;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::rc::Rc;
 use std::str;
@@ -38,7 +39,7 @@ pub struct State<'server, 'modl> {
     server: &'server IrcServer,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
-    modules: BTreeMap<Cow<'static, str>, &'modl Module>,
+    modules: BTreeMap<Cow<'static, str>, &'modl Module<'modl>>,
     commands: BTreeMap<Cow<'static, str>, BotCommand<'modl>>,
     msg_prefix_string: String,
 }
@@ -49,25 +50,15 @@ pub trait GetDebugInfo {
     fn dbg_info(&self) -> Self::Output;
 }
 
-#[derive(Clone)]
-pub struct Module {
+pub struct Module<'modl> {
     name: Cow<'static, str>,
     uuid: Uuid,
-    features: Vec<ModuleFeature>,
+    features: Vec<ModuleFeature<'modl>>,
+    _lifetime: PhantomData<&'modl ()>,
 }
 
-impl Module {
-    pub fn new(name: Cow<'static, str>, features: Vec<ModuleFeature>) -> Module {
-        Module {
-            name: name,
-            uuid: Uuid::new_v4(),
-            features: features,
-        }
-    }
-}
-
-impl PartialEq for Module {
-    fn eq(&self, other: &Module) -> bool {
+impl<'modl> PartialEq for Module<'modl> {
+    fn eq(&self, other: &Self) -> bool {
         if self.uuid == other.uuid {
             debug_assert_eq!(self.name, other.name);
             true
@@ -77,13 +68,57 @@ impl PartialEq for Module {
     }
 }
 
-impl Eq for Module {}
+impl<'modl> Eq for Module<'modl> {}
 
-impl<'a, 'b> GetDebugInfo for Module {
+impl<'modl> GetDebugInfo for Module<'modl> {
     type Output = ModuleInfo;
 
     fn dbg_info(&self) -> ModuleInfo {
         ModuleInfo { name: self.name.to_string() }
+    }
+}
+
+pub struct ModuleBuilder<'modl> {
+    name: Cow<'static, str>,
+    features: Vec<ModuleFeature<'modl>>,
+}
+
+pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
+    where S: Into<Cow<'static, str>>
+{
+    ModuleBuilder {
+        name: name.into(),
+        features: Default::default(),
+    }
+}
+
+impl<'modl> ModuleBuilder<'modl> {
+    pub fn with_command<S1, S2>(mut self, name: S1, syntax: S2, handler: Box<BotCmdHandler>) -> Self
+        where S1: Into<Cow<'static, str>>,
+              S2: Into<Cow<'static, str>>
+    {
+        self.features
+            .push(ModuleFeature::Command {
+                      name: name.into(),
+                      usage: syntax.into(),
+                      handler: handler,
+                      _lifetime: PhantomData,
+                  });
+
+        self
+    }
+
+    pub fn end(self) -> Module<'modl> {
+        let ModuleBuilder { name, mut features } = self;
+
+        features.shrink_to_fit();
+
+        Module {
+            name: name,
+            uuid: Uuid::new_v4(),
+            features: features,
+            _lifetime: PhantomData,
+        }
     }
 }
 
@@ -93,17 +128,17 @@ pub struct ModuleInfo {
     name: String,
 }
 
-#[derive(Clone)]
-pub enum ModuleFeature {
+enum ModuleFeature<'modl> {
     Command {
         name: Cow<'static, str>,
         usage: Cow<'static, str>,
-        handler: Rc<BotCmdHandler>,
+        handler: Box<BotCmdHandler>,
+        _lifetime: PhantomData<&'modl ()>,
     },
     Trigger,
 }
 
-impl GetDebugInfo for ModuleFeature {
+impl<'modl> GetDebugInfo for ModuleFeature<'modl> {
     type Output = ModuleFeatureInfo;
 
     fn dbg_info(&self) -> ModuleFeatureInfo {
@@ -131,15 +166,15 @@ pub enum ModuleFeatureKind {
     Trigger,
 }
 
-impl ModuleFeature {
-    pub fn name(&self) -> &str {
+impl<'modl> ModuleFeature<'modl> {
+    fn name(&self) -> &str {
         match self {
             &ModuleFeature::Command { ref name, .. } => name.as_ref(),
             &ModuleFeature::Trigger => unimplemented!(),
         }
     }
 
-    // pub fn provider(&self) -> &Module {
+    // fn provider(&self) -> &Module {
     //     match self {
     //         &ModuleFeature::Command { provider, .. } => provider,
     //         &ModuleFeature::Trigger => unimplemented!(),
@@ -158,8 +193,8 @@ pub enum Reaction {
 
 struct BotCommand<'modl> {
     name: Cow<'static, str>,
-    provider: &'modl Module,
-    handler: Rc<BotCmdHandler>,
+    provider: &'modl Module<'modl>,
+    handler: &'modl BotCmdHandler,
     usage: Cow<'static, str>,
 }
 
@@ -221,7 +256,7 @@ pub enum ModuleLoadMode {
 pub fn run<'modl, P, ErrF, Modls>(irc_config_json_path: P, mut error_handler: ErrF, modules: Modls)
     where P: AsRef<Path>,
           ErrF: FnMut(Error) -> ErrorReaction,
-          Modls: Into<Cow<'modl, [Module]>>
+          Modls: AsRef<[Module<'modl>]>
 {
     let server = match IrcServer::new(irc_config_json_path) {
         Ok(s) => s,
@@ -241,10 +276,9 @@ pub fn run<'modl, P, ErrF, Modls>(irc_config_json_path: P, mut error_handler: Er
         }
     };
 
-    let modules = modules.into();
     let mut state = State::new(&server);
 
-    match state.load_modules(modules.iter(), ModuleLoadMode::Add) {
+    match state.load_modules(modules.as_ref().iter(), ModuleLoadMode::Add) {
         Ok(()) => {}
         Err(errs) => {
             for err in errs {
@@ -282,7 +316,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                                modules: Modls,
                                mode: ModuleLoadMode)
                                -> std::result::Result<(), Vec<Error>>
-        where Modls: IntoIterator<Item = &'modl Module>
+        where Modls: IntoIterator<Item = &'modl Module<'modl>>
     {
         let errs = modules
             .into_iter()
@@ -337,7 +371,7 @@ impl<'server, 'modl> State<'server, 'modl> {
 
     fn load_module_feature(&mut self,
                            provider: &'modl Module,
-                           feature: &ModuleFeature,
+                           feature: &'modl ModuleFeature,
                            mode: ModuleLoadMode)
                            -> Result<()> {
         debug!("Loading module feature (f1): {:?}", feature.dbg_info());
@@ -364,7 +398,9 @@ impl<'server, 'modl> State<'server, 'modl> {
         Ok(())
     }
 
-    fn force_load_module_feature(&mut self, provider: &'modl Module, feature: &ModuleFeature) {
+    fn force_load_module_feature(&mut self,
+                                 provider: &'modl Module,
+                                 feature: &'modl ModuleFeature) {
         debug!("Loading module feature (f2): {:?}", feature.dbg_info());
 
         match feature {
@@ -372,13 +408,14 @@ impl<'server, 'modl> State<'server, 'modl> {
                  ref name,
                  ref handler,
                  ref usage,
+                 _lifetime: _,
              } => {
                 self.commands
                     .insert(name.clone(),
                             BotCommand {
                                 provider: provider,
                                 name: name.clone(),
-                                handler: handler.clone(),
+                                handler: handler.as_ref(),
                                 usage: usage.clone(),
                             })
             }

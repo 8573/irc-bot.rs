@@ -37,7 +37,7 @@ fn main() {
                   error!("{}", err);
                   core::ErrorReaction::Proceed
               },
-              vec![modules::default(), modules::test()]);
+              &[modules::default(), modules::test()]);
 }
 
 

@@ -2,13 +2,10 @@ use core::*;
 use irc::client::prelude::*;
 use std::rc::Rc;
 
-pub fn mk() -> Module {
-    Module::new("test".into(),
-                vec![ModuleFeature::Command {
-                         name: "test-line-wrap".into(),
-                         usage: "".into(),
-                         handler: Rc::new(test_line_wrap),
-                     }])
+pub fn mk<'a>() -> Module<'a> {
+    mk_module("test")
+        .with_command("test-line-wrap", "", Box::new(test_line_wrap))
+        .end()
 }
 
 const LOREM_IPSUM_TEXT: &'static str =
