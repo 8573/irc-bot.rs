@@ -1,6 +1,4 @@
 use core::*;
-use irc::client::prelude::*;
-use std::rc::Rc;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("test")
@@ -24,7 +22,7 @@ const LOREM_IPSUM_TEXT: &'static str =
 
 fn test_line_wrap(state: &State,
                   &MsgMetadata { prefix, .. }: &MsgMetadata,
-                  arg: &str)
+                  _: &str)
                   -> BotCmdResult {
     match state.have_owner(prefix) {
         Ok(true) => BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into())),

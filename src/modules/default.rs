@@ -1,6 +1,5 @@
 use core::*;
 use irc::client::prelude::*;
-use std::rc::Rc;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("default")

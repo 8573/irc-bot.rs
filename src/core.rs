@@ -7,10 +7,8 @@ use std::cmp;
 use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::io;
-use std::iter;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::rc::Rc;
 use std::str;
 use uuid::Uuid;
 
@@ -645,7 +643,7 @@ fn handle_msg(state: &mut State, input_msg: io::Result<Message>) -> Result<()> {
 
 fn handle_privmsg(state: &mut State, raw_msg: Message) -> Result<()> {
     let Message {
-        ref tags,
+        tags: _,
         ref prefix,
         ref command,
     } = raw_msg;
