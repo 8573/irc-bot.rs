@@ -86,7 +86,12 @@ pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
 }
 
 impl<'modl> ModuleBuilder<'modl> {
-    pub fn with_command<S1, S2>(mut self, name: S1, syntax: S2, handler: Box<BotCmdHandler>) -> Self
+    pub fn with_command<S1, S2>(mut self,
+                                name: S1,
+                                syntax: S2,
+                                auth_lvl: BotCmdAuthLvl,
+                                handler: Box<BotCmdHandler>)
+                                -> Self
         where S1: Into<Cow<'static, str>>,
               S2: Into<Cow<'static, str>>
     {
@@ -94,6 +99,7 @@ impl<'modl> ModuleBuilder<'modl> {
             .push(ModuleFeature::Command {
                       name: name.into(),
                       usage: syntax.into(),
+                      auth_lvl: auth_lvl,
                       handler: handler,
                       _lifetime: PhantomData,
                   });
@@ -125,6 +131,7 @@ enum ModuleFeature<'modl> {
     Command {
         name: Cow<'static, str>,
         usage: Cow<'static, str>,
+        auth_lvl: BotCmdAuthLvl,
         handler: Box<BotCmdHandler>,
         _lifetime: PhantomData<&'modl ()>,
     },
@@ -187,6 +194,7 @@ pub enum Reaction {
 struct BotCommand<'modl> {
     name: Cow<'static, str>,
     provider: &'modl Module<'modl>,
+    auth_lvl: BotCmdAuthLvl,
     handler: &'modl BotCmdHandler,
     usage: Cow<'static, str>,
 }
@@ -199,6 +207,12 @@ pub enum BotCmdResult {
     Misused,
     Unauthorized,
     Err(Error),
+}
+
+#[derive(Clone, Debug)]
+pub enum BotCmdAuthLvl {
+    Public,
+    Owner,
 }
 
 impl<'modl> GetDebugInfo for BotCommand<'modl> {
@@ -400,6 +414,7 @@ impl<'server, 'modl> State<'server, 'modl> {
             &ModuleFeature::Command {
                  ref name,
                  ref handler,
+                 ref auth_lvl,
                  ref usage,
                  _lifetime: _,
              } => {
@@ -408,6 +423,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                             BotCommand {
                                 provider: provider,
                                 name: name.clone(),
+                                auth_lvl: auth_lvl.clone(),
                                 handler: handler.as_ref(),
                                 usage: usage.clone(),
                             })
@@ -598,30 +614,59 @@ impl<'server, 'modl> State<'server, 'modl> {
         let cmd_name = cmd_name_and_args.next().unwrap_or("");
         let cmd_args = cmd_name_and_args.next().unwrap_or("");
 
-        let reaction = if let Some(&BotCommand {
-                                        ref name,
-                                        ref handler,
-                                        ref usage,
-                                        ..
-                                    }) = self.commands.get(cmd_name) {
-            match (handler)(self, msg_md, cmd_args) {
-                BotCmdResult::Ok(r) => r,
-                BotCmdResult::Misused => {
-                    Reaction::Reply(format!("Syntax: {} {}", name, usage).into())
-                }
-                BotCmdResult::Unauthorized => {
-                    Reaction::Reply(format!("My apologies, but you do not appear to have \
-                                             sufficient authority to use my {:?} command.",
-                                            name)
-                                            .into())
-                }
-                BotCmdResult::Err(e) => Reaction::Reply(format!("{}", e).into()),
-            }
-        } else {
-            Reaction::Reply(format!("Unknown command {:?}; apologies.", cmd_name).into())
+        self.handle_reaction(msg_md,
+                             self.bot_command_reaction(msg_md, cmd_name, cmd_args))
+    }
+
+    fn run_bot_command(&self, msg_md: &MsgMetadata, &BotCommand {
+                 name: _,
+                 provider: _,
+                 ref auth_lvl,
+                 ref handler,
+                 usage: _,
+}: &BotCommand, cmd_args: &str) -> BotCmdResult{
+
+        let user_authorized = match auth_lvl {
+            &BotCmdAuthLvl::Public => Ok(true),
+            &BotCmdAuthLvl::Owner => self.have_owner(msg_md.prefix),
         };
 
-        self.handle_reaction(msg_md, reaction)
+        match user_authorized {
+            Ok(true) => (handler)(self, msg_md, cmd_args),
+            Ok(false) => BotCmdResult::Unauthorized,
+            Err(e) => BotCmdResult::Err(e),
+        }
+    }
+
+    fn bot_command_reaction(&self,
+                            msg_md: &MsgMetadata,
+                            cmd_name: &str,
+                            cmd_args: &str)
+                            -> Reaction {
+        let cmd = match self.commands.get(cmd_name) {
+            Some(c) => c,
+            None => {
+                return Reaction::Reply(format!("Unknown command {:?}; apologies.", cmd_name).into())
+            }
+        };
+
+        let &BotCommand {
+                 ref name,
+                 ref usage,
+                 ..
+             } = cmd;
+
+        match self.run_bot_command(msg_md, cmd, cmd_args) {
+            BotCmdResult::Ok(r) => r,
+            BotCmdResult::Misused => Reaction::Reply(format!("Syntax: {} {}", name, usage).into()),
+            BotCmdResult::Unauthorized => {
+                Reaction::Reply(format!("My apologies, but you do not appear to have sufficient \
+                                         authority to use my {:?} command.",
+                                        name)
+                                        .into())
+            }
+            BotCmdResult::Err(e) => Reaction::Reply(format!("Error: {}", e).into()),
+        }
     }
 }
 

@@ -1,8 +1,9 @@
 use core::*;
+use core::BotCmdAuthLvl as Auth;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("test")
-        .with_command("test-line-wrap", "", Box::new(test_line_wrap))
+        .with_command("test-line-wrap", "", Auth::Owner, Box::new(test_line_wrap))
         .end()
 }
 
@@ -20,13 +21,6 @@ const LOREM_IPSUM_TEXT: &'static str =
      sagittis in. Mauris a lectus nec ligula eleifend rutrum. Class aptent taciti sociosqu ad \
      litora torquent per conubia massa nunc.";
 
-fn test_line_wrap(state: &State,
-                  &MsgMetadata { prefix, .. }: &MsgMetadata,
-                  _: &str)
-                  -> BotCmdResult {
-    match state.have_owner(prefix) {
-        Ok(true) => BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into())),
-        Ok(false) => BotCmdResult::Unauthorized,
-        Err(e) => BotCmdResult::Err(e),
-    }
+fn test_line_wrap(_: &State, _: &MsgMetadata, _: &str) -> BotCmdResult {
+    BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into()))
 }
