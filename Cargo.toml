@@ -18,3 +18,4 @@ irc = "0.11"
 itertools = "0.6"
 log = "0.3"
 uuid = {version = "0.5", features = ["v4"]}
+yamlette = "0.0"

@@ -23,6 +23,7 @@ error_chain! {
         ModuleFeatureRegistryClash(old: ModuleFeatureInfo, new: ModuleFeatureInfo)
         Config(key: String, problem: String)
         MsgPrefixUpdateRequestedButPrefixMissing
+        ModuleRequestedQuit(quit_msg: Option<Cow<'static, str>>)
     }
 }
 
@@ -189,6 +190,7 @@ pub enum Reaction {
     Reply(Cow<'static, str>),
     IrcCmd(Command),
     BotCmd(Cow<'static, str>),
+    Quit(Option<Cow<'static, str>>),
 }
 
 struct BotCommand<'modl> {
@@ -239,7 +241,7 @@ pub enum BotCmdResult {
     BotErrMsg(Cow<'static, str>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BotCmdAuthLvl {
     Public,
     Owner,
@@ -275,7 +277,7 @@ pub struct MsgMetadata<'a> {
 #[derive(Debug)]
 pub enum ErrorReaction {
     Proceed,
-    Quit,
+    Quit(Option<Cow<'static, str>>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -321,7 +323,11 @@ pub fn run<'modl, P, ErrF, Modls>(irc_config_json_path: P, mut error_handler: Er
             for err in errs {
                 match error_handler(err) {
                     ErrorReaction::Proceed => {}
-                    ErrorReaction::Quit => return,
+                    ErrorReaction::Quit(msg) => {
+                        error!("Terminal error while loading modules: {:?}",
+                               msg.unwrap_or_default().as_ref());
+                        return;
+                    }
                 }
             }
         }
@@ -472,10 +478,17 @@ impl<'server, 'modl> State<'server, 'modl> {
               self.commands.keys().collect::<Vec<_>>());
 
         'main_loop: for msg in self.server.iter() {
-            match handle_msg(self, msg).map_err(|e| error_handler(e)) {
+            match handle_msg(self, msg).map_err(|err| match err {
+                                                    Error(ErrorKind::ModuleRequestedQuit(msg),
+                                                          _) => ErrorReaction::Quit(msg),
+                                                    e => error_handler(e),
+                                                }) {
                 Ok(()) => {}
                 Err(ErrorReaction::Proceed) => {}
-                Err(ErrorReaction::Quit) => break 'main_loop,
+                Err(ErrorReaction::Quit(msg)) => {
+                    self.quit(msg);
+                    break 'main_loop;
+                }
             }
         }
     }
@@ -558,6 +571,13 @@ impl<'server, 'modl> State<'server, 'modl> {
         Ok(())
     }
 
+    fn quit<'a>(&self, msg: Option<Cow<'a, str>>) {
+        info!("Quitting. Quit message: {:?}.", msg);
+        self.server
+            .send_quit(msg.unwrap_or_default().as_ref())
+            .unwrap_or_else(|err| error!("Error while quitting: {:?}", err))
+    }
+
     pub fn nick(&self) -> &str {
         self.server.current_nickname()
     }
@@ -630,6 +650,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                 }
             }
             Reaction::BotCmd(cmd_ln) => self.handle_bot_command(msg_md, cmd_ln),
+            Reaction::Quit(msg) => bail!(ErrorKind::ModuleRequestedQuit(msg)),
         }
     }
 
@@ -649,8 +670,8 @@ impl<'server, 'modl> State<'server, 'modl> {
     }
 
     fn run_bot_command(&self, msg_md: &MsgMetadata, &BotCommand {
-                 name: _,
-                 provider: _,
+                 ref name,
+                 ref provider,
                  ref auth_lvl,
                  ref handler,
                  usage: _,
@@ -661,10 +682,28 @@ impl<'server, 'modl> State<'server, 'modl> {
             &BotCmdAuthLvl::Owner => self.have_owner(msg_md.prefix),
         };
 
-        match user_authorized {
+        let result = match user_authorized {
             Ok(true) => (handler)(self, msg_md, cmd_args),
             Ok(false) => BotCmdResult::Unauthorized,
             Err(e) => BotCmdResult::LibErr(e),
+        };
+
+        match result {
+            BotCmdResult::Ok(Reaction::Quit(ref s)) if *auth_lvl != BotCmdAuthLvl::Owner => {
+                BotCmdResult::BotErrMsg(format!("Only commands at authorization level \
+                                                 {auth_lvl_owner:?} may tell the bot to quit, \
+                                                 but the command {cmd_name:?} from module \
+                                                 {provider_name:?}, at authorization level \
+                                                 {cmd_auth_lvl:?}, has told the bot to quit with \
+                                                 quit message {quit_msg:?}.",
+                                                auth_lvl_owner = BotCmdAuthLvl::Owner,
+                                                cmd_name = name,
+                                                provider_name = provider.name,
+                                                cmd_auth_lvl = auth_lvl,
+                                                quit_msg = s)
+                                                .into())
+            }
+            r => r,
         }
     }
 

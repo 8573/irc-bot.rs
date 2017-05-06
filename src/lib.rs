@@ -9,6 +9,9 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate yamlette;
+
 pub use self::core::ErrorReaction;
 pub use self::core::run;
 
