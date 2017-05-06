@@ -11,6 +11,7 @@ pub fn mk<'a>() -> Module<'a> {
                       Box::new(part))
         .with_command("quit", "{msg: '[message]'}", Auth::Owner, Box::new(quit))
         .with_command("ping", "", Auth::Public, Box::new(ping))
+        .with_command("source", "", Auth::Public, Box::new(source))
         .end()
 }
 
@@ -46,6 +47,19 @@ fn quit(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
 fn ping(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
     if arg.is_empty() {
         Reaction::Reply("pong".into()).into()
+    } else {
+        BotCmdResult::SyntaxErr
+    }
+}
+
+fn source(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
+    let src_url = match env!("CARGO_PKG_HOMEPAGE") {
+        s if !s.is_empty() => s,
+        _ => "unknown",
+    };
+
+    if arg.is_empty() {
+        Reaction::Reply(format!("<{}>", src_url).into()).into()
     } else {
         BotCmdResult::SyntaxErr
     }
