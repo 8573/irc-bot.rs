@@ -203,10 +203,40 @@ pub type BotCmdHandler = Fn(&State, &MsgMetadata, &str) -> BotCmdResult;
 
 #[derive(Debug)]
 pub enum BotCmdResult {
+    /// The command was processed successfully. Pass through a `Reaction`.
     Ok(Reaction),
-    Misused,
+
+    /// A user invoked the command without having sufficient authorization to do so. A reply will
+    /// be sent informing the user of this.
     Unauthorized,
-    Err(Error),
+
+    /// A user invoked the command with incorrect syntax. A reply will be sent informing the user
+    /// of the correct syntax.
+    SyntaxErr,
+
+    /// A user invoked the command without providing a required argument, named by the given
+    /// string. This is a more specific version of `SyntaxErr` and should be preferred where
+    /// applicable.
+    ArgMissing(Cow<'static, str>),
+
+    /// A user invoked the command in one-to-one communication (a.k.a. "query" and "PM") without
+    /// providing an argument that is required only in one-to-one communication (such as a channel
+    /// name, which could normally default to the name of the channel in which the command was
+    /// used), named by the given string. This is a more specific version of `ArgMissing` and
+    /// should be preferred where applicable.
+    ArgMissing1To1(Cow<'static, str>),
+
+    /// Pass through an instance of the framework's `Error` type.
+    LibErr(Error),
+
+    /// A user made some miscellaneous error in invoking the command. The given string will be
+    /// included in a reply informing the user of their error.
+    UserErrMsg(Cow<'static, str>),
+
+    /// A miscellaneous error that doesn't seem to be the user's fault occurred while the bot was
+    /// processing the command. The given string will be included in a reply informing the user of
+    /// this.
+    BotErrMsg(Cow<'static, str>),
 }
 
 #[derive(Clone, Debug)]
@@ -634,7 +664,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         match user_authorized {
             Ok(true) => (handler)(self, msg_md, cmd_args),
             Ok(false) => BotCmdResult::Unauthorized,
-            Err(e) => BotCmdResult::Err(e),
+            Err(e) => BotCmdResult::LibErr(e),
         }
     }
 
@@ -656,16 +686,34 @@ impl<'server, 'modl> State<'server, 'modl> {
                  ..
              } = cmd;
 
-        match self.run_bot_command(msg_md, cmd, cmd_args) {
-            BotCmdResult::Ok(r) => r,
-            BotCmdResult::Misused => Reaction::Reply(format!("Syntax: {} {}", name, usage).into()),
+        let cmd_result = match self.run_bot_command(msg_md, cmd, cmd_args) {
+            BotCmdResult::Ok(r) => Ok(r),
             BotCmdResult::Unauthorized => {
-                Reaction::Reply(format!("My apologies, but you do not appear to have sufficient \
-                                         authority to use my {:?} command.",
-                                        name)
-                                        .into())
+                Err(format!("My apologies, but you do not appear to have sufficient authority to \
+                             use my {:?} command.",
+                            name))
             }
-            BotCmdResult::Err(e) => Reaction::Reply(format!("Error: {}", e).into()),
+            BotCmdResult::SyntaxErr => Err(format!("Syntax: {} {}", name, usage)),
+            BotCmdResult::ArgMissing(arg_name) => {
+                Err(format!("Syntax error: For command {:?}, the argument {:?} is required, but \
+                             it was not given.",
+                            name,
+                            arg_name))
+            }
+            BotCmdResult::ArgMissing1To1(arg_name) => {
+                Err(format!("Syntax error: When command {:?} is used outside of a channel, the \
+                             argument {:?} is required, but it was not given.",
+                            name,
+                            arg_name))
+            }
+            BotCmdResult::LibErr(e) => Err(format!("Error: {}", e)),
+            BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s)),
+            BotCmdResult::BotErrMsg(s) => Err(format!("Internal error: {}", s)),
+        };
+
+        match cmd_result {
+            Ok(r) => r,
+            Err(s) => Reaction::Reply(s.into()),
         }
     }
 }
