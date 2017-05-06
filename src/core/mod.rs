@@ -591,9 +591,14 @@ impl<'server, 'modl> State<'server, 'modl> {
     }
 
     fn quit<'a>(&self, msg: Option<Cow<'a, str>>) {
+        let default_quit_msg = format!("<{}> v{}",
+                                       env!("CARGO_PKG_HOMEPAGE"),
+                                       env!("CARGO_PKG_VERSION"));
+
         info!("Quitting. Quit message: {:?}.", msg);
+
         self.server
-            .send_quit(msg.unwrap_or_default().as_ref())
+            .send_quit(msg.unwrap_or(default_quit_msg.into()).as_ref())
             .unwrap_or_else(|err| error!("Error while quitting: {:?}", err))
     }
 
