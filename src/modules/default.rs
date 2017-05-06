@@ -14,8 +14,8 @@ pub fn mk<'a>() -> Module<'a> {
         .end()
 }
 
-fn join(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
-    BotCmdResult::Ok(Reaction::IrcCmd(Command::JOIN(arg.to_owned(), None, None)))
+fn join(_: &State, _: &MsgMetadata, arg: &str) -> Command {
+    Command::JOIN(arg.to_owned(), None, None)
 }
 
 fn part(state: &State,
@@ -32,20 +32,20 @@ fn part(state: &State,
         (None, t) => t.to_owned(),
     };
 
-    BotCmdResult::Ok(Reaction::IrcCmd(Command::PART(chan, comment)))
+    Reaction::IrcCmd(Command::PART(chan, comment)).into()
 }
 
-fn quit(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
+fn quit(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
     yamlette!(read; arg.as_bytes(); [[
         {"msg" => (comment: String)}
     ]]);
 
-    BotCmdResult::Ok(Reaction::Quit(comment.map(Into::into)))
+    Reaction::Quit(comment.map(Into::into))
 }
 
 fn ping(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
     if arg.is_empty() {
-        BotCmdResult::Ok(Reaction::Reply("pong".into()))
+        Reaction::Reply("pong".into()).into()
     } else {
         BotCmdResult::SyntaxErr
     }

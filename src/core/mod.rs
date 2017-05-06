@@ -1,3 +1,4 @@
+pub use self::bot_cmd_handler::BotCmdHandler;
 use irc::client::prelude::*;
 use itertools::Itertools;
 use std;
@@ -11,6 +12,8 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::str;
 use uuid::Uuid;
+
+mod bot_cmd_handler;
 
 error_chain! {
     foreign_links {
@@ -193,6 +196,12 @@ pub enum Reaction {
     Quit(Option<Cow<'static, str>>),
 }
 
+impl From<Command> for Reaction {
+    fn from(c: Command) -> Self {
+        Reaction::IrcCmd(c)
+    }
+}
+
 struct BotCommand<'modl> {
     name: Cow<'static, str>,
     provider: &'modl Module<'modl>,
@@ -200,8 +209,6 @@ struct BotCommand<'modl> {
     handler: &'modl BotCmdHandler,
     usage: Cow<'static, str>,
 }
-
-pub type BotCmdHandler = Fn(&State, &MsgMetadata, &str) -> BotCmdResult;
 
 #[derive(Debug)]
 pub enum BotCmdResult {
@@ -239,6 +246,18 @@ pub enum BotCmdResult {
     /// processing the command. The given string will be included in a reply informing the user of
     /// this.
     BotErrMsg(Cow<'static, str>),
+}
+
+impl From<Reaction> for BotCmdResult {
+    fn from(r: Reaction) -> Self {
+        BotCmdResult::Ok(r)
+    }
+}
+
+impl From<Command> for BotCmdResult {
+    fn from(c: Command) -> Self {
+        BotCmdResult::Ok(c.into())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -683,7 +702,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         };
 
         let result = match user_authorized {
-            Ok(true) => (handler)(self, msg_md, cmd_args),
+            Ok(true) => handler.run(self, msg_md, cmd_args),
             Ok(false) => BotCmdResult::Unauthorized,
             Err(e) => BotCmdResult::LibErr(e),
         };
