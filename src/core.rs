@@ -227,7 +227,7 @@ impl<'modl> GetDebugInfo for BotCommand<'modl> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MsgTarget<'a>(&'a str);
+pub struct MsgTarget<'a>(pub &'a str);
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MsgPrefix<'a> {
