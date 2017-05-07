@@ -102,9 +102,15 @@ impl<'modl> ModuleBuilder<'modl> {
               S2: Into<Cow<'static, str>>,
               S3: Into<Cow<'static, str>>
     {
+        let name = name.into();
+
+        assert!(!name.as_ref().contains(char::is_whitespace),
+                "The name of the bot command {:?} contains whitespace, which is not allowed.",
+                name.as_ref());
+
         self.features
             .push(ModuleFeature::Command {
-                      name: name.into(),
+                      name: name,
                       usage: syntax.into(),
                       help_msg: help_msg.into(),
                       auth_lvl: auth_lvl,
