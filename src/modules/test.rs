@@ -3,11 +3,11 @@ use core::BotCmdAuthLvl as Auth;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("test")
-        .with_command("test-line-wrap",
-                      "",
-                      "Request a long message from the bot, to test its line-wrapping function.",
-                      Auth::Owner,
-                      Box::new(test_line_wrap))
+        .command("test-line-wrap",
+                 "",
+                 "Request a long message from the bot, to test its line-wrapping function.",
+                 Auth::Owner,
+                 Box::new(test_line_wrap))
         .end()
 }
 

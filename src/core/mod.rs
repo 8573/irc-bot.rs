@@ -91,13 +91,13 @@ pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
 }
 
 impl<'modl> ModuleBuilder<'modl> {
-    pub fn with_command<S1, S2, S3>(mut self,
-                                    name: S1,
-                                    syntax: S2,
-                                    help_msg: S3,
-                                    auth_lvl: BotCmdAuthLvl,
-                                    handler: Box<BotCmdHandler>)
-                                    -> Self
+    pub fn command<S1, S2, S3>(mut self,
+                               name: S1,
+                               syntax: S2,
+                               help_msg: S3,
+                               auth_lvl: BotCmdAuthLvl,
+                               handler: Box<BotCmdHandler>)
+                               -> Self
         where S1: Into<Cow<'static, str>>,
               S2: Into<Cow<'static, str>>,
               S3: Into<Cow<'static, str>>

@@ -4,38 +4,38 @@ use irc::client::prelude::*;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("default")
-        .with_command("join",
-                      "<channel>",
-                      "Have the bot join the given channel.",
-                      Auth::Owner,
-                      Box::new(join))
-        .with_command("part",
-                      "{chan: '[channel]', msg: '[message]'}",
-                      "Have the bot part from the given channel (defaults to the current \
-                       channel), with an optional part message.",
-                      Auth::Owner,
-                      Box::new(part))
-        .with_command("quit",
-                      "{msg: '[message]'}",
-                      "Have the bot quit.",
-                      Auth::Owner,
-                      Box::new(quit))
-        .with_command("ping",
-                      "",
-                      "Request a short message from the bot, typically for testing purposes.",
-                      Auth::Public,
-                      Box::new(ping))
-        .with_command("source",
-                      "",
-                      "Request information about the bot, such as the URL of a Web page about its \
-                       software.",
-                      Auth::Public,
-                      Box::new(source))
-        .with_command("help",
-                      "{cmd: [command], list: [list name]}",
-                      "Request help with the bot's features, such as commands.",
-                      Auth::Public,
-                      Box::new(help))
+        .command("join",
+                 "<channel>",
+                 "Have the bot join the given channel.",
+                 Auth::Owner,
+                 Box::new(join))
+        .command("part",
+                 "{chan: '[channel]', msg: '[message]'}",
+                 "Have the bot part from the given channel (defaults to the current channel), \
+                  with an optional part message.",
+                 Auth::Owner,
+                 Box::new(part))
+        .command("quit",
+                 "{msg: '[message]'}",
+                 "Have the bot quit.",
+                 Auth::Owner,
+                 Box::new(quit))
+        .command("ping",
+                 "",
+                 "Request a short message from the bot, typically for testing purposes.",
+                 Auth::Public,
+                 Box::new(ping))
+        .command("source",
+                 "",
+                 "Request information about the bot, such as the URL of a Web page about its \
+                  software.",
+                 Auth::Public,
+                 Box::new(source))
+        .command("help",
+                 "{cmd: [command], list: [list name]}",
+                 "Request help with the bot's features, such as commands.",
+                 Auth::Public,
+                 Box::new(help))
         .end()
 }
 
