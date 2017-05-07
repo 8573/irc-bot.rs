@@ -49,7 +49,7 @@ trait GetDebugInfo {
 }
 
 pub struct Module<'modl> {
-    name: Cow<'static, str>,
+    pub name: Cow<'static, str>,
     uuid: Uuid,
     features: Vec<ModuleFeature<'modl>>,
     _lifetime: PhantomData<&'modl ()>,
@@ -91,19 +91,22 @@ pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
 }
 
 impl<'modl> ModuleBuilder<'modl> {
-    pub fn with_command<S1, S2>(mut self,
-                                name: S1,
-                                syntax: S2,
-                                auth_lvl: BotCmdAuthLvl,
-                                handler: Box<BotCmdHandler>)
-                                -> Self
+    pub fn with_command<S1, S2, S3>(mut self,
+                                    name: S1,
+                                    syntax: S2,
+                                    help_msg: S3,
+                                    auth_lvl: BotCmdAuthLvl,
+                                    handler: Box<BotCmdHandler>)
+                                    -> Self
         where S1: Into<Cow<'static, str>>,
-              S2: Into<Cow<'static, str>>
+              S2: Into<Cow<'static, str>>,
+              S3: Into<Cow<'static, str>>
     {
         self.features
             .push(ModuleFeature::Command {
                       name: name.into(),
                       usage: syntax.into(),
+                      help_msg: help_msg.into(),
                       auth_lvl: auth_lvl,
                       handler: handler,
                       _lifetime: PhantomData,
@@ -136,6 +139,7 @@ enum ModuleFeature<'modl> {
     Command {
         name: Cow<'static, str>,
         usage: Cow<'static, str>,
+        help_msg: Cow<'static, str>,
         auth_lvl: BotCmdAuthLvl,
         handler: Box<BotCmdHandler>,
         _lifetime: PhantomData<&'modl ()>,
@@ -205,12 +209,13 @@ impl From<Command> for Reaction {
     }
 }
 
-struct BotCommand<'modl> {
-    name: Cow<'static, str>,
-    provider: &'modl Module<'modl>,
-    auth_lvl: BotCmdAuthLvl,
+pub struct BotCommand<'modl> {
+    pub name: Cow<'static, str>,
+    pub provider: &'modl Module<'modl>,
+    pub auth_lvl: BotCmdAuthLvl,
     handler: &'modl BotCmdHandler,
-    usage: Cow<'static, str>,
+    pub usage: Cow<'static, str>,
+    pub help_msg: Cow<'static, str>,
 }
 
 #[derive(Debug)]
@@ -474,6 +479,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                  ref handler,
                  ref auth_lvl,
                  ref usage,
+                 ref help_msg,
                  _lifetime: _,
              } => {
                 self.commands
@@ -484,6 +490,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                                 auth_lvl: auth_lvl.clone(),
                                 handler: handler.as_ref(),
                                 usage: usage.clone(),
+                                help_msg: help_msg.clone(),
                             })
             }
             &ModuleFeature::Trigger => unimplemented!(),
@@ -612,6 +619,10 @@ impl<'server, 'modl> State<'server, 'modl> {
         self.server.current_nickname()
     }
 
+    pub fn command(&self, name: &str) -> Option<&BotCommand> {
+        self.commands.get(name)
+    }
+
     pub fn have_module_feature(&self, kind: ModuleFeatureKind, name: &str) -> bool {
         match kind {
             ModuleFeatureKind::Command => self.commands.contains_key(name),
@@ -717,6 +728,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                  ref auth_lvl,
                  ref handler,
                  usage: _,
+                 help_msg: _,
 }: &BotCommand, cmd_args: &str) -> BotCmdResult{
 
         let user_authorized = match auth_lvl {
