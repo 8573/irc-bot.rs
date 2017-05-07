@@ -6,6 +6,7 @@ use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::io;
 use std::marker::PhantomData;
@@ -512,11 +513,14 @@ impl<'server, 'modl> State<'server, 'modl> {
         }
     }
 
-    pub fn say(&self, MsgTarget(target): MsgTarget, addressee: &str, msg: &str) -> Result<()> {
+    pub fn say<S1, S2>(&self, MsgTarget(target): MsgTarget, addressee: S1, msg: S2) -> Result<()>
+        where S1: Borrow<str>,
+              S2: Display
+    {
         let final_msg = format!(
             "{}{}{}",
-            addressee,
-            if addressee.is_empty() {
+            addressee.borrow(),
+            if addressee.borrow().is_empty() {
                 ""
             } else {
                 &self.addressee_suffix
