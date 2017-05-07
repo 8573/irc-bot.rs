@@ -629,6 +629,10 @@ impl<'server, 'modl> State<'server, 'modl> {
         self.commands.get(name)
     }
 
+    pub fn command_names(&self) -> Vec<Cow<'static, str>> {
+        self.commands.keys().cloned().collect()
+    }
+
     pub fn have_module_feature(&self, kind: ModuleFeatureKind, name: &str) -> bool {
         match kind {
             ModuleFeatureKind::Command => self.commands.contains_key(name),

@@ -32,7 +32,7 @@ pub fn mk<'a>() -> Module<'a> {
                       Auth::Public,
                       Box::new(source))
         .with_command("help",
-                      "{cmd: [command]}",
+                      "{cmd: [command], list: [list name]}",
                       "Request help with the bot's features, such as commands.",
                       Auth::Public,
                       Box::new(help))
@@ -92,10 +92,10 @@ fn source(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
 
 fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
     yamlette!(read; arg.as_bytes(); [[
-        {"cmd" => (cmd: &str)}
+        {"cmd" => (cmd: &str), "list" => (list: &str)}
     ]]);
 
-    let argc = [cmd].iter().filter(|x| x.is_some()).count();
+    let argc = [cmd, list].iter().filter(|x| x.is_some()).count();
 
     if argc == 0 && !arg.is_empty() {
         return BotCmdResult::SyntaxErr;
@@ -125,9 +125,27 @@ fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
                             help_msg.clone()]
                                .into())
                 .into()
+    } else if let Some(list_name) = list {
+        let list_names = ["commands", "lists"];
+
+        if list_name == "commands" {
+            Reaction::Msg(format!("Available commands: {:?}", state.command_names()).into()).into()
+        } else if list_name == "lists" {
+            Reaction::Msg(format!("Available lists: {:?}", list_names).into()).into()
+        } else {
+            if list_names.contains(&list_name) {
+                error!("Help list {:?} declared but not defined.", list_name);
+            }
+
+            Reaction::Msg(format!("List {:?} not found. Available lists: {:?}",
+                                  list_name,
+                                  list_names)
+                                  .into())
+                    .into()
+        }
     } else {
         Reaction::Msgs(vec!["For help with a command named 'foo', try `help cmd: foo`.".into(),
-                            "To see a list of all available commands, try `help list: cmds`."
+                            "To see a list of all available commands, try `help list: commands`."
                                 .into(),
                             format!("For this bot software's documentation, including an \
                                      introduction to the command syntax, see <{homepage}>",
