@@ -53,6 +53,7 @@ fn part(state: &State,
 
     let chan = match (chan, target) {
         (Some(c), _) => c,
+        (None, _) if !arg.is_empty() => return BotCmdResult::SyntaxErr,
         (None, t) if t == state.nick() => return BotCmdResult::ArgMissing1To1("channel".into()),
         (None, t) => t.to_owned(),
     };
