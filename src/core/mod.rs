@@ -191,7 +191,9 @@ impl<'modl> ModuleFeature<'modl> {
 pub enum Reaction {
     None,
     Msg(Cow<'static, str>),
+    Msgs(Cow<'static, [Cow<'static, str>]>),
     Reply(Cow<'static, str>),
+    Replies(Cow<'static, [Cow<'static, str>]>),
     IrcCmd(Command),
     BotCmd(Cow<'static, str>),
     Quit(Option<Cow<'static, str>>),
@@ -661,16 +663,28 @@ impl<'server, 'modl> State<'server, 'modl> {
                  prefix: MsgPrefix { nick, .. },
              } = msg_md;
 
-        let reply_target = if target.0 == self.nick() {
-            MsgTarget(nick.unwrap())
+        let (reply_target, reply_addressee) = if target.0 == self.nick() {
+            (MsgTarget(nick.unwrap()), "")
         } else {
-            target
+            (target, nick.unwrap_or(""))
         };
 
         match reaction {
             Reaction::None => Ok(()),
             Reaction::Msg(s) => self.say(reply_target, "", &s),
-            Reaction::Reply(s) => self.say(reply_target, nick.unwrap_or(""), &s),
+            Reaction::Msgs(a) => {
+                for s in a.iter() {
+                    self.say(reply_target, "", &s)?
+                }
+                Ok(())
+            }
+            Reaction::Reply(s) => self.say(reply_target, reply_addressee, &s),
+            Reaction::Replies(a) => {
+                for s in a.iter() {
+                    self.say(reply_target, reply_addressee, &s)?
+                }
+                Ok(())
+            }
             Reaction::IrcCmd(c) => {
                 match self.server.send(c) {
                     Ok(()) => Ok(()),
