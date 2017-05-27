@@ -16,7 +16,8 @@ fn main() {
 
     env_logger::init().expect("error: failed to initialize logging");
 
-    irc_bot::run(args.value_of("config-file").expect("default missing?"),
+    irc_bot::run(irc_bot::Config::try_from_path(args.value_of("config-file")
+                                                    .expect("default missing?")),
                  |err| {
                      error!("{}", err);
                      irc_bot::ErrorReaction::Proceed

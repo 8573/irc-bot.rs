@@ -1,4 +1,5 @@
 pub use self::bot_cmd_handler::BotCmdHandler;
+pub use self::config::Config;
 use irc::client::prelude::*;
 use itertools::Itertools;
 use std;
@@ -10,11 +11,11 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::io;
 use std::marker::PhantomData;
-use std::path::Path;
 use std::str;
 use uuid::Uuid;
 
 mod bot_cmd_handler;
+mod config;
 
 error_chain! {
     foreign_links {
@@ -325,12 +326,18 @@ pub enum ModuleLoadMode {
     Force,
 }
 
-pub fn run<'modl, P, ErrF, Modls>(irc_config_json_path: P, mut error_handler: ErrF, modules: Modls)
-    where P: AsRef<Path>,
+pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, mut error_handler: ErrF, modules: Modls)
+    where Cfg: config::IntoConfig,
           ErrF: FnMut(Error) -> ErrorReaction,
           Modls: AsRef<[Module<'modl>]>
 {
-    let server = match IrcServer::new(irc_config_json_path) {
+    let config = config.into_config();
+
+    info!("{:?}", config);
+
+    return;
+
+    let server = match IrcServer::new("") {
         Ok(s) => s,
         Err(e) => {
             error_handler(e.into());
