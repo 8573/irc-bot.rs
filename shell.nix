@@ -7,6 +7,7 @@ let
     rustc
     rustfmt
     openssl
+    pkgconfig
   ;
 in
 
@@ -18,6 +19,7 @@ stdenv.mkDerivation rec {
     clang
     rustc
     rustfmt
+    pkgconfig
   ];
 
   buildInputs = [
