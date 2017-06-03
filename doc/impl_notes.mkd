@@ -1,0 +1,39 @@
+
+## `irc`
+
+(2017-06-03)
+
+I originally implemented this library using the `irc` crate.
+
+The `irc` crate depends on an outdated version of `openssl` (the Rust crate,
+not the actual `openssl` C library) for TLS, and looks like it has more
+willingness to panic than I appreciate in a library.
+
+The last commit using the `irc` crate was
+`8f56b20844c3981b45b748d5138b4da2850b35dc`.
+
+
+## `tokio-irc-client`
+
+(2017-06-03)
+
+Secondly, I rewrote this library using the `tokio-irc-client` crate.
+
+I've concluded that this implementation is a dead end, though I may revive it
+in the future if ever I become more experienced with Tokio.
+
+If I naively try to run two futures (`intake_future` and `output_future`)
+concurrently as `input_future.join(output_future)`, `input_future` is run very
+briefly (only receiving the first two of many messages that are sent by the
+server when I connect), and then only `output_future` is run.
+
+Trying `select` or `select2` rather than `join` results in type errors I know
+not how to understand.
+
+Now I've resorted to running each future on a separate Tokio reactor core,
+with `input_future` on the main thread and `output_future` on another thread.
+This works, in that the bot receives and sends all messages that it should.
+However, while it receives messages just fine, it has terrible latency when
+sending messages: a 1-to-1 message from the bot to itself, practically instant
+with the `irc` crate, takes literally two minutes with this implementation
+(although that measurement is precise only to within five seconds).
