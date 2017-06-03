@@ -1,6 +1,5 @@
 use super::State;
 use pircolate;
-use std::ops::Deref;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MsgTarget<'a>(pub &'a str);

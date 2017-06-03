@@ -1,11 +1,8 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
-use super::config;
 use pircolate;
-use std;
 use std::borrow::Cow;
 use std::io;
-use std::sync;
 use std::sync::mpsc;
 use tokio_irc_client;
 

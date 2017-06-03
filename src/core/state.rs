@@ -5,11 +5,7 @@ use super::MsgPrefix;
 use super::Result;
 use super::State;
 use super::config;
-use pircolate::Command;
-use pircolate::Message;
-use std::borrow::Borrow;
 use std::borrow::Cow;
-use std::hash::Hash;
 
 impl<'server, 'modl> State<'server, 'modl> {
     pub fn nick(&self) -> Result<String> {

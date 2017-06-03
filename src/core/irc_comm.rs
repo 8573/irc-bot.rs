@@ -1,7 +1,6 @@
 use super::BotCmdAuthLvl;
 use super::BotCmdResult;
 use super::BotCommand;
-use super::Error;
 use super::ErrorKind;
 use super::MsgMetadata;
 use super::MsgPrefix;
@@ -12,22 +11,12 @@ use super::State;
 use super::irc_msgs::PrivMsg;
 use super::irc_msgs::parse_privmsg;
 use super::parse_msg_to_nick;
-use super::parse_prefix;
-use futures::Future;
-use futures::Sink;
-use futures::Stream;
-use futures::future;
-use futures::stream;
 use itertools::Itertools;
 use pircolate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
-use std::io;
-use std::iter;
-use std::sync::MutexGuard;
-use std::sync::PoisonError;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -276,15 +265,13 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) {
                                    env!("CARGO_PKG_HOMEPAGE"),
                                    env!("CARGO_PKG_VERSION"));
 
-    let msg = msg.as_ref().map(Borrow::borrow);
+    let msg: Option<&str> = msg.as_ref().map(Borrow::borrow);
 
     info!("Quitting. Quit message: {:?}.", msg);
 
-    let quit = match format!("QUIT{}{}",
-                             msg.as_ref().and(Some(" :")).unwrap_or(""),
-                             msg.unwrap_or(""))
-                  .parse()
-                  .map_err(Into::into) {
+    let quit = match format!("QUIT :{}", msg.unwrap_or(&default_quit_msg))
+              .parse()
+              .map_err(Into::into) {
         Ok(m) => m,
         Err(e) => {
             (state.error_handler)(e);
@@ -308,8 +295,7 @@ pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<()> {
         handle_privmsg(state, &msg)
     } else if let Some(pircolate::command::ServerInfo(..)) =
         input_msg.command::<pircolate::command::ServerInfo>() {
-        handle_004(state);
-        Ok(())
+        handle_004(state)
     } else {
         // Ignore message.
         Ok(())
@@ -351,8 +337,6 @@ fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
 fn handle_004(state: &State) -> Result<()> {
     // The server has finished sending the protocol-mandated welcome messages.
 
-    use pircolate::message::client::join;
-
     send_msg_prefix_update_request(state)
 }
 
@@ -363,7 +347,6 @@ fn send_msg_prefix_update_request(state: &State) -> Result<()> {
 }
 
 pub fn connection_sequence(state: &State) -> Result<Vec<pircolate::Message>> {
-    use pircolate::message::client::join;
     use pircolate::message::client::nick;
     use pircolate::message::client::user;
 
