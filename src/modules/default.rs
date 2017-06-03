@@ -1,24 +1,23 @@
 use core::*;
 use core::BotCmdAuthLvl as Auth;
-use irc::client::prelude::*;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("default")
         .command("join",
                  "<channel>",
                  "Have the bot join the given channel.",
-                 Auth::Owner,
+                 Auth::Admin,
                  Box::new(join))
         .command("part",
                  "{chan: '[channel]', msg: '[message]'}",
                  "Have the bot part from the given channel (defaults to the current channel), \
                   with an optional part message.",
-                 Auth::Owner,
+                 Auth::Admin,
                  Box::new(part))
         .command("quit",
                  "{msg: '[message]'}",
                  "Have the bot quit.",
-                 Auth::Owner,
+                 Auth::Admin,
                  Box::new(quit))
         .command("ping",
                  "",
@@ -39,8 +38,8 @@ pub fn mk<'a>() -> Module<'a> {
         .end()
 }
 
-fn join(_: &State, _: &MsgMetadata, arg: &str) -> Command {
-    Command::JOIN(arg.to_owned(), None, None)
+fn join(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
+    Reaction::RawMsg(format!("JOIN {}", arg).into())
 }
 
 fn part(state: &State,
@@ -54,11 +53,18 @@ fn part(state: &State,
     let chan = match (chan, target) {
         (Some(c), _) => c,
         (None, _) if !arg.is_empty() => return BotCmdResult::SyntaxErr,
-        (None, t) if t == state.nick() => return BotCmdResult::ArgMissing1To1("channel".into()),
+        (None, t) if t == state.nick().unwrap_or("".into()) => {
+            return BotCmdResult::ArgMissing1To1("channel".into())
+        }
         (None, t) => t.to_owned(),
     };
 
-    Reaction::IrcCmd(Command::PART(chan, comment)).into()
+    Reaction::RawMsg(format!("PART {}{}{}",
+                             chan,
+                             if comment.is_some() { " :" } else { "" },
+                             comment.unwrap_or_default())
+                             .into())
+            .into()
 }
 
 fn quit(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
@@ -112,10 +118,11 @@ fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
                  ref help_msg,
                  ..
              } = match state.command(cmd_name) {
-            Some(c) => c,
-            None => {
+            Ok(Some(c)) => c,
+            Ok(None) => {
                 return Reaction::Msg(format!("Command {:?} not found.", cmd_name).into()).into()
             }
+            Err(e) => return BotCmdResult::LibErr(e),
         };
 
         Reaction::Msgs(vec![format!("= Help for command {:?}:", name).into(),

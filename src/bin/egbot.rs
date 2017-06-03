@@ -11,7 +11,7 @@ fn main() {
     let args = clap::App::new("egbot")
         .arg(clap::Arg::with_name("config-file")
                  .short("c")
-                 .default_value("config.json"))
+                 .default_value("config.yaml"))
         .get_matches();
 
     env_logger::init().expect("error: failed to initialize logging");

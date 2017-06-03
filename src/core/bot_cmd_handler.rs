@@ -2,14 +2,14 @@ use super::BotCmdResult;
 use super::MsgMetadata;
 use super::State;
 
-pub trait BotCmdHandler {
+pub trait BotCmdHandler: Send + Sync {
     fn run(&self, &State, &MsgMetadata, &str) -> BotCmdResult;
 }
 
 macro_rules! impl_fn {
     (($($param_id:ident: $param_ty:ty),*) => ($state_pat:pat, $msg_md_pat:pat, $arg_pat: pat)) => {
         impl<F, R> BotCmdHandler for F
-            where F: Fn($($param_ty),*) -> R,
+            where F: Fn($($param_ty),*) -> R + Send + Sync,
                   R: Into<BotCmdResult>
         {
             fn run(&self, $state_pat: &State, $msg_md_pat: &MsgMetadata, $arg_pat: &str)

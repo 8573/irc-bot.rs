@@ -6,7 +6,7 @@ pub fn mk<'a>() -> Module<'a> {
         .command("test-line-wrap",
                  "",
                  "Request a long message from the bot, to test its line-wrapping function.",
-                 Auth::Owner,
+                 Auth::Admin,
                  Box::new(test_line_wrap))
         .end()
 }

@@ -1,5 +1,4 @@
 use super::BotCmdHandler;
-use super::Command;
 use super::Error;
 use super::Module;
 use super::Reaction;
@@ -59,14 +58,8 @@ impl From<Reaction> for BotCmdResult {
     }
 }
 
-impl From<Command> for BotCmdResult {
-    fn from(c: Command) -> Self {
-        BotCmdResult::Ok(c.into())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BotCmdAuthLvl {
     Public,
-    Owner,
+    Admin,
 }

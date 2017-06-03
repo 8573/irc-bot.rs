@@ -1,7 +1,12 @@
 extern crate clap;
-extern crate irc;
+extern crate crossbeam;
+extern crate futures;
 extern crate itertools;
+extern crate parking_lot;
+extern crate pircolate;
 extern crate skimmer;
+extern crate tokio_core;
+extern crate tokio_irc_client;
 extern crate uuid;
 
 #[macro_use]

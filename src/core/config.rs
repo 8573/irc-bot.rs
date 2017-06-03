@@ -1,3 +1,4 @@
+use super::Config;
 use super::ErrorKind;
 use super::Result;
 use skimmer;
@@ -10,21 +11,18 @@ use std::path::Path;
 use yamlette::book::extractor::pointer::Pointer;
 use yamlette::book::extractor::traits::FromPointer;
 
-#[derive(Debug)]
-pub struct Config {
-    nick: String,
-    username: Option<String>,
-    realname: Option<String>,
-    admins: Vec<Admin>,
-    server: SocketAddr,
-    channels: Vec<String>,
+#[derive(Clone, Debug)]
+pub struct Admin {
+    pub nick: Option<String>,
+    pub user: Option<String>,
+    pub host: Option<String>,
 }
 
-#[derive(Debug)]
-pub struct Admin {
-    nick: Option<String>,
-    user: Option<String>,
-    host: Option<String>,
+#[derive(Clone, Debug)]
+pub struct Server {
+    pub host: String,
+    pub port: u16,
+    pub tls: bool,
 }
 
 #[derive(Debug)]
@@ -57,6 +55,20 @@ impl Config {
         where P: AsRef<Path>
     {
         ConfigBuilder(Self::try_from_path(path))
+    }
+}
+
+impl Server {
+    pub fn resolve(&self) -> SocketAddr {
+        (self.host.as_ref(), self.port)
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .unwrap()
+    }
+
+    pub fn socket_addr_string(&self) -> String {
+        format!("{}:{}", self.host, self.port)
     }
 }
 
@@ -163,49 +175,40 @@ fn read_config<R>(input: R) -> Result<Config>
 <<R as skimmer::reader::IntoReader>::Reader as skimmer::Read>::Datum: 'static + skimmer::Datum{
     yamlette!(read; input; [[
         {
-            "nick" => (nick: String),
+            "nickname" => (nickname: String),
             "username" => (username: String),
             "realname" => (realname: String),
             "admins" => (list admins: Vec<Admin>),
+            "servers" => (list servers: Vec<Server>),
 
             // For compatibility with the `irc` crate's configuration files....
-            "owners" => (list owners: Vec<String>),
-            "nickname" => (nickname: String),
-            "server" => (server: &str),
-            "port" => (port: u16),
             "channels" => (list channels: Vec<String>)
         }
     ]]);
 
-    let nick = nick.or(nickname)
-        .ok_or(ErrorKind::Config("nick".into(), "is not specified".into()))?;
+    let nickname = nickname.ok_or(ErrorKind::Config("nickname".into(), "is not specified".into()))?;
 
-    if nick.is_empty() {
-        bail!(ErrorKind::Config("nick".into(), "is empty".into()))
+    if nickname.is_empty() {
+        bail!(ErrorKind::Config("nickname".into(), "is empty".into()))
+    }
+
+    let servers = servers.ok_or(ErrorKind::Config("servers".into(), "is not specified".into()))?;
+
+    if servers.is_empty() {
+        bail!(ErrorKind::Config("servers".into(), "is empty".into()))
+    }
+
+    if servers.len() > 1 {
+        bail!(ErrorKind::Config("servers".into(),
+                                "lists multiple servers, which is not yet supported".into()))
     }
 
     Ok(Config {
-           nick: nick,
+           nick: nickname,
            username: username,
            realname: realname,
-           admins: admins
-               .or(owners.map(|vec| {
-        vec.into_iter()
-            .map(|owner_nick| {
-                     Admin {
-                         nick: Some(owner_nick),
-                         user: None,
-                         host: None,
-                     }
-                 })
-            .collect()
-    }))
-               .unwrap_or(vec![]),
-           server: (server.unwrap(), port.unwrap())
-               .to_socket_addrs()
-               .unwrap()
-               .next()
-               .unwrap(),
+           admins: admins.unwrap_or(vec![]),
+           servers: servers,
            channels: channels.unwrap(),
        })
 }
@@ -228,6 +231,38 @@ impl<'a> FromPointer<'a> for Admin {
                          nick: n,
                          user: u,
                          host: h,
+                     })
+            }
+        }
+    }
+}
+
+impl<'a> FromPointer<'a> for Server {
+    fn from_pointer(pointer: Pointer<'a>) -> Option<Server> {
+        yamlette_reckon!(ptr; Some(pointer); {
+            "host" => (host: String),
+            "port" => (port: u16),
+            "TLS" => (tls: bool)
+        });
+
+        match (host, port) {
+            (None, None) => {
+                error!("Server list entry has no host or port; ignoring.");
+                None
+            }
+            (None, Some(_)) => {
+                error!("Server list entry has no host; ignoring.");
+                None
+            }
+            (Some(_), None) => {
+                error!("Server list entry has no port; ignoring.");
+                None
+            }
+            (Some(h), Some(p)) => {
+                Some(Server {
+                         host: h,
+                         port: p,
+                         tls: tls.unwrap_or(true),
                      })
             }
         }
