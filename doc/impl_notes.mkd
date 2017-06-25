@@ -37,3 +37,11 @@ However, while it receives messages just fine, it has terrible latency when
 sending messages: a 1-to-1 message from the bot to itself, practically instant
 with the `irc` crate, takes literally two minutes with this implementation
 (although that measurement is precise only to within five seconds).
+
+
+## Custom IRC client implementation
+
+(2017-06-25)
+
+I've now rewritten this library with a custom implementation of the necessary
+IRC client functionality, which is still a WIP.
