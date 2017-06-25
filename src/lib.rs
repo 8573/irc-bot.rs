@@ -1,16 +1,19 @@
 extern crate clap;
-extern crate crossbeam;
-extern crate futures;
 extern crate itertools;
+extern crate mio;
 extern crate parking_lot;
 extern crate pircolate;
 extern crate skimmer;
-extern crate tokio_core;
-extern crate tokio_irc_client;
 extern crate uuid;
 
 #[macro_use]
+extern crate bitflags;
+
+#[macro_use]
 extern crate error_chain;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 extern crate log;
@@ -24,3 +27,5 @@ pub use self::core::run;
 
 pub mod core;
 pub mod modules;
+
+mod irc;

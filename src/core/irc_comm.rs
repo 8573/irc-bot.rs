@@ -10,18 +10,22 @@ use super::Result;
 use super::State;
 use super::irc_msgs::PrivMsg;
 use super::irc_msgs::parse_privmsg;
+use super::irc_send;
 use super::parse_msg_to_nick;
+use irc::client::Reaction as LibReaction;
+use irc::connection::prelude::*;
 use itertools::Itertools;
 use pircolate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
+use std::iter;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
 impl<'server, 'modl> State<'server, 'modl> {
-    fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<()>
+    fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction>
         where S1: Borrow<str>,
               S2: Display
     {
@@ -36,28 +40,13 @@ impl<'server, 'modl> State<'server, 'modl> {
             msg,
         );
         info!("Sending message to {:?}: {:?}", target, final_msg);
-        wrap_msg(self,
-                 target,
-                 &final_msg,
-                 |line| self.send_privmsg(target, line))
-    }
-
-    fn send_msg(&self, msg: pircolate::Message) -> Result<()> {
-        Ok(self.mpsc_channel.lock().try_send(msg)?)
-    }
-
-    fn send_msgs<I>(&self, msgs: I) -> Result<()>
-        where I: IntoIterator<Item = pircolate::Message>
-    {
-        for msg in msgs {
-            self.send_msg(msg)?
-        }
-
-        Ok(())
-    }
-
-    fn send_privmsg(&self, MsgTarget(target): MsgTarget, msg: &str) -> Result<()> {
-        self.send_msg(pircolate::message::client::priv_msg(target, msg)?)
+        let mut wrapped_msg = vec![];
+        wrap_msg(self, target, &final_msg, |line| {
+            use pircolate::message::client::priv_msg;
+            Ok(wrapped_msg.push(LibReaction::RawMsg(priv_msg(target.0, line)?)))
+        })?;
+        // TODO: optimize for case where no wrapping, and thus no `Vec`, is needed.
+        Ok(LibReaction::Multi(wrapped_msg))
     }
 
     fn prefix_len(&self) -> Result<usize> {
@@ -123,7 +112,7 @@ fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F)
     Ok(())
 }
 
-fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<()> {
+fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<LibReaction> {
     let &PrivMsg {
              metadata: MsgMetadata {
                  target,
@@ -139,28 +128,26 @@ fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<(
     };
 
     match reaction {
-        Reaction::None => Ok(()),
+        Reaction::None => Ok(LibReaction::None),
         Reaction::Msg(s) => state.say(reply_target, "", &s),
         Reaction::Msgs(a) => {
-            for s in a.iter() {
-                state.say(reply_target, "", &s)?
-            }
-            Ok(())
+            Ok(LibReaction::Multi(a.iter()
+                                      .map(|s| state.say(reply_target, "", &s))
+                                      .collect::<Result<_>>()?))
         }
         Reaction::Reply(s) => state.say(reply_target, reply_addressee, &s),
         Reaction::Replies(a) => {
-            for s in a.iter() {
-                state.say(reply_target, reply_addressee, &s)?
-            }
-            Ok(())
+            Ok(LibReaction::Multi(a.iter()
+                                      .map(|s| state.say(reply_target, reply_addressee, &s))
+                                      .collect::<Result<_>>()?))
         }
-        Reaction::RawMsg(s) => state.send_msg(s.parse()?),
+        Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
         Reaction::BotCmd(cmd_ln) => handle_bot_command(state, msg, cmd_ln),
         Reaction::Quit(msg) => bail!(ErrorKind::ModuleRequestedQuit(msg)),
     }
 }
 
-fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Result<()>
+fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Result<LibReaction>
     where C: Borrow<str>
 {
     let cmd_ln = command_line.borrow();
@@ -260,7 +247,7 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
     }
 }
 
-pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) {
+pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction {
     let default_quit_msg = format!("<{}> v{}",
                                    env!("CARGO_PKG_HOMEPAGE"),
                                    env!("CARGO_PKG_VERSION"));
@@ -276,33 +263,25 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) {
         Err(e) => {
             (state.error_handler)(e);
             error!("Failed to construct quit message.");
-            return;
+            return LibReaction::None;
         }
     };
 
-    state
-        .send_msg(quit)
-        .unwrap_or_else(|err| {
-                            (state.error_handler)(err);
-                            error!("Error while quitting.")
-                        })
+    LibReaction::RawMsg(quit)
 }
 
-pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<()> {
-    debug!("Received message: {:?}", input_msg.raw_message());
-
+pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibReaction> {
     if let Some(msg) = parse_privmsg(&input_msg) {
         handle_privmsg(state, &msg)
     } else if let Some(pircolate::command::ServerInfo(..)) =
         input_msg.command::<pircolate::command::ServerInfo>() {
         handle_004(state)
     } else {
-        // Ignore message.
-        Ok(())
+        Ok(LibReaction::None)
     }
 }
 
-fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<()> {
+fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction> {
     trace!("Handling PRIVMSG: {:?}", msg);
 
     let &PrivMsg {
@@ -315,10 +294,10 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<()> {
 
     let msg_for_bot = match parse_msg_to_nick(state, msg, &state.nick()?) {
         Some(m) => m,
-        None => return Ok(()),
+        None => return Ok(LibReaction::None),
     };
 
-    if text.is_empty() {
+    if msg_for_bot.is_empty() {
         handle_reaction(state, msg, Reaction::Reply("Yes?".into()))
     } else if prefix.nick == Some(target.0) && text == UPDATE_MSG_PREFIX_STR {
         update_prefix_info(state, prefix)
@@ -327,38 +306,31 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<()> {
     }
 }
 
-fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
+fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction> {
     debug!("Updating stored message prefix information from received {:?}",
            prefix);
 
-    Ok(state.msg_prefix.write().update_from(prefix))
+    state.msg_prefix.write().update_from(prefix);
+
+    Ok(LibReaction::None)
 }
 
-fn handle_004(state: &State) -> Result<()> {
+fn handle_004(state: &State) -> Result<LibReaction> {
     // The server has finished sending the protocol-mandated welcome messages.
 
     send_msg_prefix_update_request(state)
 }
 
-fn send_msg_prefix_update_request(state: &State) -> Result<()> {
+fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction> {
     use pircolate::message::client::priv_msg;
 
-    state.send_msg(priv_msg(&state.nick()?, UPDATE_MSG_PREFIX_STR)?)
+    Ok(LibReaction::RawMsg(priv_msg(&state.nick()?, UPDATE_MSG_PREFIX_STR)?))
 }
 
-pub fn connection_sequence(state: &State) -> Result<Vec<pircolate::Message>> {
+fn connection_sequence(state: &State) -> Result<Vec<pircolate::Message>> {
     use pircolate::message::client::nick;
     use pircolate::message::client::user;
 
     Ok(vec![nick(&state.config.nick)?,
-            user(state
-                     .config
-                     .username
-                     .as_ref()
-                     .unwrap_or(&state.config.nick),
-                 state
-                     .config
-                     .realname
-                     .as_ref()
-                     .unwrap_or(&state.config.nick))?])
+            user(&state.config.username, &state.config.realname)?])
 }

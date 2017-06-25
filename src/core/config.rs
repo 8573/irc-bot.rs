@@ -91,7 +91,7 @@ impl ConfigBuilder {
         ConfigBuilder(self.0
                           .map(|cfg| {
                                    Config {
-                                       username: Some(username.into()),
+                                       username: username.into(),
                                        ..cfg
                                    }
                                }))
@@ -103,7 +103,7 @@ impl ConfigBuilder {
         ConfigBuilder(self.0
                           .map(|cfg| {
                                    Config {
-                                       realname: Some(realname.into()),
+                                       realname: realname.into(),
                                        ..cfg
                                    }
                                }))
@@ -186,13 +186,21 @@ fn read_config<R>(input: R) -> Result<Config>
         }
     ]]);
 
-    let nickname = nickname.ok_or(ErrorKind::Config("nickname".into(), "is not specified".into()))?;
+    let nickname = nickname
+        .ok_or(ErrorKind::Config("nickname".into(), "is not specified".into()))?;
 
     if nickname.is_empty() {
         bail!(ErrorKind::Config("nickname".into(), "is empty".into()))
     }
 
-    let servers = servers.ok_or(ErrorKind::Config("servers".into(), "is not specified".into()))?;
+    let username = username.unwrap_or(nickname.clone());
+
+    let realname = realname.unwrap_or(format!("Built with <{}> v{}",
+                                              env!("CARGO_PKG_HOMEPAGE"),
+                                              env!("CARGO_PKG_VERSION")));
+
+    let servers = servers
+        .ok_or(ErrorKind::Config("servers".into(), "is not specified".into()))?;
 
     if servers.is_empty() {
         bail!(ErrorKind::Config("servers".into(), "is empty".into()))

@@ -12,17 +12,16 @@ categories = ["network-programming"]
 license = "Apache-2.0"
 
 [dependencies]
+bitflags = "0.9"
 clap = "2"
-crossbeam = "0.2"
 env_logger = "0.4"
 error-chain = "0.10"
-futures = "0.1"
 itertools = "0.6"
+lazy_static = "0.2"
 log = "0.3"
+mio = "0.6"
 parking_lot = "0.4"
 pircolate = "0.2"
 skimmer = "0.0"
-tokio-core = "0.1"
-tokio-irc-client = {version = "0.2", features = ["tls"]}
 uuid = {version = "0.5", features = ["v4"]}
 yamlette = "0.0"

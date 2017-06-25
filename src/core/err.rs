@@ -1,10 +1,10 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
+use irc;
 use pircolate;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
-use tokio_irc_client;
 
 error_chain! {
     foreign_links {
@@ -13,8 +13,8 @@ error_chain! {
     }
 
     links {
+        Irc(irc::Error, irc::ErrorKind);
         Pircolate(pircolate::error::Error, pircolate::error::ErrorKind);
-        TokioIrcClient(tokio_irc_client::error::Error, tokio_irc_client::error::ErrorKind);
     }
 
     errors {

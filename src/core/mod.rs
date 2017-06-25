@@ -19,22 +19,17 @@ use self::modl_sys::ModuleLoadMode;
 pub use self::modl_sys::mk_module;
 pub use self::reaction::ErrorReaction;
 pub use self::reaction::Reaction;
-use crossbeam;
-use futures::Future;
-use futures::Sink;
-use futures::Stream;
-use futures::stream;
+use irc::Message;
+use irc::client::Client;
+use irc::client::Reaction as LibReaction;
+use irc::client::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use pircolate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::mpsc;
-use tokio_core;
-use tokio_irc_client;
 
 mod bot_cmd;
 mod bot_cmd_handler;
@@ -48,12 +43,9 @@ mod modl_sys;
 mod reaction;
 mod state;
 
-const MSG_OUTBOX_SIZE: usize = 256;
-
 pub struct State<'server, 'modl> {
     _lifetime_server: PhantomData<&'server ()>,
     config: Config,
-    mpsc_channel: Mutex<mpsc::SyncSender<pircolate::Message>>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
     modules: BTreeMap<Cow<'static, str>, &'modl Module<'modl>>,
@@ -66,8 +58,8 @@ pub struct State<'server, 'modl> {
 #[derive(Debug)]
 pub struct Config {
     nick: String,
-    username: Option<String>,
-    realname: Option<String>,
+    username: String,
+    realname: String,
     admins: Vec<config::Admin>,
     servers: Vec<config::Server>,
     channels: Vec<String>,
@@ -83,136 +75,18 @@ impl<'server, 'modl> State<'server, 'modl> {
         State {
             _lifetime_server: PhantomData,
             config: config,
-            // All messages will be ignored (although none are expected to be sent) until this
-            // channel is replaced with a useful one in `State::run`.
-            mpsc_channel: Mutex::new(mpsc::sync_channel(0).0),
             addressee_suffix: ": ".into(),
             chars_indicating_msg_is_addressed_to_nick: vec![':', ','],
             modules: Default::default(),
             commands: Default::default(),
             msg_prefix: RwLock::new(OwningMsgPrefix::from_string(format!("{}!{}@",
-                                                                 nick,
-                                                                 username.unwrap_or_default()))),
+                                                                         nick,
+                                                                         username))),
             error_handler: Arc::new(error_handler),
         }
     }
 
-    fn run(mut self, mut reactor_core: tokio_core::reactor::Core) {
-        info!("Loaded modules: {:?}",
-              self.modules.keys().collect::<Vec<_>>());
-        info!("Loaded commands: {:?}",
-              self.commands.keys().collect::<Vec<_>>());
-        trace!("Running bot....");
-
-        let error_handler = self.error_handler.clone();
-
-        let connection_sequence = match irc_comm::connection_sequence(&self) {
-            Ok(v) => v,
-            Err(e) => {
-                error_handler(e.into());
-                error!("Terminal error: Failed to construct connection sequence messages.");
-                return;
-            }
-        };
-
-        // There shouldn't be multiple extant references to this, but Rust can't tell that the
-        // closures that capture it run serially.
-        let server_sinks = RwLock::new(Vec::new());
-
-        let (send_chan, recv_chan) = mpsc::sync_channel(MSG_OUTBOX_SIZE);
-
-        self.mpsc_channel = Mutex::new(send_chan);
-
-        let ref server = self.config.servers[0];
-
-        let conn_init_future = tokio_irc_client::Client::new(server.resolve())
-            .connect_tls(&reactor_core.handle(), server.host.clone())
-            .from_err::<Error>()
-            .map(|irc_transport| {
-                     irc_transport
-                         .from_err::<Error>()
-                         .sink_from_err::<Error>()
-                 })
-            .and_then(|irc_transport| {
-                debug!("[{}] Sending connection sequence: {:#?}",
-                       server.socket_addr_string(),
-                       connection_sequence
-                           .iter()
-                           .map(|m| m.raw_message())
-                           .collect::<Vec<_>>());
-
-                stream::iter(connection_sequence.into_iter().map(Ok)).forward(irc_transport)
-            });
-
-        let (sink, stream) = match reactor_core.run(conn_init_future) {
-            Ok((stream::Iter { .. }, irc_transport)) => {
-                trace!("[{}] Connection sequence sent.",
-                       server.socket_addr_string());
-                irc_transport.split()
-            }
-            Err(e) => {
-                error_handler(e);
-                error!("Terminal error: Failed to send connection sequence.");
-                return;
-            }
-        };
-
-        server_sinks.write().push(sink);
-
-        let intake_future = stream.for_each(|msg| Ok(handle_msg(&self, msg)));
-
-        let outgoing_msgs_iter = recv_chan
-            .into_iter()
-            .filter_map(|msg| irc_send::process_outgoing_msg(&self, msg))
-            .map(Ok);
-
-        let server_sink = server_sinks.write().remove(0);
-
-        let output_future = stream::iter(outgoing_msgs_iter).forward(server_sink);
-
-        let error_handler_2 = error_handler.clone();
-
-        crossbeam::scope(move |scope| {
-            scope.spawn(move || {
-                let mut output_core = match tokio_core::reactor::Core::new() {
-                    Ok(r) => {
-                        trace!("Initialized Tokio reactor core for output thread.");
-                        r
-                    }
-                    Err(e) => {
-                        error_handler_2(e.into());
-                        error!("Terminal error in Tokio: Failed to initialize reactor core for \
-                                output thread.");
-                        return Err(());
-                    }
-                };
-
-                match output_core.run(output_future) {
-                    Ok((_, _)) => {
-                        trace!("Output reactor core shutting down without error.");
-                        Ok(())
-                    }
-                    Err(e) => {
-                        error_handler_2(e);
-                        error!("Terminal error in output reactor core.");
-                        Err(())
-                    }
-                }
-            });
-
-            match reactor_core.run(intake_future) {
-                Ok(()) => {
-                    trace!("Intake reactor core shutting down without error.");
-                }
-                Err(e) => {
-                    error_handler(e);
-                    error!("Terminal error in intake reactor core.");
-                }
-            }
-        })
-    }
-
-    fn handle_err<E, S>(&self, err: E, desc: S)
+    fn handle_err<E, S>(&self, err: E, desc: S) -> LibReaction
         where E: Into<Error>,
               S: Borrow<str>
     {
@@ -228,13 +102,20 @@ impl<'server, 'modl> State<'server, 'modl> {
                 trace!("Proceeding despite error{}{}{}.",
                        if desc.is_empty() { "" } else { " (" },
                        desc,
-                       if desc.is_empty() { "" } else { ")" })
+                       if desc.is_empty() { "" } else { ")" });
+                LibReaction::None
             }
-            ErrorReaction::Quit(msg) => irc_comm::quit(self, msg),
+            ErrorReaction::Quit(msg) => {
+                trace!("Quitting because of error{}{}{}.",
+                       if desc.is_empty() { "" } else { " (" },
+                       desc,
+                       if desc.is_empty() { "" } else { ")" });
+                irc_comm::quit(self, msg)
+            }
         }
     }
 
-    fn handle_err_generic<E>(&self, err: E)
+    fn handle_err_generic<E>(&self, err: E) -> LibReaction
         where E: Into<Error>
     {
         self.handle_err(err, "")
@@ -258,22 +139,43 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
         }
     };
 
-    let reactor = match tokio_core::reactor::Core::new() {
-        Ok(r) => {
-            trace!("Initialized Tokio reactor core.");
-            r
-        }
-        Err(e) => {
-            error_handler(e.into());
-            error!("Terminal error in Tokio: Failed to initialize reactor core.");
-            return;
-        }
+
+    let client = {
+        let ref server = config.servers[0];
+
+        let mut cli = Client::new();
+
+        let connection = match PlaintextConnection::from_addr(server.resolve()) {
+            Ok(conn) => conn,
+            Err(err) => {
+                error_handler(err.into());
+                error!("Terminal error: Failed to connect to server {}.",
+                       server.socket_addr_string());
+                return;
+            }
+        };
+
+        match session::build()
+                  .nickname(&config.nick)
+                  .username(&config.username)
+                  .realname(&config.realname)
+                  .start(connection) {
+            Ok(session) => cli.add_session(session).unwrap(),
+            Err(err) => {
+                // TODO
+                unimplemented!()
+            }
+        };
+
+        cli
     };
 
     let mut state = State::new(config, error_handler);
 
     match state.load_modules(modules.as_ref().iter(), ModuleLoadMode::Add) {
-        Ok(()) => {}
+        Ok(()) => {
+            trace!("Loaded all requested modules without error.")
+        }
         Err(errs) => {
             for err in errs {
                 match (state.error_handler)(err) {
@@ -288,12 +190,21 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
         }
     }
 
-    state.run(reactor);
+    info!("Loaded modules: {:?}",
+          state.modules.keys().collect::<Vec<_>>());
+    info!("Loaded commands: {:?}",
+          state.commands.keys().collect::<Vec<_>>());
+
+    trace!("Running bot....");
+
+    client
+        .run(|msg| handle_msg(&state, msg.map_err(Into::into)))
+        .unwrap()
 }
 
-fn handle_msg(state: &State, msg: pircolate::Message) {
-    match irc_comm::handle_msg(&state, msg) {
-        Ok(()) => {}
+fn handle_msg(state: &State, input: Result<Message>) -> LibReaction {
+    match input.and_then(|msg| irc_comm::handle_msg(&state, msg)) {
+        Ok(r) => r,
         Err(e) => state.handle_err_generic(e),
     }
 }
