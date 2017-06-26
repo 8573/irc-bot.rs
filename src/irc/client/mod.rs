@@ -6,8 +6,7 @@ use irc::ErrorKind;
 use irc::Message;
 use irc::Result;
 use irc::connection::Connection;
-use irc::connection::GenericReceiver;
-use irc::connection::GenericSender;
+use irc::connection::GenericConnection;
 use irc::connection::GetMioTcpStream;
 use irc::connection::ReceiveMessage;
 use irc::connection::SendMessage;
@@ -34,8 +33,7 @@ pub struct Client {
 
 #[derive(Debug)]
 struct SessionEntry {
-    sender: GenericSender,
-    receiver: GenericReceiver,
+    inner: Session<GenericConnection>,
     // TODO: use smallvec.
     output_queue: Vec<Message>,
     is_writable: bool,
@@ -54,14 +52,11 @@ impl Client {
     pub fn add_session<Conn>(&mut self, session: Session<Conn>) -> Result<SessionId>
         where Conn: Connection
     {
-        let (sender, receiver) = session.split();
-
         let index = self.sessions.len();
 
         self.sessions
             .push(SessionEntry {
-                      sender: sender.into(),
-                      receiver: receiver.into(),
+                      inner: session.into_generic(),
                       output_queue: Vec::new(),
                       is_writable: false,
                   });
@@ -82,13 +77,8 @@ impl Client {
 
         let mut events = mio::Events::with_capacity(512);
 
-        // XXX: The sender `TcpStream`s are `try_clone`'d from the receiver `TcpStream`s. The
-        // following code registers only the receiver `TcpStream`s with the mio `Poll`, and assumes
-        // that if a receiver `TcpStream` becomes writable, the corresponding sender `TcpStream` is
-        // also writable. This may or may not be okay to assume.
-
         for (index, session) in self.sessions.iter().enumerate() {
-            poll.register(session.receiver.mio_tcp_stream(),
+            poll.register(session.inner.mio_tcp_stream(),
                           mio::Token(index),
                           mio::Ready::readable() | mio::Ready::writable(),
                           mio::PollOpt::edge())?
@@ -128,7 +118,7 @@ fn process_readable<MsgHandler>(session: &mut SessionEntry,
     let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
 
     loop {
-        let reaction = match session.receiver.recv() {
+        let reaction = match session.inner.recv() {
             Ok(Some(ref msg)) if msg.raw_command() == "PING" => {
                 match msg.raw_message().replacen("I", "O", 1).parse() {
                     Ok(pong) => Reaction::RawMsg(pong),
@@ -151,7 +141,7 @@ fn process_writable(session: &mut SessionEntry, session_index: usize) {
     let mut msgs_consumed = 0;
 
     for (index, msg) in session.output_queue.iter().enumerate() {
-        match session.sender.try_send(msg.clone()) {
+        match session.inner.try_send(msg.clone()) {
             Ok(()) => msgs_consumed += 1,
             Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
                                                       io::ErrorKind::TimedOut]
@@ -186,7 +176,7 @@ fn process_reaction(session: &mut SessionEntry, session_index: usize, reaction: 
 
 impl SessionEntry {
     fn send(&mut self, session_index: usize, msg: Message) {
-        match self.sender.try_send(msg.clone()) {
+        match self.inner.try_send(msg.clone()) {
             Ok(()) => {
                 // TODO: log the `session_index`.
             }

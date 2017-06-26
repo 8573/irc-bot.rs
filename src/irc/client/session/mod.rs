@@ -1,7 +1,9 @@
 use irc::Message;
 use irc::Result;
 use irc::connection::GenericConnection;
+use irc::connection::GetMioTcpStream;
 use irc::connection::prelude::*;
+use mio;
 use std::borrow::Cow;
 use std::net::SocketAddr;
 
@@ -15,8 +17,7 @@ lazy_static! {
 pub struct Session<Conn>
     where Conn: Connection
 {
-    sender: Conn::Sender,
-    receiver: Conn::Receiver,
+    connection: Conn,
 }
 
 #[derive(Clone, Debug)]
@@ -80,7 +81,7 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
         self
     }
 
-    pub fn start<Conn>(mut self, connection: Conn) -> Result<Session<Conn>>
+    pub fn start<Conn>(mut self, mut connection: Conn) -> Result<Session<Conn>>
         where Conn: Connection
     {
         if self.nickname.is_empty() {
@@ -103,31 +104,39 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             initial_user_mode_request,
         } = self;
 
-        let (mut sender, receiver) = connection.split();
-
-        sender
+        connection
             .try_send(Message::try_from(format!("NICK {}", nickname))?)?;
-        sender
+        connection
             .try_send(Message::try_from(format!("USER {} {} * :{}",
                                                 username,
                                                 initial_user_mode_request.bits(),
                                                 realname))?)?;
 
-        Ok(Session {
-               sender: sender,
-               receiver: receiver,
-           })
+        Ok(Session { connection })
     }
 }
 
-impl<Conn> Connection for Session<Conn>
+impl<Conn> Session<Conn>
     where Conn: Connection
 {
-    type Sender = Conn::Sender;
-    type Receiver = Conn::Receiver;
+    pub fn into_generic(self) -> Session<GenericConnection> {
+        Session { connection: self.connection.into() }
+    }
+}
 
-    fn split(self) -> (Self::Sender, Self::Receiver) {
-        (self.sender, self.receiver)
+impl<Conn> ReceiveMessage for Session<Conn>
+    where Conn: Connection
+{
+    fn recv(&mut self) -> Result<Option<Message>> {
+        self.connection.recv()
+    }
+}
+
+impl<Conn> SendMessage for Session<Conn>
+    where Conn: Connection
+{
+    fn try_send(&mut self, msg: Message) -> Result<()> {
+        self.connection.try_send(msg)
     }
 }
 
@@ -135,17 +144,14 @@ impl<Conn> GetPeerAddr for Session<Conn>
     where Conn: Connection
 {
     fn peer_addr(&self) -> Result<SocketAddr> {
-        self.sender.peer_addr()
+        self.connection.peer_addr()
     }
 }
 
-impl<Conn> From<Session<Conn>> for GenericConnection
-    where Conn: Connection
+impl<Conn> GetMioTcpStream for Session<Conn>
+    where Conn: Connection + GetMioTcpStream
 {
-    fn from(Session { sender, receiver }: Session<Conn>) -> Self {
-        GenericConnection {
-            sender: sender.into(),
-            receiver: receiver.into(),
-        }
+    fn mio_tcp_stream(&self) -> &mio::net::TcpStream {
+        self.connection.mio_tcp_stream()
     }
 }
