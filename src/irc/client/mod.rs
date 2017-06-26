@@ -1,3 +1,4 @@
+pub use self::msg_ctx::MessageContext;
 pub use self::reaction::Reaction;
 use self::session::Session;
 use irc::Error;
@@ -14,6 +15,7 @@ use pircolate;
 use std::io;
 use std::io::Write;
 
+pub mod msg_ctx;
 pub mod reaction;
 pub mod session;
 
@@ -67,7 +69,7 @@ impl Client {
     }
 
     pub fn run<MsgHandler>(mut self, msg_handler: MsgHandler) -> Result<()>
-        where MsgHandler: Fn(Result<Message>) -> Reaction
+        where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
     {
         let poll = match mio::Poll::new() {
             Ok(p) => p,
@@ -140,22 +142,25 @@ impl Client {
 fn process_readable<MsgHandler>(session: &mut SessionEntry,
                                 session_index: usize,
                                 msg_handler: MsgHandler)
-    where MsgHandler: Fn(Result<Message>) -> Reaction
+    where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
 {
+    let msg_ctx = MessageContext { session_id: SessionId { index: session_index } };
+    let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
+
     loop {
         let reaction = match session.receiver.recv() {
             Ok(Some(ref msg)) if msg.raw_command() == "PING" => {
                 match msg.raw_message().replacen("I", "O", 1).parse() {
                     Ok(pong) => Reaction::RawMsg(pong),
-                    Err(err) => msg_handler(Err(err.into())),
+                    Err(err) => msg_handler_with_ctx(Err(err.into())),
                 }
             }
-            Ok(Some(msg)) => msg_handler(Ok(msg)),
+            Ok(Some(msg)) => msg_handler_with_ctx(Ok(msg)),
             Ok(None) => break,
             Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
                                                       io::ErrorKind::TimedOut]
                                                              .contains(&err.kind()) => break,
-            Err(err) => msg_handler(Err(err)),
+            Err(err) => msg_handler_with_ctx(Err(err)),
         };
 
         process_reaction(session, session_index, reaction);

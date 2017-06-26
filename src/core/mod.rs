@@ -198,7 +198,7 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
     trace!("Running bot....");
 
     client
-        .run(|msg| handle_msg(&state, msg.map_err(Into::into)))
+        .run(|ctx, msg| handle_msg(&state, msg.map_err(Into::into)))
         .unwrap()
 }
 
