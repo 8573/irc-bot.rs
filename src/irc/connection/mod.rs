@@ -53,6 +53,8 @@ pub trait GetPeerAddr {
 
 /// TODO: Use pub_restricted once I get 1.18.
 pub trait GetMioTcpStream {
+    /// Returns a reference to `self`'s underlying `mio::net::TcpStream`, which is intended solely
+    /// for registering the `TcpStream` with a `mio::Poll`.
     fn mio_tcp_stream(&self) -> &mio::net::TcpStream;
 }
 

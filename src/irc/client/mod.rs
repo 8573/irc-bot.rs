@@ -10,6 +10,7 @@ use irc::connection::GenericReceiver;
 use irc::connection::GenericSender;
 use irc::connection::GetMioTcpStream;
 use irc::connection::ReceiveMessage;
+use irc::connection::SendMessage;
 use mio;
 use pircolate;
 use std::io;
@@ -105,28 +106,7 @@ impl Client {
                 }
 
                 if session.is_writable {
-                    let mut msgs_consumed = 0;
-                    for (index, msg) in session.output_queue.iter().enumerate() {
-                        match write!(session.receiver.mio_tcp_stream(),
-                                     "{}\r\n",
-                                     msg.raw_message()) {
-                            Ok(()) => msgs_consumed += 1,
-                            Err(ref err) if [io::ErrorKind::WouldBlock,
-                                             io::ErrorKind::TimedOut]
-                                                    .contains(&err.kind()) => {
-                                session.is_writable = false;
-                                break;
-                            }
-                            Err(err) => {
-                                msgs_consumed += 1;
-                                error!("[session {}] Failed to send message {:?} (error: {})",
-                                       session_index,
-                                       msg.raw_message(),
-                                       err)
-                            }
-                        }
-                    }
-                    session.output_queue.drain(..msgs_consumed);
+                    process_writable(session, session_index);
                 }
 
                 if event.readiness().is_readable() {
@@ -167,6 +147,31 @@ fn process_readable<MsgHandler>(session: &mut SessionEntry,
     }
 }
 
+fn process_writable(session: &mut SessionEntry, session_index: usize) {
+    let mut msgs_consumed = 0;
+
+    for (index, msg) in session.output_queue.iter().enumerate() {
+        match session.sender.try_send(msg.clone()) {
+            Ok(()) => msgs_consumed += 1,
+            Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
+                                                      io::ErrorKind::TimedOut]
+                                                             .contains(&err.kind()) => {
+                session.is_writable = false;
+                break;
+            }
+            Err(err) => {
+                msgs_consumed += 1;
+                error!("[session {}] Failed to send message {:?} (error: {})",
+                       session_index,
+                       msg.raw_message(),
+                       err)
+            }
+        }
+    }
+
+    session.output_queue.drain(..msgs_consumed);
+}
+
 fn process_reaction(session: &mut SessionEntry, session_index: usize, reaction: Reaction) {
     match reaction {
         Reaction::None => {}
@@ -181,21 +186,13 @@ fn process_reaction(session: &mut SessionEntry, session_index: usize, reaction: 
 
 impl SessionEntry {
     fn send(&mut self, session_index: usize, msg: Message) {
-        match write!(self.receiver.mio_tcp_stream(), "{}\r\n", msg.raw_message()) {
+        match self.sender.try_send(msg.clone()) {
             Ok(()) => {
-                match self.receiver.mio_tcp_stream().flush() {
-                    Ok(()) => trace!("[session {}] Sent message: {:?}",
-                                     session_index,
-                                     msg.raw_message()),
-                    Err(err) => error!("[session {}] Wrote but failed to flush message: {:?} \
-                                       (error: {})",
-                                       session_index,
-                                       msg.raw_message(),
-                                       err),
-                }
+                // TODO: log the `session_index`.
             }
-            Err(ref err) if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut]
-                                .contains(&err.kind()) => {
+            Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
+                                                      io::ErrorKind::TimedOut]
+                                                             .contains(&err.kind()) => {
                 trace!("[session {}] Write would block or timed out; enqueueing message for \
                         later transmission: {:?}",
                        session_index,
