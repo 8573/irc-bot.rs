@@ -1,3 +1,4 @@
+use self::action::Action;
 pub use self::msg_ctx::MessageContext;
 pub use self::reaction::Reaction;
 use self::session::Session;
@@ -12,8 +13,10 @@ use irc::connection::ReceiveMessage;
 use irc::connection::SendMessage;
 use mio;
 use pircolate;
+use std;
 use std::io;
 use std::io::Write;
+use std::sync::mpsc;
 
 pub mod msg_ctx;
 pub mod reaction;
@@ -25,10 +28,21 @@ pub mod prelude {
     pub use super::super::connection::prelude::*;
 }
 
+mod action;
+
 #[derive(Debug)]
 pub struct Client {
     // TODO: use smallvec.
     sessions: Vec<SessionEntry>,
+    mpsc_receiver: mpsc::Receiver<Action>,
+    mpsc_registration: mio::Registration,
+    handle_prototype: ClientHandle,
+}
+
+#[derive(Clone, Debug)]
+pub struct ClientHandle {
+    mpsc_sender: mpsc::SyncSender<Action>,
+    readiness_setter: mio::SetReadiness,
 }
 
 #[derive(Debug)]
@@ -44,15 +58,44 @@ pub struct SessionId {
     index: usize,
 }
 
+const MPSC_QUEUE_SIZE_LIMIT: usize = 1024;
+const MPSC_QUEUE_TOKEN: usize = std::usize::MAX;
+
 impl Client {
     pub fn new() -> Self {
-        Client { sessions: Vec::new() }
+        let sessions = Vec::new();
+        let (mpsc_sender, mpsc_receiver) = mpsc::sync_channel(MPSC_QUEUE_SIZE_LIMIT);
+        let (mpsc_registration, readiness_setter) = mio::Registration::new2();
+        let handle_prototype = ClientHandle {
+            mpsc_sender,
+            readiness_setter,
+        };
+
+        Client {
+            sessions,
+            mpsc_receiver,
+            mpsc_registration,
+            handle_prototype,
+        }
+    }
+
+    pub fn handle(&self) -> ClientHandle {
+        self.handle_prototype.clone()
     }
 
     pub fn add_session<Conn>(&mut self, session: Session<Conn>) -> Result<SessionId>
         where Conn: Connection
     {
         let index = self.sessions.len();
+
+        if index == std::usize::MAX {
+            // `usize::MAX` is used as the `mio::Token` value for the `Client`'s MPSC queue, and
+            // would mean that the upcoming `Vec::push` call would cause an overflow, assuming the
+            // system had somehow not run out of memory.
+
+            // TODO: return an error.
+            unreachable!()
+        }
 
         self.sessions
             .push(SessionEntry {
@@ -84,28 +127,48 @@ impl Client {
                           mio::PollOpt::edge())?
         }
 
+        poll.register(&self.mpsc_registration,
+                      mio::Token(MPSC_QUEUE_TOKEN),
+                      mio::Ready::readable(),
+                      mio::PollOpt::edge())?;
+
         loop {
             let _event_qty = poll.poll(&mut events, None)?;
 
             for event in &events {
-                let mio::Token(session_index) = event.token();
-                let ref mut session = self.sessions[session_index];
-
-                if event.readiness().is_writable() {
-                    session.is_writable = true;
-                }
-
-                if session.is_writable {
-                    process_writable(session, session_index);
-                }
-
-                if event.readiness().is_readable() {
-                    process_readable(session, session_index, &msg_handler);
+                match event.token() {
+                    mio::Token(MPSC_QUEUE_TOKEN) => process_mpsc_queue(&mut self),
+                    mio::Token(session_index) => {
+                        let ref mut session = self.sessions[session_index];
+                        process_session_event(event.readiness(),
+                                              session,
+                                              session_index,
+                                              &msg_handler)
+                    }
                 }
             }
         }
 
         Ok(())
+    }
+}
+
+fn process_session_event<MsgHandler>(readiness: mio::Ready,
+                                     session: &mut SessionEntry,
+                                     session_index: usize,
+                                     msg_handler: MsgHandler)
+    where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
+{
+    if readiness.is_writable() {
+        session.is_writable = true;
+    }
+
+    if session.is_writable {
+        process_writable(session, session_index);
+    }
+
+    if readiness.is_readable() {
+        process_readable(session, session_index, &msg_handler);
     }
 }
 
@@ -171,6 +234,40 @@ fn process_reaction(session: &mut SessionEntry, session_index: usize, reaction: 
                 process_reaction(session, session_index, r);
             }
         }
+    }
+}
+
+fn process_mpsc_queue(client: &mut Client) {
+    while let Ok(action) = client.mpsc_receiver.try_recv() {
+        process_action(client, action)
+    }
+}
+
+fn process_action(client: &mut Client, action: Action) {
+    match action {
+        Action::None => {}
+        Action::RawMsg {
+            session: SessionId { index: session_index },
+            message,
+        } => {
+            let ref mut session = client.sessions[session_index];
+            session.send(session_index, message)
+        }
+    }
+}
+
+impl ClientHandle {
+    pub fn try_send(&mut self, session: SessionId, message: Message) -> Result<()> {
+        // Add the action to the client's MPSC queue.
+        self.mpsc_sender
+            .try_send(Action::RawMsg { session, message })
+            .unwrap();
+
+        // Notify the client that there's an action to read from the MPSC queue.
+        self.readiness_setter
+            .set_readiness(mio::Ready::readable())?;
+
+        Ok(())
     }
 }
 
