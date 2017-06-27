@@ -16,6 +16,15 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 
+// TODO: add usage example.
+/// A generic IRC connection.
+///
+/// This type can be constructed from any type implementing [`Connection`]. It uses an internal
+/// `enum` type to represent [`Connection`] types from this crate without storing them on the heap
+/// to create trait objects. [`Connection`] types from other crates, if supported at all, will most
+/// likely be stored on the heap.
+///
+/// [`Connection`]: ../trait.Connection.html
 #[derive(Debug)]
 pub struct GenericConnection {
     inner: GenericConnectionInner,
