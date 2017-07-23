@@ -199,9 +199,10 @@ fn read_config<R>(input: R) -> Result<Config>
         "is not specified".into(),
     ))?;
 
-    if nickname.is_empty() {
-        bail!(ErrorKind::Config("nickname".into(), "is empty".into()))
-    }
+    ensure!(
+        !nickname.is_empty(),
+        ErrorKind::Config("nickname".into(), "is empty".into())
+    );
 
     let username = username.unwrap_or(nickname.clone());
 
@@ -216,16 +217,18 @@ fn read_config<R>(input: R) -> Result<Config>
         "is not specified".into(),
     ))?;
 
-    if servers.is_empty() {
-        bail!(ErrorKind::Config("servers".into(), "is empty".into()))
-    }
+    ensure!(
+        !servers.is_empty(),
+        ErrorKind::Config("servers".into(), "is empty".into())
+    );
 
-    if servers.len() > 1 {
-        bail!(ErrorKind::Config(
+    ensure!(
+        servers.len() == 1,
+        ErrorKind::Config(
             "servers".into(),
             "lists multiple servers, which is not yet supported".into(),
-        ))
-    }
+        )
+    );
 
     Ok(Config {
         nick: nickname,
