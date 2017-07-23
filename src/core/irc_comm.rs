@@ -26,10 +26,12 @@ const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
 impl<'server, 'modl> State<'server, 'modl> {
     fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction>
-        where S1: Borrow<str>,
-              S2: Display
+    where
+        S1: Borrow<str>,
+        S2: Display,
     {
-        let final_msg = format!(
+        let final_msg =
+            format!(
             "{}{}{}",
             addressee.borrow(),
             if addressee.borrow().is_empty() {
@@ -43,7 +45,9 @@ impl<'server, 'modl> State<'server, 'modl> {
         let mut wrapped_msg = vec![];
         wrap_msg(self, target, &final_msg, |line| {
             use pircolate::message::client::priv_msg;
-            Ok(wrapped_msg.push(LibReaction::RawMsg(priv_msg(target.0, line)?)))
+            Ok(wrapped_msg.push(
+                LibReaction::RawMsg(priv_msg(target.0, line)?),
+            ))
         })?;
         // TODO: optimize for case where no wrapping, and thus no `Vec`, is needed.
         Ok(LibReaction::Multi(wrapped_msg))
@@ -55,7 +59,8 @@ impl<'server, 'modl> State<'server, 'modl> {
 }
 
 fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F) -> Result<()>
-    where F: FnMut(&str) -> Result<()>
+where
+    F: FnMut(&str) -> Result<()>,
 {
     // :nick!user@host PRIVMSG target :message
     // :nick!user@host NOTICE target :message
@@ -76,9 +81,8 @@ fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F)
 
     let mut split_end_idx = 0;
 
-    let lines = msg.match_indices(char::is_whitespace)
-        .peekable()
-        .batching(|mut iter| {
+    let lines = msg.match_indices(char::is_whitespace).peekable().batching(
+        |mut iter| {
             debug_assert!(msg.len() >= msg_len_limit);
 
             let split_start_idx = split_end_idx;
@@ -103,7 +107,8 @@ fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F)
             }
 
             Some(msg[split_start_idx..split_end_idx].trim())
-        });
+        },
+    );
 
     for line in lines {
         f(line)?
@@ -114,12 +119,12 @@ fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F)
 
 fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<LibReaction> {
     let &PrivMsg {
-             metadata: MsgMetadata {
-                 target,
-                 prefix: MsgPrefix { nick, .. },
-             },
-             ..
-         } = msg;
+        metadata: MsgMetadata {
+            target,
+            prefix: MsgPrefix { nick, .. },
+        },
+        ..
+    } = msg;
 
     let (reply_target, reply_addressee) = if target.0 == state.nick()? {
         (MsgTarget(nick.unwrap()), "")
@@ -132,14 +137,14 @@ fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<L
         Reaction::Msg(s) => state.say(reply_target, "", &s),
         Reaction::Msgs(a) => {
             Ok(LibReaction::Multi(a.iter()
-                                      .map(|s| state.say(reply_target, "", &s))
-                                      .collect::<Result<_>>()?))
+                .map(|s| state.say(reply_target, "", &s))
+                .collect::<Result<_>>()?))
         }
         Reaction::Reply(s) => state.say(reply_target, reply_addressee, &s),
         Reaction::Replies(a) => {
             Ok(LibReaction::Multi(a.iter()
-                                      .map(|s| state.say(reply_target, reply_addressee, &s))
-                                      .collect::<Result<_>>()?))
+                .map(|s| state.say(reply_target, reply_addressee, &s))
+                .collect::<Result<_>>()?))
         }
         Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
         Reaction::BotCmd(cmd_ln) => handle_bot_command(state, msg, cmd_ln),
@@ -148,7 +153,8 @@ fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<L
 }
 
 fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Result<LibReaction>
-    where C: Borrow<str>
+where
+    C: Borrow<str>,
 {
     let cmd_ln = command_line.borrow();
 
@@ -158,9 +164,11 @@ fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Resul
     let cmd_name = cmd_name_and_args.next().unwrap_or("");
     let cmd_args = cmd_name_and_args.next().unwrap_or("");
 
-    handle_reaction(state,
-                    msg,
-                    bot_command_reaction(state, msg, cmd_name, cmd_args))
+    handle_reaction(
+        state,
+        msg,
+        bot_command_reaction(state, msg, cmd_name, cmd_args),
+    )
 }
 
     fn run_bot_command(state: &State, &PrivMsg {ref metadata, ..}: &PrivMsg, &BotCommand {
@@ -185,18 +193,19 @@ fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Resul
 
     match result {
         BotCmdResult::Ok(Reaction::Quit(ref s)) if *auth_lvl != BotCmdAuthLvl::Admin => {
-            BotCmdResult::BotErrMsg(format!("Only commands at authorization level \
-                                             {auth_lvl_owner:?} may tell the bot to quit, but \
-                                             the command {cmd_name:?} from module \
-                                             {provider_name:?}, at authorization level \
-                                             {cmd_auth_lvl:?}, has told the bot to quit with \
-                                             quit message {quit_msg:?}.",
-                                            auth_lvl_owner = BotCmdAuthLvl::Admin,
-                                            cmd_name = name,
-                                            provider_name = provider.name,
-                                            cmd_auth_lvl = auth_lvl,
-                                            quit_msg = s)
-                                            .into())
+            BotCmdResult::BotErrMsg(
+                format!(
+                    "Only commands at authorization level {auth_lvl_owner:?} may tell the bot to \
+                     quit, but the command {cmd_name:?} from module {provider_name:?}, at \
+                     authorization level {cmd_auth_lvl:?}, has told the bot to quit with quit \
+                     message {quit_msg:?}.",
+                    auth_lvl_owner = BotCmdAuthLvl::Admin,
+                    cmd_name = name,
+                    provider_name = provider.name,
+                    cmd_auth_lvl = auth_lvl,
+                    quit_msg = s
+                ).into(),
+            )
         }
         r => r,
     }
@@ -211,30 +220,37 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
     };
 
     let &BotCommand {
-             ref name,
-             ref usage,
-             ..
-         } = cmd;
+        ref name,
+        ref usage,
+        ..
+    } = cmd;
 
     let cmd_result = match run_bot_command(state, msg, cmd, cmd_args) {
         BotCmdResult::Ok(r) => Ok(r),
         BotCmdResult::Unauthorized => {
-            Err(format!("My apologies, but you do not appear to have sufficient authority to use \
-                         my {:?} command.",
-                        name))
+            Err(format!(
+                "My apologies, but you do not appear to have sufficient \
+                 authority to use my {:?} command.",
+                name
+            ))
         }
         BotCmdResult::SyntaxErr => Err(format!("Syntax: {} {}", name, usage)),
         BotCmdResult::ArgMissing(arg_name) => {
-            Err(format!("Syntax error: For command {:?}, the argument {:?} is required, but it \
-                         was not given.",
-                        name,
-                        arg_name))
+            Err(format!(
+                "Syntax error: For command {:?}, the argument {:?} is \
+                 required, but it was not given.",
+                name,
+                arg_name
+            ))
         }
         BotCmdResult::ArgMissing1To1(arg_name) => {
-            Err(format!("Syntax error: When command {:?} is used outside of a channel, the \
-                         argument {:?} is required, but it was not given.",
-                        name,
-                        arg_name))
+            Err(format!(
+                "Syntax error: When command {:?} is used outside of a \
+                 channel, the argument {:?} is required, but it was not \
+                 given.",
+                name,
+                arg_name
+            ))
         }
         BotCmdResult::LibErr(e) => Err(format!("Error: {}", e)),
         BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s)),
@@ -248,17 +264,19 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
 }
 
 pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction {
-    let default_quit_msg = format!("<{}> v{}",
-                                   env!("CARGO_PKG_HOMEPAGE"),
-                                   env!("CARGO_PKG_VERSION"));
+    let default_quit_msg = format!(
+        "<{}> v{}",
+        env!("CARGO_PKG_HOMEPAGE"),
+        env!("CARGO_PKG_VERSION")
+    );
 
     let msg: Option<&str> = msg.as_ref().map(Borrow::borrow);
 
     info!("Quitting. Quit message: {:?}.", msg);
 
     let quit = match format!("QUIT :{}", msg.unwrap_or(&default_quit_msg))
-              .parse()
-              .map_err(Into::into) {
+        .parse()
+        .map_err(Into::into) {
         Ok(m) => m,
         Err(e) => {
             (state.error_handler)(e);
@@ -274,7 +292,8 @@ pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibRea
     if let Some(msg) = parse_privmsg(&input_msg) {
         handle_privmsg(state, &msg)
     } else if let Some(pircolate::command::ServerInfo(..)) =
-        input_msg.command::<pircolate::command::ServerInfo>() {
+        input_msg.command::<pircolate::command::ServerInfo>()
+    {
         handle_004(state)
     } else {
         Ok(LibReaction::None)
@@ -285,12 +304,12 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction> {
     trace!("Handling PRIVMSG: {:?}", msg);
 
     let &PrivMsg {
-             metadata: MsgMetadata {
-                 ref target,
-                 ref prefix,
-             },
-             text,
-         } = msg;
+        metadata: MsgMetadata {
+            ref target,
+            ref prefix,
+        },
+        text,
+    } = msg;
 
     let msg_for_bot = match parse_msg_to_nick(state, msg, &state.nick()?) {
         Some(m) => m,
@@ -307,8 +326,10 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction> {
 }
 
 fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction> {
-    debug!("Updating stored message prefix information from received {:?}",
-           prefix);
+    debug!(
+        "Updating stored message prefix information from received {:?}",
+        prefix
+    );
 
     state.msg_prefix.write().update_from(prefix);
 
@@ -324,13 +345,17 @@ fn handle_004(state: &State) -> Result<LibReaction> {
 fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction> {
     use pircolate::message::client::priv_msg;
 
-    Ok(LibReaction::RawMsg(priv_msg(&state.nick()?, UPDATE_MSG_PREFIX_STR)?))
+    Ok(LibReaction::RawMsg(
+        priv_msg(&state.nick()?, UPDATE_MSG_PREFIX_STR)?,
+    ))
 }
 
 fn connection_sequence(state: &State) -> Result<Vec<pircolate::Message>> {
     use pircolate::message::client::nick;
     use pircolate::message::client::user;
 
-    Ok(vec![nick(&state.config.nick)?,
-            user(&state.config.username, &state.config.realname)?])
+    Ok(vec![
+        nick(&state.config.nick)?,
+        user(&state.config.username, &state.config.realname)?,
+    ])
 }

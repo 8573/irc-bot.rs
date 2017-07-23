@@ -23,7 +23,8 @@ pub struct PlaintextConnection {
 
 impl PlaintextConnection {
     pub fn from_addr<A>(server_addrs: A) -> Result<Self>
-        where A: ToSocketAddrs
+    where
+        A: ToSocketAddrs,
     {
         Self::from_tcp_stream(TcpStream::connect(server_addrs)?)
     }
@@ -31,8 +32,10 @@ impl PlaintextConnection {
     pub fn from_tcp_stream(tcp_stream: TcpStream) -> Result<Self> {
         let tcp_stream = mio::net::TcpStream::from_stream(tcp_stream)?;
 
-        trace!("[{}] Established plaintext connection.",
-               tcp_stream.peer_addr()?);
+        trace!(
+            "[{}] Established plaintext connection.",
+            tcp_stream.peer_addr()?
+        );
 
         let tcp_stream = BufReader::new(tcp_stream);
 
@@ -54,9 +57,11 @@ impl SendMessage for PlaintextConnection {
         match self.tcp_stream.get_mut().flush() {
             Ok(()) => debug!("Sent message: {:?}", msg),
             Err(err) => {
-                error!("Wrote but failed to flush message: {:?} (error: {})",
-                       msg,
-                       err);
+                error!(
+                    "Wrote but failed to flush message: {:?} (error: {})",
+                    msg,
+                    err
+                );
                 bail!(err)
             }
         }
@@ -88,10 +93,7 @@ impl ReceiveMessage for PlaintextConnection {
 
 impl GetPeerAddr for PlaintextConnection {
     fn peer_addr(&self) -> Result<SocketAddr> {
-        self.tcp_stream
-            .get_ref()
-            .peer_addr()
-            .map_err(Into::into)
+        self.tcp_stream.get_ref().peer_addr().map_err(Into::into)
     }
 }
 

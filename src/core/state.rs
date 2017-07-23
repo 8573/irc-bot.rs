@@ -34,17 +34,14 @@ impl<'server, 'modl> State<'server, 'modl> {
 
     pub fn have_admin(&self,
 MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<bool>{
-        Ok(self.config
-               .admins
-               .iter()
-               .any(|&config::Admin {
-                          nick: ref nick_2,
-                          user: ref user_2,
-                          host: ref host_2,
-                      }| {
-                        check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2) &&
-                        check_admin_cred(host_1, host_2)
-                    }))
+        Ok(self.config.admins.iter().any(|&config::Admin {
+             nick: ref nick_2,
+             user: ref user_2,
+             host: ref host_2,
+         }| {
+            check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2) &&
+                check_admin_cred(host_1, host_2)
+        }))
     }
 }
 

@@ -15,7 +15,8 @@ lazy_static! {
 
 #[derive(Debug)]
 pub struct Session<Conn>
-    where Conn: Connection
+where
+    Conn: Connection,
 {
     connection: Conn,
 }
@@ -35,10 +36,7 @@ bitflags! {
     }
 }
 
-pub fn build<'nickname, 'username, 'realname>
-    ()
-    -> SessionBuilder<'nickname, 'username, 'realname>
-{
+pub fn build<'nickname, 'username, 'realname>() -> SessionBuilder<'nickname, 'username, 'realname> {
     SessionBuilder {
         nickname: Cow::Borrowed(""),
         username: Cow::Borrowed(""),
@@ -70,19 +68,24 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
     }
 
     pub fn wallops(mut self, wallops: bool) -> Self {
-        self.initial_user_mode_request
-            .set(INIT_UMODE_REQ_WALLOPS, wallops);
+        self.initial_user_mode_request.set(
+            INIT_UMODE_REQ_WALLOPS,
+            wallops,
+        );
         self
     }
 
     pub fn invisible(mut self, invisible: bool) -> Self {
-        self.initial_user_mode_request
-            .set(INIT_UMODE_REQ_INVISIBLE, invisible);
+        self.initial_user_mode_request.set(
+            INIT_UMODE_REQ_INVISIBLE,
+            invisible,
+        );
         self
     }
 
     pub fn start<Conn>(mut self, mut connection: Conn) -> Result<Session<Conn>>
-        where Conn: Connection
+    where
+        Conn: Connection,
     {
         if self.nickname.is_empty() {
             // TODO: return error.
@@ -93,9 +96,11 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             self.username = self.nickname.clone().into_owned().into();
         }
 
-        trace!("[{}] Initiating session from {:?}",
-               connection.peer_addr()?,
-               self);
+        trace!(
+            "[{}] Initiating session from {:?}",
+            connection.peer_addr()?,
+            self
+        );
 
         let SessionBuilder {
             nickname,
@@ -104,20 +109,23 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             initial_user_mode_request,
         } = self;
 
-        connection
-            .try_send(Message::try_from(format!("NICK {}", nickname))?)?;
-        connection
-            .try_send(Message::try_from(format!("USER {} {} * :{}",
-                                                username,
-                                                initial_user_mode_request.bits(),
-                                                realname))?)?;
+        connection.try_send(
+            Message::try_from(format!("NICK {}", nickname))?,
+        )?;
+        connection.try_send(Message::try_from(format!(
+            "USER {} {} * :{}",
+            username,
+            initial_user_mode_request.bits(),
+            realname
+        ))?)?;
 
         Ok(Session { connection })
     }
 }
 
 impl<Conn> Session<Conn>
-    where Conn: Connection
+where
+    Conn: Connection,
 {
     pub fn into_generic(self) -> Session<GenericConnection> {
         Session { connection: self.connection.into() }
@@ -125,7 +133,8 @@ impl<Conn> Session<Conn>
 }
 
 impl<Conn> ReceiveMessage for Session<Conn>
-    where Conn: Connection
+where
+    Conn: Connection,
 {
     fn recv(&mut self) -> Result<Option<Message>> {
         self.connection.recv()
@@ -133,7 +142,8 @@ impl<Conn> ReceiveMessage for Session<Conn>
 }
 
 impl<Conn> SendMessage for Session<Conn>
-    where Conn: Connection
+where
+    Conn: Connection,
 {
     fn try_send(&mut self, msg: Message) -> Result<()> {
         self.connection.try_send(msg)
@@ -141,7 +151,8 @@ impl<Conn> SendMessage for Session<Conn>
 }
 
 impl<Conn> GetPeerAddr for Session<Conn>
-    where Conn: Connection
+where
+    Conn: Connection,
 {
     fn peer_addr(&self) -> Result<SocketAddr> {
         self.connection.peer_addr()
@@ -149,7 +160,8 @@ impl<Conn> GetPeerAddr for Session<Conn>
 }
 
 impl<Conn> GetMioTcpStream for Session<Conn>
-    where Conn: Connection + GetMioTcpStream
+where
+    Conn: Connection + GetMioTcpStream,
 {
     fn mio_tcp_stream(&self) -> &mio::net::TcpStream {
         self.connection.mio_tcp_stream()

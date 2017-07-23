@@ -47,10 +47,12 @@ macro_rules! impl_from {
     };
 }
 
-impl_from!(GenericConnection,
-           GenericConnectionInner,
-           PlaintextConnection,
-           Plaintext);
+impl_from!(
+    GenericConnection,
+    GenericConnectionInner,
+    PlaintextConnection,
+    Plaintext
+);
 
 impl Connection for GenericConnection {}
 

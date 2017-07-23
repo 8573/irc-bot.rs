@@ -67,7 +67,8 @@ pub struct Config {
 
 impl<'server, 'modl> State<'server, 'modl> {
     fn new<ErrF>(config: Config, error_handler: ErrF) -> State<'server, 'modl>
-        where ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync
+    where
+        ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     {
         let nick = config.nick.clone();
         let username = config.username.clone();
@@ -79,16 +80,17 @@ impl<'server, 'modl> State<'server, 'modl> {
             chars_indicating_msg_is_addressed_to_nick: vec![':', ','],
             modules: Default::default(),
             commands: Default::default(),
-            msg_prefix: RwLock::new(OwningMsgPrefix::from_string(format!("{}!{}@",
-                                                                         nick,
-                                                                         username))),
+            msg_prefix: RwLock::new(OwningMsgPrefix::from_string(
+                format!("{}!{}@", nick, username),
+            )),
             error_handler: Arc::new(error_handler),
         }
     }
 
     fn handle_err<E, S>(&self, err: E, desc: S) -> LibReaction
-        where E: Into<Error>,
-              S: Borrow<str>
+    where
+        E: Into<Error>,
+        S: Borrow<str>,
     {
         let desc = desc.borrow();
 
@@ -99,33 +101,39 @@ impl<'server, 'modl> State<'server, 'modl> {
 
         match reaction {
             ErrorReaction::Proceed => {
-                trace!("Proceeding despite error{}{}{}.",
-                       if desc.is_empty() { "" } else { " (" },
-                       desc,
-                       if desc.is_empty() { "" } else { ")" });
+                trace!(
+                    "Proceeding despite error{}{}{}.",
+                    if desc.is_empty() { "" } else { " (" },
+                    desc,
+                    if desc.is_empty() { "" } else { ")" }
+                );
                 LibReaction::None
             }
             ErrorReaction::Quit(msg) => {
-                trace!("Quitting because of error{}{}{}.",
-                       if desc.is_empty() { "" } else { " (" },
-                       desc,
-                       if desc.is_empty() { "" } else { ")" });
+                trace!(
+                    "Quitting because of error{}{}{}.",
+                    if desc.is_empty() { "" } else { " (" },
+                    desc,
+                    if desc.is_empty() { "" } else { ")" }
+                );
                 irc_comm::quit(self, msg)
             }
         }
     }
 
     fn handle_err_generic<E>(&self, err: E) -> LibReaction
-        where E: Into<Error>
+    where
+        E: Into<Error>,
     {
         self.handle_err(err, "")
     }
 }
 
 pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
-    where Cfg: config::IntoConfig,
-          ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
-          Modls: AsRef<[Module<'modl>]>
+where
+    Cfg: config::IntoConfig,
+    ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
+    Modls: AsRef<[Module<'modl>]>,
 {
     let config = match config.into_config() {
         Ok(c) => {
@@ -149,17 +157,19 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
             Ok(conn) => conn,
             Err(err) => {
                 error_handler(err.into());
-                error!("Terminal error: Failed to connect to server {}.",
-                       server.socket_addr_string());
+                error!(
+                    "Terminal error: Failed to connect to server {}.",
+                    server.socket_addr_string()
+                );
                 return;
             }
         };
 
         match session::build()
-                  .nickname(&config.nick)
-                  .username(&config.username)
-                  .realname(&config.realname)
-                  .start(connection) {
+            .nickname(&config.nick)
+            .username(&config.username)
+            .realname(&config.realname)
+            .start(connection) {
             Ok(session) => cli.add_session(session).unwrap(),
             Err(err) => {
                 // TODO
@@ -181,8 +191,10 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
                 match (state.error_handler)(err) {
                     ErrorReaction::Proceed => {}
                     ErrorReaction::Quit(msg) => {
-                        error!("Terminal error while loading modules: {:?}",
-                               msg.unwrap_or_default().as_ref());
+                        error!(
+                            "Terminal error while loading modules: {:?}",
+                            msg.unwrap_or_default().as_ref()
+                        );
                         return;
                     }
                 }
@@ -190,10 +202,14 @@ pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: M
         }
     }
 
-    info!("Loaded modules: {:?}",
-          state.modules.keys().collect::<Vec<_>>());
-    info!("Loaded commands: {:?}",
-          state.commands.keys().collect::<Vec<_>>());
+    info!(
+        "Loaded modules: {:?}",
+        state.modules.keys().collect::<Vec<_>>()
+    );
+    info!(
+        "Loaded commands: {:?}",
+        state.commands.keys().collect::<Vec<_>>()
+    );
 
     trace!("Running bot....");
 

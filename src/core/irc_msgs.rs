@@ -28,8 +28,9 @@ pub struct OwningMsgPrefix {
     backing: String,
 }
 
-fn prefix_from_pircolate<'a>(pirc_pfx: Option<(&'a str, Option<&'a str>, Option<&'a str>)>)
-                             -> MsgPrefix<'a> {
+fn prefix_from_pircolate<'a>(
+    pirc_pfx: Option<(&'a str, Option<&'a str>, Option<&'a str>)>,
+) -> MsgPrefix<'a> {
     match pirc_pfx {
         Some((nick, user, host)) => {
             MsgPrefix {
@@ -49,9 +50,8 @@ fn prefix_from_pircolate<'a>(pirc_pfx: Option<(&'a str, Option<&'a str>, Option<
 }
 
 pub fn parse_privmsg(input: &pircolate::Message) -> Option<PrivMsg> {
-    input
-        .command::<pircolate::command::PrivMsg>()
-        .map(|pircolate::command::PrivMsg(target, msg)| {
+    input.command::<pircolate::command::PrivMsg>().map(
+        |pircolate::command::PrivMsg(target, msg)| {
             PrivMsg {
                 metadata: MsgMetadata {
                     target: MsgTarget(target),
@@ -59,31 +59,34 @@ pub fn parse_privmsg(input: &pircolate::Message) -> Option<PrivMsg> {
                 },
                 text: msg,
             }
-        })
+        },
+    )
 }
 
 fn is_msg_to_nick(state: &State, MsgTarget(target): MsgTarget, msg: &str, nick: &str) -> bool {
     target == nick || msg == nick ||
-    (msg.starts_with(nick) &&
-     (msg.find(|c: char| {
-                   state
-                       .chars_indicating_msg_is_addressed_to_nick
-                       .contains(&c)
-               }) == Some(nick.len())))
+        (msg.starts_with(nick) &&
+             (msg.find(|c: char| {
+                state.chars_indicating_msg_is_addressed_to_nick.contains(&c)
+            }) == Some(nick.len())))
 }
 
-pub fn parse_msg_to_nick<'msg>(state: &State,
-                             &PrivMsg {metadata: MsgMetadata {target, ..}, text}: &PrivMsg<'msg>,
-                             nick: &str)
--> Option<&'msg str>{
+pub fn parse_msg_to_nick<'msg>(
+    state: &State,
+    &PrivMsg {
+        metadata: MsgMetadata { target, .. },
+        text,
+    }: &PrivMsg<'msg>,
+    nick: &str,
+) -> Option<&'msg str> {
     if is_msg_to_nick(state, target, text, nick) {
-        Some(text.trim_left_matches(nick)
-                 .trim_left_matches(|c: char| {
-                                        state
-                                            .chars_indicating_msg_is_addressed_to_nick
-                                            .contains(&c)
-                                    })
-                 .trim())
+        Some(
+            text.trim_left_matches(nick)
+                .trim_left_matches(|c: char| {
+                    state.chars_indicating_msg_is_addressed_to_nick.contains(&c)
+                })
+                .trim(),
+        )
     } else {
         None
     }
@@ -113,10 +116,12 @@ impl<'a> MsgPrefix<'a> {
     }
 
     fn to_owning(&self) -> OwningMsgPrefix {
-        OwningMsgPrefix::from_string(format!("{}!{}@{}",
-                                             self.nick.unwrap_or(""),
-                                             self.user.unwrap_or(""),
-                                             self.host.unwrap_or("")))
+        OwningMsgPrefix::from_string(format!(
+            "{}!{}@{}",
+            self.nick.unwrap_or(""),
+            self.user.unwrap_or(""),
+            self.host.unwrap_or("")
+        ))
     }
 }
 
@@ -138,7 +143,8 @@ impl OwningMsgPrefix {
     /// `self`.
     pub fn update_from(&mut self, new: &MsgPrefix) {
         fn updated<'old, 'new>(old: Option<&'old str>, new: Option<&'new str>) -> &'old str
-            where 'new: 'old
+        where
+            'new: 'old,
         {
             match (old, new) {
                 (_, Some(s)) => s,
@@ -149,10 +155,12 @@ impl OwningMsgPrefix {
 
         self.backing = {
             let old = self.parse();
-            format!("{}!{}@{}",
-                    updated(old.nick, new.nick),
-                    updated(old.user, new.user),
-                    updated(old.host, new.host))
+            format!(
+                "{}!{}@{}",
+                updated(old.nick, new.nick),
+                updated(old.user, new.user),
+                updated(old.host, new.host)
+            )
         }
     }
 }

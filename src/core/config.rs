@@ -30,13 +30,15 @@ pub struct ConfigBuilder(Result<Config>);
 
 impl Config {
     pub fn try_from<T>(input: T) -> Result<Config>
-        where T: IntoConfig
+    where
+        T: IntoConfig,
     {
         input.into_config()
     }
 
     pub fn try_from_path<P>(path: P) -> Result<Config>
-        where P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         Self::try_from(File::open(path)?)
     }
@@ -46,13 +48,15 @@ impl Config {
     }
 
     pub fn build_from<T>(input: T) -> ConfigBuilder
-        where T: IntoConfig
+    where
+        T: IntoConfig,
     {
         ConfigBuilder(Self::try_from(input))
     }
 
     pub fn build_from_path<P>(path: P) -> ConfigBuilder
-        where P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         ConfigBuilder(Self::try_from_path(path))
     }
@@ -74,39 +78,42 @@ impl Server {
 
 impl ConfigBuilder {
     pub fn nick<S>(self, nick: S) -> Self
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         let nick = nick.into();
 
         if nick.is_empty() {
-            return ConfigBuilder(Err(ErrorKind::Config("nick".into(), "is empty".into()).into()));
+            return ConfigBuilder(Err(
+                ErrorKind::Config("nick".into(), "is empty".into()).into(),
+            ));
         }
 
         ConfigBuilder(self.0.map(|cfg| Config { nick: nick, ..cfg }))
     }
 
     pub fn username<S>(self, username: S) -> Self
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
-        ConfigBuilder(self.0
-                          .map(|cfg| {
-                                   Config {
-                                       username: username.into(),
-                                       ..cfg
-                                   }
-                               }))
+        ConfigBuilder(self.0.map(|cfg| {
+            Config {
+                username: username.into(),
+                ..cfg
+            }
+        }))
     }
 
     pub fn realname<S>(self, realname: S) -> Self
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
-        ConfigBuilder(self.0
-                          .map(|cfg| {
-                                   Config {
-                                       realname: realname.into(),
-                                       ..cfg
-                                   }
-                               }))
+        ConfigBuilder(self.0.map(|cfg| {
+            Config {
+                realname: realname.into(),
+                ..cfg
+            }
+        }))
     }
 }
 
@@ -146,7 +153,8 @@ impl IntoConfig for String {
 }
 
 impl<R> IntoConfig for BufReader<R>
-    where R: Read
+where
+    R: Read,
 {
     fn into_config(mut self) -> Result<Config> {
         let mut text = String::new();
@@ -186,8 +194,10 @@ fn read_config<R>(input: R) -> Result<Config>
         }
     ]]);
 
-    let nickname = nickname
-        .ok_or(ErrorKind::Config("nickname".into(), "is not specified".into()))?;
+    let nickname = nickname.ok_or(ErrorKind::Config(
+        "nickname".into(),
+        "is not specified".into(),
+    ))?;
 
     if nickname.is_empty() {
         bail!(ErrorKind::Config("nickname".into(), "is empty".into()))
@@ -195,30 +205,36 @@ fn read_config<R>(input: R) -> Result<Config>
 
     let username = username.unwrap_or(nickname.clone());
 
-    let realname = realname.unwrap_or(format!("Built with <{}> v{}",
-                                              env!("CARGO_PKG_HOMEPAGE"),
-                                              env!("CARGO_PKG_VERSION")));
+    let realname = realname.unwrap_or(format!(
+        "Built with <{}> v{}",
+        env!("CARGO_PKG_HOMEPAGE"),
+        env!("CARGO_PKG_VERSION")
+    ));
 
-    let servers = servers
-        .ok_or(ErrorKind::Config("servers".into(), "is not specified".into()))?;
+    let servers = servers.ok_or(ErrorKind::Config(
+        "servers".into(),
+        "is not specified".into(),
+    ))?;
 
     if servers.is_empty() {
         bail!(ErrorKind::Config("servers".into(), "is empty".into()))
     }
 
     if servers.len() > 1 {
-        bail!(ErrorKind::Config("servers".into(),
-                                "lists multiple servers, which is not yet supported".into()))
+        bail!(ErrorKind::Config(
+            "servers".into(),
+            "lists multiple servers, which is not yet supported".into(),
+        ))
     }
 
     Ok(Config {
-           nick: nickname,
-           username: username,
-           realname: realname,
-           admins: admins.unwrap_or(vec![]),
-           servers: servers,
-           channels: channels.unwrap(),
-       })
+        nick: nickname,
+        username: username,
+        realname: realname,
+        admins: admins.unwrap_or(vec![]),
+        servers: servers,
+        channels: channels.unwrap(),
+    })
 }
 
 impl<'a> FromPointer<'a> for Admin {
@@ -236,10 +252,10 @@ impl<'a> FromPointer<'a> for Admin {
             }
             (n, u, h) => {
                 Some(Admin {
-                         nick: n,
-                         user: u,
-                         host: h,
-                     })
+                    nick: n,
+                    user: u,
+                    host: h,
+                })
             }
         }
     }
@@ -268,10 +284,10 @@ impl<'a> FromPointer<'a> for Server {
             }
             (Some(h), Some(p)) => {
                 Some(Server {
-                         host: h,
-                         port: p,
-                         tls: tls.unwrap_or(true),
-                     })
+                    host: h,
+                    port: p,
+                    tls: tls.unwrap_or(true),
+                })
             }
         }
     }

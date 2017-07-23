@@ -84,7 +84,8 @@ impl Client {
     }
 
     pub fn add_session<Conn>(&mut self, session: Session<Conn>) -> Result<SessionId>
-        where Conn: Connection
+    where
+        Conn: Connection,
     {
         let index = self.sessions.len();
 
@@ -97,18 +98,18 @@ impl Client {
             unreachable!()
         }
 
-        self.sessions
-            .push(SessionEntry {
-                      inner: session.into_generic(),
-                      output_queue: Vec::new(),
-                      is_writable: false,
-                  });
+        self.sessions.push(SessionEntry {
+            inner: session.into_generic(),
+            output_queue: Vec::new(),
+            is_writable: false,
+        });
 
         Ok(SessionId { index: index })
     }
 
     pub fn run<MsgHandler>(mut self, msg_handler: MsgHandler) -> Result<()>
-        where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
+    where
+        MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
     {
         let poll = match mio::Poll::new() {
             Ok(p) => p,
@@ -121,16 +122,20 @@ impl Client {
         let mut events = mio::Events::with_capacity(512);
 
         for (index, session) in self.sessions.iter().enumerate() {
-            poll.register(session.inner.mio_tcp_stream(),
-                          mio::Token(index),
-                          mio::Ready::readable() | mio::Ready::writable(),
-                          mio::PollOpt::edge())?
+            poll.register(
+                session.inner.mio_tcp_stream(),
+                mio::Token(index),
+                mio::Ready::readable() | mio::Ready::writable(),
+                mio::PollOpt::edge(),
+            )?
         }
 
-        poll.register(&self.mpsc_registration,
-                      mio::Token(MPSC_QUEUE_TOKEN),
-                      mio::Ready::readable(),
-                      mio::PollOpt::edge())?;
+        poll.register(
+            &self.mpsc_registration,
+            mio::Token(MPSC_QUEUE_TOKEN),
+            mio::Ready::readable(),
+            mio::PollOpt::edge(),
+        )?;
 
         loop {
             let _event_qty = poll.poll(&mut events, None)?;
@@ -140,10 +145,12 @@ impl Client {
                     mio::Token(MPSC_QUEUE_TOKEN) => process_mpsc_queue(&mut self),
                     mio::Token(session_index) => {
                         let ref mut session = self.sessions[session_index];
-                        process_session_event(event.readiness(),
-                                              session,
-                                              session_index,
-                                              &msg_handler)
+                        process_session_event(
+                            event.readiness(),
+                            session,
+                            session_index,
+                            &msg_handler,
+                        )
                     }
                 }
             }
@@ -153,11 +160,13 @@ impl Client {
     }
 }
 
-fn process_session_event<MsgHandler>(readiness: mio::Ready,
-                                     session: &mut SessionEntry,
-                                     session_index: usize,
-                                     msg_handler: MsgHandler)
-    where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
+fn process_session_event<MsgHandler>(
+    readiness: mio::Ready,
+    session: &mut SessionEntry,
+    session_index: usize,
+    msg_handler: MsgHandler,
+) where
+    MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
 {
     if readiness.is_writable() {
         session.is_writable = true;
@@ -172,10 +181,12 @@ fn process_session_event<MsgHandler>(readiness: mio::Ready,
     }
 }
 
-fn process_readable<MsgHandler>(session: &mut SessionEntry,
-                                session_index: usize,
-                                msg_handler: MsgHandler)
-    where MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction
+fn process_readable<MsgHandler>(
+    session: &mut SessionEntry,
+    session_index: usize,
+    msg_handler: MsgHandler,
+) where
+    MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
 {
     let msg_ctx = MessageContext { session_id: SessionId { index: session_index } };
     let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
@@ -190,9 +201,10 @@ fn process_readable<MsgHandler>(session: &mut SessionEntry,
             }
             Ok(Some(msg)) => msg_handler_with_ctx(Ok(msg)),
             Ok(None) => break,
-            Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
-                                                      io::ErrorKind::TimedOut]
-                                                             .contains(&err.kind()) => break,
+            Err(Error(ErrorKind::Io(ref err), _))
+                if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
+                break
+            }
             Err(err) => msg_handler_with_ctx(Err(err)),
         };
 
@@ -206,18 +218,19 @@ fn process_writable(session: &mut SessionEntry, session_index: usize) {
     for (index, msg) in session.output_queue.iter().enumerate() {
         match session.inner.try_send(msg.clone()) {
             Ok(()) => msgs_consumed += 1,
-            Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
-                                                      io::ErrorKind::TimedOut]
-                                                             .contains(&err.kind()) => {
+            Err(Error(ErrorKind::Io(ref err), _))
+                if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 session.is_writable = false;
                 break;
             }
             Err(err) => {
                 msgs_consumed += 1;
-                error!("[session {}] Failed to send message {:?} (error: {})",
-                       session_index,
-                       msg.raw_message(),
-                       err)
+                error!(
+                    "[session {}] Failed to send message {:?} (error: {})",
+                    session_index,
+                    msg.raw_message(),
+                    err
+                )
             }
         }
     }
@@ -264,8 +277,7 @@ impl ClientHandle {
             .unwrap();
 
         // Notify the client that there's an action to read from the MPSC queue.
-        self.readiness_setter
-            .set_readiness(mio::Ready::readable())?;
+        self.readiness_setter.set_readiness(mio::Ready::readable())?;
 
         Ok(())
     }
@@ -277,21 +289,24 @@ impl SessionEntry {
             Ok(()) => {
                 // TODO: log the `session_index`.
             }
-            Err(Error(ErrorKind::Io(ref err), _)) if [io::ErrorKind::WouldBlock,
-                                                      io::ErrorKind::TimedOut]
-                                                             .contains(&err.kind()) => {
-                trace!("[session {}] Write would block or timed out; enqueueing message for \
-                        later transmission: {:?}",
-                       session_index,
-                       msg.raw_message());
+            Err(Error(ErrorKind::Io(ref err), _))
+                if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
+                trace!(
+                    "[session {}] Write would block or timed out; enqueueing message for later \
+                     transmission: {:?}",
+                    session_index,
+                    msg.raw_message()
+                );
                 self.is_writable = false;
                 self.output_queue.push(msg);
             }
             Err(err) => {
-                error!("[session {}] Failed to send message {:?} (error: {})",
-                       session_index,
-                       msg.raw_message(),
-                       err)
+                error!(
+                    "[session {}] Failed to send message {:?} (error: {})",
+                    session_index,
+                    msg.raw_message(),
+                    err
+                )
             }
         }
     }

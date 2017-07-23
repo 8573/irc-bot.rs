@@ -47,7 +47,8 @@ pub struct ModuleBuilder<'modl> {
 }
 
 pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
-    where S: Into<Cow<'static, str>>
+where
+    S: Into<Cow<'static, str>>,
 {
     ModuleBuilder {
         name: name.into(),
@@ -56,32 +57,35 @@ pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
 }
 
 impl<'modl> ModuleBuilder<'modl> {
-    pub fn command<S1, S2, S3>(mut self,
-                               name: S1,
-                               syntax: S2,
-                               help_msg: S3,
-                               auth_lvl: BotCmdAuthLvl,
-                               handler: Box<BotCmdHandler>)
-                               -> Self
-        where S1: Into<Cow<'static, str>>,
-              S2: Into<Cow<'static, str>>,
-              S3: Into<Cow<'static, str>>
+    pub fn command<S1, S2, S3>(
+        mut self,
+        name: S1,
+        syntax: S2,
+        help_msg: S3,
+        auth_lvl: BotCmdAuthLvl,
+        handler: Box<BotCmdHandler>,
+    ) -> Self
+    where
+        S1: Into<Cow<'static, str>>,
+        S2: Into<Cow<'static, str>>,
+        S3: Into<Cow<'static, str>>,
     {
         let name = name.into();
 
-        assert!(!name.as_ref().contains(char::is_whitespace),
-                "The name of the bot command {:?} contains whitespace, which is not allowed.",
-                name.as_ref());
+        assert!(
+            !name.as_ref().contains(char::is_whitespace),
+            "The name of the bot command {:?} contains whitespace, which is not allowed.",
+            name.as_ref()
+        );
 
-        self.features
-            .push(ModuleFeature::Command {
-                      name: name,
-                      usage: syntax.into(),
-                      help_msg: help_msg.into(),
-                      auth_lvl: auth_lvl,
-                      handler: handler,
-                      _lifetime: PhantomData,
-                  });
+        self.features.push(ModuleFeature::Command {
+            name: name,
+            usage: syntax.into(),
+            help_msg: help_msg.into(),
+            auth_lvl: auth_lvl,
+            handler: handler,
+            _lifetime: PhantomData,
+        });
 
         self
     }
@@ -186,36 +190,41 @@ pub enum ModuleLoadMode {
 }
 
 impl<'server, 'modl> State<'server, 'modl> {
-    pub fn load_modules<Modls>(&mut self,
-                               modules: Modls,
-                               mode: ModuleLoadMode)
-                               -> std::result::Result<(), Vec<Error>>
-        where Modls: IntoIterator<Item = &'modl Module<'modl>>
+    pub fn load_modules<Modls>(
+        &mut self,
+        modules: Modls,
+        mode: ModuleLoadMode,
+    ) -> std::result::Result<(), Vec<Error>>
+    where
+        Modls: IntoIterator<Item = &'modl Module<'modl>>,
     {
         let errs = modules
             .into_iter()
             .filter_map(|module| match self.load_module(module, mode) {
-                            Ok(()) => None,
-                            Err(e) => Some(e),
-                        })
+                Ok(()) => None,
+                Err(e) => Some(e),
+            })
             .flatten()
             .collect::<Vec<Error>>();
 
         if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
 
-    pub fn load_module(&mut self,
-                       module: &'modl Module,
-                       mode: ModuleLoadMode)
-                       -> std::result::Result<(), Vec<Error>> {
-        debug!("Loading module {:?}, mode {:?}, providing {:?}",
-               module.name,
-               mode,
-               module
-                   .features
-                   .iter()
-                   .map(GetDebugInfo::dbg_info)
-                   .collect::<Vec<_>>());
+    pub fn load_module(
+        &mut self,
+        module: &'modl Module,
+        mode: ModuleLoadMode,
+    ) -> std::result::Result<(), Vec<Error>> {
+        debug!(
+            "Loading module {:?}, mode {:?}, providing {:?}",
+            module.name,
+            mode,
+            module
+                .features
+                .iter()
+                .map(GetDebugInfo::dbg_info)
+                .collect::<Vec<_>>()
+        );
 
         if let Some(existing_module) =
             match (mode, self.modules.get(module.name.as_ref())) {
@@ -223,10 +232,14 @@ impl<'server, 'modl> State<'server, 'modl> {
                 (ModuleLoadMode::Replace, _) |
                 (ModuleLoadMode::Force, _) => None,
                 (ModuleLoadMode::Add, Some(old)) => Some(old),
-            } {
-            return Err(vec![ErrorKind::ModuleRegistryClash(existing_module.dbg_info(),
-                                                           module.dbg_info())
-                                    .into()]);
+            }
+        {
+            return Err(vec![
+                ErrorKind::ModuleRegistryClash(
+                    existing_module.dbg_info(),
+                    module.dbg_info()
+                ).into(),
+            ]);
         }
 
         self.modules.insert(module.name.clone(), module);
@@ -234,20 +247,25 @@ impl<'server, 'modl> State<'server, 'modl> {
         let errs = module
             .features
             .iter()
-            .filter_map(|feature| match self.load_module_feature(module, feature, mode) {
-                            Ok(()) => None,
-                            Err(e) => Some(e),
-                        })
+            .filter_map(|feature| match self.load_module_feature(
+                module,
+                feature,
+                mode,
+            ) {
+                Ok(()) => None,
+                Err(e) => Some(e),
+            })
             .collect::<Vec<Error>>();
 
         if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
 
-    fn load_module_feature(&mut self,
-                           provider: &'modl Module,
-                           feature: &'modl ModuleFeature,
-                           mode: ModuleLoadMode)
-                           -> Result<()> {
+    fn load_module_feature(
+        &mut self,
+        provider: &'modl Module,
+        feature: &'modl ModuleFeature,
+        mode: ModuleLoadMode,
+    ) -> Result<()> {
         debug!("Loading module feature (f1): {:?}", feature.dbg_info());
 
         if let Some(existing_feature) =
@@ -256,15 +274,19 @@ impl<'server, 'modl> State<'server, 'modl> {
                     match (mode, self.commands.get(feature.name())) {
                         (_, None) |
                         (ModuleLoadMode::Force, _) => None,
-                        (ModuleLoadMode::Replace, Some(old)) if old.provider.name ==
-                                                                provider.name => None,
+                        (ModuleLoadMode::Replace, Some(old))
+                            if old.provider.name == provider.name => None,
                         (ModuleLoadMode::Replace, Some(old)) => Some(old.dbg_info()),
                         (ModuleLoadMode::Add, Some(old)) => Some(old.dbg_info()),
                     }
                 }
                 &ModuleFeature::Trigger => unimplemented!(),
-            } {
-            bail!(ErrorKind::ModuleFeatureRegistryClash(existing_feature, feature.dbg_info()))
+            }
+        {
+            bail!(ErrorKind::ModuleFeatureRegistryClash(
+                existing_feature,
+                feature.dbg_info(),
+            ))
         }
 
         self.force_load_module_feature(provider, feature);
@@ -272,30 +294,33 @@ impl<'server, 'modl> State<'server, 'modl> {
         Ok(())
     }
 
-    fn force_load_module_feature(&mut self,
-                                 provider: &'modl Module,
-                                 feature: &'modl ModuleFeature) {
+    fn force_load_module_feature(
+        &mut self,
+        provider: &'modl Module,
+        feature: &'modl ModuleFeature,
+    ) {
         debug!("Loading module feature (f2): {:?}", feature.dbg_info());
 
         match feature {
             &ModuleFeature::Command {
-                 ref name,
-                 ref handler,
-                 ref auth_lvl,
-                 ref usage,
-                 ref help_msg,
-                 _lifetime: _,
-             } => {
-                self.commands
-                    .insert(name.clone(),
-                            BotCommand {
-                                provider: provider,
-                                name: name.clone(),
-                                auth_lvl: auth_lvl.clone(),
-                                handler: handler.as_ref(),
-                                usage: usage.clone(),
-                                help_msg: help_msg.clone(),
-                            })
+                ref name,
+                ref handler,
+                ref auth_lvl,
+                ref usage,
+                ref help_msg,
+                _lifetime: _,
+            } => {
+                self.commands.insert(
+                    name.clone(),
+                    BotCommand {
+                        provider: provider,
+                        name: name.clone(),
+                        auth_lvl: auth_lvl.clone(),
+                        handler: handler.as_ref(),
+                        usage: usage.clone(),
+                        help_msg: help_msg.clone(),
+                    },
+                )
             }
             &ModuleFeature::Trigger => unimplemented!(),
         };

@@ -38,7 +38,8 @@ pub struct IntoIter {
 
 impl PlaintextConnection {
     pub fn from_addr<A>(server_addrs: A) -> Result<Self>
-        where A: ToSocketAddrs
+    where
+        A: ToSocketAddrs,
     {
         Self::from_tcp_stream(TcpStream::connect(server_addrs)?)
     }
@@ -53,57 +54,69 @@ impl PlaintextConnection {
         let mut tcp_writer = LineWriter::with_capacity(1024, tcp_stream.try_clone()?);
         let tcp_reader = BufReader::new(tcp_stream);
 
-        thread::Builder::new()
-            .name(input_thread_name)
-            .spawn(move || for msg in tcp_reader.lines() {
-                       let msg = msg.map_err(Into::into)
-                           .and_then(|s| Message::try_from(s).map_err(Into::into));
-                       match input_sender.try_send(msg) {
-                           Ok(()) => {}
-                           Err(err) => {
-                               error!("Failed to pass incoming message to message receiver: {:?}",
-                                      err)
-                           }
-                       }
-                   })?;
+        thread::Builder::new().name(input_thread_name).spawn(
+            move || {
+                for msg in tcp_reader.lines() {
+                    let msg = msg.map_err(Into::into).and_then(|s| {
+                        Message::try_from(s).map_err(Into::into)
+                    });
+                    match input_sender.try_send(msg) {
+                        Ok(()) => {}
+                        Err(err) => {
+                            error!(
+                                "Failed to pass incoming message to message receiver: {:?}",
+                                err
+                            )
+                        }
+                    }
+                }
+            },
+        )?;
 
-        thread::Builder::new()
-            .name(output_thread_name)
-            .spawn(move || for msg in output_receiver {
-                       let msg = msg.raw_message();
+        thread::Builder::new().name(output_thread_name).spawn(
+            move || {
+                for msg in output_receiver {
+                    let msg = msg.raw_message();
 
-                       match tcp_writer.write_all(msg.as_bytes()) {
-                           Ok(()) => {
+                    match tcp_writer.write_all(msg.as_bytes()) {
+                        Ok(()) => {
                     trace!("Sent message {:?}.", msg)
                 }
-                           Err(err) => {
-                               match error_sender.try_send(Err(err.into())) {
-                                   Ok(()) => {
+                        Err(err) => {
+                            match error_sender.try_send(Err(err.into())) {
+                                Ok(()) => {
                     trace!("Failed to send message {:?}. Reported error to message receiver.", msg)
                         }
-                                   Err(mpsc::TrySendError::Full(Err(err))) => {
-                                       error!("Failed to send message {:?}. Failed to report \
-                                               error to message receiver (MPSC queue full). \
-                                               Original error: {:?}",
-                                              msg,
-                                              err)
-                                   }
-                                   Err(mpsc::TrySendError::Disconnected(Err(err))) => {
-                                       error!("Failed to send message {:?}. Failed to report \
-                                               error to message receiver (receiver disconnected). \
-                                               Original error: {:?}",
-                                              msg,
-                                              err)
-                                   }
-                                   Err(mpsc::TrySendError::Full(Ok(_))) |
-                                   Err(mpsc::TrySendError::Disconnected(Ok(_))) => unreachable!(),
-                               }
-                           }
-                       }
-                   })?;
+                                Err(mpsc::TrySendError::Full(Err(err))) => {
+                                    error!(
+                                        "Failed to send message {:?}. Failed to report error to \
+                                         message receiver (MPSC queue full). Original error: {:?}",
+                                        msg,
+                                        err
+                                    )
+                                }
+                                Err(mpsc::TrySendError::Disconnected(Err(err))) => {
+                                    error!(
+                                        "Failed to send message {:?}. Failed to report error to \
+                                         message receiver (receiver disconnected). Original error: \
+                                         {:?}",
+                                        msg,
+                                        err
+                                    )
+                                }
+                                Err(mpsc::TrySendError::Full(Ok(_))) |
+                                Err(mpsc::TrySendError::Disconnected(Ok(_))) => unreachable!(),
+                            }
+                        }
+                    }
+                }
+            },
+        )?;
 
-        Ok(PlaintextConnection(PlaintextSender { mpsc_sender: output_sender },
-                               PlaintextReceiver { mpsc_receiver: input_receiver }))
+        Ok(PlaintextConnection(
+            PlaintextSender { mpsc_sender: output_sender },
+            PlaintextReceiver { mpsc_receiver: input_receiver },
+        ))
     }
 }
 
