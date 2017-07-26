@@ -2,7 +2,7 @@
 build:
 	@nix-shell --run 'cargo build'
 
-run: build
+run:
 	@nix-shell --run 'cargo run'
 
 clean:
