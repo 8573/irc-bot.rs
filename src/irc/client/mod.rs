@@ -59,7 +59,16 @@ pub struct SessionId {
 }
 
 const MPSC_QUEUE_SIZE_LIMIT: usize = 1024;
-const MPSC_QUEUE_TOKEN: usize = std::usize::MAX;
+
+/// Identifies the context associated with a `mio` event.
+///
+/// The context could be an IRC session, or it could be the MPSC queue via which the library
+/// consumer can asynchronously send messages and other actions to this library.
+#[derive(Debug)]
+enum EventContextId {
+    MpscQueue,
+    Session(usize),
+}
 
 impl Client {
     pub fn new() -> Self {
@@ -90,9 +99,8 @@ impl Client {
         let index = self.sessions.len();
 
         if index == std::usize::MAX {
-            // `usize::MAX` is used as the `mio::Token` value for the `Client`'s MPSC queue, and
-            // would mean that the upcoming `Vec::push` call would cause an overflow, assuming the
-            // system had somehow not run out of memory.
+            // `usize::MAX` would mean that the upcoming `Vec::push` call would cause an overflow,
+            // assuming the system had somehow not run out of memory.
 
             // TODO: return an error.
             unreachable!()
@@ -124,7 +132,7 @@ impl Client {
         for (index, session) in self.sessions.iter().enumerate() {
             poll.register(
                 session.inner.mio_tcp_stream(),
-                mio::Token(index),
+                EventContextId::Session(index).to_mio_token()?,
                 mio::Ready::readable() | mio::Ready::writable(),
                 mio::PollOpt::edge(),
             )?
@@ -132,7 +140,7 @@ impl Client {
 
         poll.register(
             &self.mpsc_registration,
-            mio::Token(MPSC_QUEUE_TOKEN),
+            EventContextId::MpscQueue.to_mio_token()?,
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
@@ -141,9 +149,9 @@ impl Client {
             let _event_qty = poll.poll(&mut events, None)?;
 
             for event in &events {
-                match event.token() {
-                    mio::Token(MPSC_QUEUE_TOKEN) => process_mpsc_queue(&mut self),
-                    mio::Token(session_index) => {
+                match event.token().into() {
+                    EventContextId::MpscQueue => process_mpsc_queue(&mut self),
+                    EventContextId::Session(session_index) => {
                         let ref mut session = self.sessions[session_index];
                         process_session_event(
                             event.readiness(),
@@ -308,6 +316,30 @@ impl SessionEntry {
                     err
                 )
             }
+        }
+    }
+}
+
+impl EventContextId {
+    fn to_mio_token(&self) -> Result<mio::Token> {
+        // TODO: Use QuickCheck to test that this function is bijective.
+        let token_number = match self {
+            &EventContextId::MpscQueue => 0,
+            // TODO: Check for overflow.
+            &EventContextId::Session(index) => 1 + index,
+        };
+
+        Ok(mio::Token(token_number))
+    }
+}
+
+// TODO: Use QuickCheck to test that conversion between `EventContextId` and `mio::Token`
+// round-trips properly.
+impl From<mio::Token> for EventContextId {
+    fn from(mio::Token(token_number): mio::Token) -> Self {
+        match token_number {
+            0 => EventContextId::MpscQueue,
+            n => EventContextId::Session(n - 1),
         }
     }
 }
