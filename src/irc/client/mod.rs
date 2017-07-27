@@ -1,11 +1,10 @@
 use self::action::Action;
+pub use self::err::*;
 pub use self::msg_ctx::MessageContext;
 pub use self::reaction::Reaction;
 use self::session::Session;
-use irc::Error;
-use irc::ErrorKind;
 use irc::Message;
-use irc::Result;
+use irc::connection;
 use irc::connection::Connection;
 use irc::connection::GenericConnection;
 use irc::connection::GetMioTcpStream;
@@ -29,6 +28,7 @@ pub mod prelude {
 }
 
 mod action;
+mod err;
 
 #[derive(Debug)]
 pub struct Client {
@@ -201,11 +201,11 @@ fn process_readable<MsgHandler>(
             }
             Ok(Some(msg)) => msg_handler_with_ctx(Ok(msg)),
             Ok(None) => break,
-            Err(Error(ErrorKind::Io(ref err), _))
+            Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 break
             }
-            Err(err) => msg_handler_with_ctx(Err(err)),
+            Err(err) => msg_handler_with_ctx(Err(err.into())),
         };
 
         process_reaction(session, session_index, reaction);
@@ -218,7 +218,7 @@ fn process_writable(session: &mut SessionEntry, session_index: usize) {
     for (index, msg) in session.output_queue.iter().enumerate() {
         match session.inner.try_send(msg.clone()) {
             Ok(()) => msgs_consumed += 1,
-            Err(Error(ErrorKind::Io(ref err), _))
+            Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 session.is_writable = false;
                 break;
@@ -289,7 +289,7 @@ impl SessionEntry {
             Ok(()) => {
                 // TODO: log the `session_index`.
             }
-            Err(Error(ErrorKind::Io(ref err), _))
+            Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 trace!(
                     "[session {}] Write would block or timed out; enqueueing message for later \

@@ -13,7 +13,8 @@ error_chain! {
     }
 
     links {
-        Irc(irc::Error, irc::ErrorKind);
+        IrcConnection(irc::connection::Error, irc::connection::ErrorKind);
+        IrcClient(irc::client::Error, irc::client::ErrorKind);
         Pircolate(pircolate::error::Error, pircolate::error::ErrorKind);
     }
 

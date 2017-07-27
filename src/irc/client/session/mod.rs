@@ -1,5 +1,6 @@
 use irc::Message;
-use irc::Result;
+use irc::client::Result;
+use irc::connection;
 use irc::connection::GenericConnection;
 use irc::connection::GetMioTcpStream;
 use irc::connection::prelude::*;
@@ -136,7 +137,7 @@ impl<Conn> ReceiveMessage for Session<Conn>
 where
     Conn: Connection,
 {
-    fn recv(&mut self) -> Result<Option<Message>> {
+    fn recv(&mut self) -> connection::Result<Option<Message>> {
         self.connection.recv()
     }
 }
@@ -145,7 +146,7 @@ impl<Conn> SendMessage for Session<Conn>
 where
     Conn: Connection,
 {
-    fn try_send(&mut self, msg: Message) -> Result<()> {
+    fn try_send(&mut self, msg: Message) -> connection::Result<()> {
         self.connection.try_send(msg)
     }
 }
@@ -154,7 +155,7 @@ impl<Conn> GetPeerAddr for Session<Conn>
 where
     Conn: Connection,
 {
-    fn peer_addr(&self) -> Result<SocketAddr> {
+    fn peer_addr(&self) -> connection::Result<SocketAddr> {
         self.connection.peer_addr()
     }
 }

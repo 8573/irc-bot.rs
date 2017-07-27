@@ -1,4 +1,3 @@
-use mio;
 use pircolate;
 use std::io;
 

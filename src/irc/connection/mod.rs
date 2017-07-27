@@ -1,7 +1,7 @@
+pub use self::err::*;
 pub use self::generic::GenericConnection;
 pub use self::plaintext::PlaintextConnection;
 use irc::Message;
-use irc::Result;
 use mio;
 use std::net::SocketAddr;
 
@@ -14,6 +14,7 @@ pub mod prelude {
     pub use super::SendMessage;
 }
 
+mod err;
 mod generic;
 mod plaintext;
 
