@@ -24,7 +24,7 @@ use std::net::ToSocketAddrs;
 /// to create trait objects. [`Connection`] types from other crates, if supported at all, will most
 /// likely be stored on the heap.
 ///
-/// [`Connection`]: ../trait.Connection.html
+/// [`Connection`]: trait.Connection.html
 #[derive(Debug)]
 pub struct GenericConnection {
     inner: GenericConnectionInner,
