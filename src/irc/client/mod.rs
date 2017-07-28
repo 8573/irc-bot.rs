@@ -67,7 +67,7 @@ const MPSC_QUEUE_SIZE_LIMIT: usize = 1024;
 #[derive(Debug)]
 enum EventContextId {
     MpscQueue,
-    Session(usize),
+    Session(SessionId),
 }
 
 impl Client {
@@ -132,7 +132,8 @@ impl Client {
         for (index, session) in self.sessions.iter().enumerate() {
             poll.register(
                 session.inner.mio_tcp_stream(),
-                EventContextId::Session(index).to_mio_token()?,
+                EventContextId::Session(SessionId { index })
+                    .to_mio_token()?,
                 mio::Ready::readable() | mio::Ready::writable(),
                 mio::PollOpt::edge(),
             )?
@@ -151,14 +152,9 @@ impl Client {
             for event in &events {
                 match event.token().into() {
                     EventContextId::MpscQueue => process_mpsc_queue(&mut self),
-                    EventContextId::Session(session_index) => {
-                        let ref mut session = self.sessions[session_index];
-                        process_session_event(
-                            event.readiness(),
-                            session,
-                            session_index,
-                            &msg_handler,
-                        )
+                    EventContextId::Session(ref session_id) => {
+                        let ref mut session = self.sessions[session_id.index];
+                        process_session_event(event.readiness(), session, session_id, &msg_handler)
                     }
                 }
             }
@@ -171,7 +167,7 @@ impl Client {
 fn process_session_event<MsgHandler>(
     readiness: mio::Ready,
     session: &mut SessionEntry,
-    session_index: usize,
+    session_id: &SessionId,
     msg_handler: MsgHandler,
 ) where
     MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
@@ -181,22 +177,22 @@ fn process_session_event<MsgHandler>(
     }
 
     if session.is_writable {
-        process_writable(session, session_index);
+        process_writable(session, session_id);
     }
 
     if readiness.is_readable() {
-        process_readable(session, session_index, &msg_handler);
+        process_readable(session, session_id, &msg_handler);
     }
 }
 
 fn process_readable<MsgHandler>(
     session: &mut SessionEntry,
-    session_index: usize,
+    session_id: &SessionId,
     msg_handler: MsgHandler,
 ) where
     MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
 {
-    let msg_ctx = MessageContext { session_id: SessionId { index: session_index } };
+    let msg_ctx = MessageContext { session_id: session_id.clone() };
     let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
 
     loop {
@@ -216,11 +212,11 @@ fn process_readable<MsgHandler>(
             Err(err) => msg_handler_with_ctx(Err(err.into())),
         };
 
-        process_reaction(session, session_index, reaction);
+        process_reaction(session, session_id, reaction);
     }
 }
 
-fn process_writable(session: &mut SessionEntry, session_index: usize) {
+fn process_writable(session: &mut SessionEntry, session_id: &SessionId) {
     let mut msgs_consumed = 0;
 
     for (index, msg) in session.output_queue.iter().enumerate() {
@@ -235,7 +231,7 @@ fn process_writable(session: &mut SessionEntry, session_index: usize) {
                 msgs_consumed += 1;
                 error!(
                     "[session {}] Failed to send message {:?} (error: {})",
-                    session_index,
+                    session_id.index,
                     msg.raw_message(),
                     err
                 )
@@ -246,13 +242,13 @@ fn process_writable(session: &mut SessionEntry, session_index: usize) {
     session.output_queue.drain(..msgs_consumed);
 }
 
-fn process_reaction(session: &mut SessionEntry, session_index: usize, reaction: Reaction) {
+fn process_reaction(session: &mut SessionEntry, session_id: &SessionId, reaction: Reaction) {
     match reaction {
         Reaction::None => {}
-        Reaction::RawMsg(msg) => session.send(session_index, msg),
+        Reaction::RawMsg(msg) => session.send(session_id, msg),
         Reaction::Multi(reactions) => {
             for r in reactions {
-                process_reaction(session, session_index, r);
+                process_reaction(session, session_id, r);
             }
         }
     }
@@ -268,20 +264,23 @@ fn process_action(client: &mut Client, action: Action) {
     match action {
         Action::None => {}
         Action::RawMsg {
-            session: SessionId { index: session_index },
+            session_id,
             message,
         } => {
-            let ref mut session = client.sessions[session_index];
-            session.send(session_index, message)
+            let ref mut session = client.sessions[session_id.index];
+            session.send(&session_id, message)
         }
     }
 }
 
 impl ClientHandle {
-    pub fn try_send(&mut self, session: SessionId, message: Message) -> Result<()> {
+    pub fn try_send(&mut self, session_id: SessionId, message: Message) -> Result<()> {
         // Add the action to the client's MPSC queue.
         self.mpsc_sender
-            .try_send(Action::RawMsg { session, message })
+            .try_send(Action::RawMsg {
+                session_id,
+                message,
+            })
             .unwrap();
 
         // Notify the client that there's an action to read from the MPSC queue.
@@ -292,17 +291,17 @@ impl ClientHandle {
 }
 
 impl SessionEntry {
-    fn send(&mut self, session_index: usize, msg: Message) {
+    fn send(&mut self, session_id: &SessionId, msg: Message) {
         match self.inner.try_send(msg.clone()) {
             Ok(()) => {
-                // TODO: log the `session_index`.
+                // TODO: log the `session_id`.
             }
             Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 trace!(
                     "[session {}] Write would block or timed out; enqueueing message for later \
                      transmission: {:?}",
-                    session_index,
+                    session_id.index,
                     msg.raw_message()
                 );
                 self.is_writable = false;
@@ -311,7 +310,7 @@ impl SessionEntry {
             Err(err) => {
                 error!(
                     "[session {}] Failed to send message {:?} (error: {})",
-                    session_index,
+                    session_id.index,
                     msg.raw_message(),
                     err
                 )
@@ -326,7 +325,7 @@ impl EventContextId {
         let token_number = match self {
             &EventContextId::MpscQueue => 0,
             // TODO: Check for overflow.
-            &EventContextId::Session(index) => 1 + index,
+            &EventContextId::Session(SessionId { index }) => 1 + index,
         };
 
         Ok(mio::Token(token_number))
@@ -339,7 +338,7 @@ impl From<mio::Token> for EventContextId {
     fn from(mio::Token(token_number): mio::Token) -> Self {
         match token_number {
             0 => EventContextId::MpscQueue,
-            n => EventContextId::Session(n - 1),
+            n => EventContextId::Session(SessionId { index: n - 1 }),
         }
     }
 }

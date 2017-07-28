@@ -7,7 +7,7 @@ pub enum Action {
 
     /// Send a message like `Reaction::RawMsg`, in a specified session.
     RawMsg {
-        session: SessionId,
+        session_id: SessionId,
         message: Message,
     },
 }
