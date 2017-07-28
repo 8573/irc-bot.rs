@@ -2,6 +2,9 @@
 build:
 	@nix-shell --run 'cargo build'
 
+check:
+	@nix-shell --run 'cargo check'
+
 run:
 	@nix-shell --run 'cargo run'
 
