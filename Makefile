@@ -8,6 +8,15 @@ check:
 run:
 	@nix-shell --run 'cargo run'
 
+docs:
+	@nix-shell --run 'cargo doc --no-deps --all-features'
+
+view-docs:
+	@nix-shell --run '\
+	   BROWSER=chromium-browser \
+	   cargo doc --no-deps --all-features --open \
+	 '
+
 clean:
 	@nix-shell --run 'cargo clean'
 
