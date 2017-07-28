@@ -283,7 +283,13 @@ impl ClientHandle {
             })
             .unwrap();
 
-        // Notify the client that there's an action to read from the MPSC queue.
+        self.set_ready()?;
+
+        Ok(())
+    }
+
+    /// Notifies the associated client that there's an action to read from the MPSC queue.
+    fn set_ready(&self) -> Result<()> {
         self.readiness_setter.set_readiness(mio::Ready::readable())?;
 
         Ok(())
