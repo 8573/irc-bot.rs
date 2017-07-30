@@ -28,6 +28,7 @@ use pircolate::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::default::Default;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -165,12 +166,17 @@ where
             }
         };
 
-        match session::build()
-            .nickname(&config.nick)
-            .username(&config.username)
-            .realname(&config.realname)
-            .start(connection) {
-            Ok(session) => cli.add_session(session).unwrap(),
+        match session::SessionBuilder::<PlaintextConnection>::new()
+            .connection(connection)
+            .nickname(config.nick.clone())
+            .username(config.username.clone())
+            .realname(config.realname.clone())
+            .build() {
+            Ok(mut session) => {
+                // TODO: Have `add_session` call `start`.
+                session.start().unwrap();
+                cli.add_session(session).unwrap()
+            }
             Err(err) => {
                 // TODO
                 unimplemented!()

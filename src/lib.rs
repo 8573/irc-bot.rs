@@ -10,6 +10,9 @@ extern crate uuid;
 extern crate bitflags;
 
 #[macro_use]
+extern crate derive_builder;
+
+#[macro_use]
 extern crate error_chain;
 
 #[macro_use]
