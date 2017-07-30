@@ -27,14 +27,6 @@ pub struct SessionBuilder<'nickname, 'username, 'realname> {
     nickname: Cow<'nickname, str>,
     username: Cow<'username, str>,
     realname: Cow<'realname, str>,
-    initial_user_mode_request: InitialUserModeRequest,
-}
-
-bitflags! {
-    struct InitialUserModeRequest: u32 {
-        const INIT_UMODE_REQ_WALLOPS   = 1 << 2;
-        const INIT_UMODE_REQ_INVISIBLE = 1 << 3;
-    }
 }
 
 pub fn build<'nickname, 'username, 'realname>() -> SessionBuilder<'nickname, 'username, 'realname> {
@@ -42,7 +34,6 @@ pub fn build<'nickname, 'username, 'realname>() -> SessionBuilder<'nickname, 'us
         nickname: Cow::Borrowed(""),
         username: Cow::Borrowed(""),
         realname: Cow::Borrowed(&DEFAULT_REALNAME),
-        initial_user_mode_request: INIT_UMODE_REQ_INVISIBLE,
     }
 }
 
@@ -68,22 +59,6 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
         }
     }
 
-    pub fn wallops(mut self, wallops: bool) -> Self {
-        self.initial_user_mode_request.set(
-            INIT_UMODE_REQ_WALLOPS,
-            wallops,
-        );
-        self
-    }
-
-    pub fn invisible(mut self, invisible: bool) -> Self {
-        self.initial_user_mode_request.set(
-            INIT_UMODE_REQ_INVISIBLE,
-            invisible,
-        );
-        self
-    }
-
     pub fn start<Conn>(mut self, mut connection: Conn) -> Result<Session<Conn>>
     where
         Conn: Connection,
@@ -107,18 +82,14 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             nickname,
             username,
             realname,
-            initial_user_mode_request,
         } = self;
 
         connection.try_send(
             Message::try_from(format!("NICK {}", nickname))?,
         )?;
-        connection.try_send(Message::try_from(format!(
-            "USER {} {} * :{}",
-            username,
-            initial_user_mode_request.bits(),
-            realname
-        ))?)?;
+        connection.try_send(Message::try_from(
+            format!("USER {} 8 * :{}", username, realname),
+        )?)?;
 
         Ok(Session { connection })
     }
