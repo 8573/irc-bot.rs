@@ -181,7 +181,7 @@ fn process_session_event<Msg, MsgHandler>(
     readiness: mio::Ready,
     session: &mut SessionEntry<Msg>,
     session_id: &SessionId,
-    msg_handler: MsgHandler,
+    msg_handler: &MsgHandler,
 ) where
     Msg: Message,
     MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
@@ -195,41 +195,32 @@ fn process_session_event<Msg, MsgHandler>(
     }
 
     if readiness.is_readable() {
-        process_readable(session, session_id, &msg_handler);
+        process_readable(session, session_id, msg_handler);
     }
 }
 
 fn process_readable<Msg, MsgHandler>(
     session: &mut SessionEntry<Msg>,
     session_id: &SessionId,
-    msg_handler: MsgHandler,
+    msg_handler: &MsgHandler,
 ) where
     Msg: Message,
     MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
 {
     let msg_ctx = MessageContext { session_id: session_id.clone() };
-    let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
 
     loop {
-        let reaction = match session.inner.recv::<Msg>() {
-            Ok(Some(ref msg)) if msg.command_bytes() == b"PING" => {
-                let mut pong_bytes = msg.as_bytes().to_owned();
-
-                pong_bytes[1] = b'O';
-
-                match Msg::try_from(Cow::Owned(pong_bytes)) {
-                    Ok(pong) => Reaction::RawMsg(pong),
-                    Err(err) => msg_handler_with_ctx(Err(err.into())),
-                }
-            }
-            Ok(Some(msg)) => msg_handler_with_ctx(Ok(msg)),
+        let msg = match session.inner.recv::<Msg>() {
+            Ok(Some(msg)) => Ok(msg),
             Ok(None) => break,
             Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
                 break
             }
-            Err(err) => msg_handler_with_ctx(Err(err.into())),
+            Err(err) => Err(err.into()),
         };
+
+        let reaction = handle_message(msg_handler, &msg_ctx, msg);
 
         process_reaction(session, session_id, reaction);
     }
@@ -262,6 +253,32 @@ where
     }
 
     session.output_queue.drain(..msgs_consumed);
+}
+
+fn handle_message<Msg, MsgHandler>(
+    msg_handler: &MsgHandler,
+    msg_ctx: &MessageContext,
+    msg: Result<Msg>,
+) -> Reaction<Msg>
+where
+    Msg: Message,
+    MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
+{
+    let msg = match msg {
+        Ok(msg) => {
+            if msg.command_bytes() == b"PING" {
+                match pong_from_ping(msg) {
+                    Ok(pong) => return Reaction::RawMsg(pong),
+                    Err(err) => Err(err),
+                }
+            } else {
+                Ok(msg)
+            }
+        }
+        Err(err) => Err(err),
+    };
+
+    msg_handler(&msg_ctx, msg)
 }
 
 fn process_reaction<Msg>(
@@ -305,6 +322,20 @@ where
             session.send(session_id, message)
         }
     }
+}
+
+// TODO: Write test cases.
+fn pong_from_ping<Msg>(msg: Msg) -> Result<Msg>
+where
+    Msg: Message,
+{
+    let mut pong_bytes = msg.as_bytes().to_owned();
+
+    // TODO: Skip over prefix and IRCv3 tags, if any, rather than assuming that the message starts
+    // with the command, "PING". (<http://ircv3.net/specs/core/message-tags-3.2.html>)
+    pong_bytes[1] = b'O';
+
+    Ok(Msg::try_from(Cow::Owned(pong_bytes))?)
 }
 
 impl<Msg> ClientHandle<Msg>
