@@ -1,6 +1,5 @@
-use pircolate;
+pub use self::message::Message;
 
 pub mod connection;
 pub mod client;
-
-pub type Message = pircolate::Message;
+pub mod message;

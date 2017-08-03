@@ -19,12 +19,12 @@ use self::modl_sys::ModuleLoadMode;
 pub use self::modl_sys::mk_module;
 pub use self::reaction::ErrorReaction;
 pub use self::reaction::Reaction;
-use irc::Message;
 use irc::client::Client;
 use irc::client::Reaction as LibReaction;
 use irc::client::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use pircolate::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -87,7 +87,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         }
     }
 
-    fn handle_err<E, S>(&self, err: E, desc: S) -> LibReaction
+    fn handle_err<E, S>(&self, err: E, desc: S) -> LibReaction<Message>
     where
         E: Into<Error>,
         S: Borrow<str>,
@@ -121,7 +121,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         }
     }
 
-    fn handle_err_generic<E>(&self, err: E) -> LibReaction
+    fn handle_err_generic<E>(&self, err: E) -> LibReaction<Message>
     where
         E: Into<Error>,
     {
@@ -218,7 +218,7 @@ where
         .unwrap()
 }
 
-fn handle_msg(state: &State, input: Result<Message>) -> LibReaction {
+fn handle_msg(state: &State, input: Result<Message>) -> LibReaction<Message> {
     match input.and_then(|msg| irc_comm::handle_msg(&state, msg)) {
         Ok(r) => r,
         Err(e) => state.handle_err_generic(e),

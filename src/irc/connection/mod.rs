@@ -29,13 +29,17 @@ pub trait Connection
 }
 
 pub trait SendMessage: Send + GetPeerAddr {
-    fn try_send(&mut self, Message) -> Result<()>;
+    fn try_send<Msg>(&mut self, &Msg) -> Result<()>
+    where
+        Msg: Message;
 }
 
 pub trait ReceiveMessage: Send + GetPeerAddr {
     /// Must perform a blocking read. Must return `Ok(None)` if there is no message to return, and
     /// not otherwise.
-    fn recv(&mut self) -> Result<Option<Message>>;
+    fn recv<Msg>(&mut self) -> Result<Option<Msg>>
+    where
+        Msg: Message;
 }
 
 pub trait GetPeerAddr {

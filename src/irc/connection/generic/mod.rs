@@ -57,7 +57,10 @@ impl_from!(
 impl Connection for GenericConnection {}
 
 impl SendMessage for GenericConnection {
-    fn try_send(&mut self, msg: Message) -> Result<()> {
+    fn try_send<Msg>(&mut self, msg: &Msg) -> Result<()>
+    where
+        Msg: Message,
+    {
         match self.inner {
             GenericConnectionInner::Plaintext(ref mut conn) => conn.try_send(msg),
         }
@@ -65,7 +68,10 @@ impl SendMessage for GenericConnection {
 }
 
 impl ReceiveMessage for GenericConnection {
-    fn recv(&mut self) -> Result<Option<Message>> {
+    fn recv<Msg>(&mut self) -> Result<Option<Msg>>
+    where
+        Msg: Message,
+    {
         match self.inner {
             GenericConnectionInner::Plaintext(ref mut conn) => conn.recv(),
         }

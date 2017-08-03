@@ -13,6 +13,7 @@ use irc::connection::SendMessage;
 use mio;
 use pircolate;
 use std;
+use std::borrow::Cow;
 use std::io;
 use std::io::Write;
 use std::sync::mpsc;
@@ -31,25 +32,34 @@ mod action;
 mod err;
 
 #[derive(Debug)]
-pub struct Client {
+pub struct Client<Msg>
+where
+    Msg: Message,
+{
     // TODO: use smallvec.
-    sessions: Vec<SessionEntry>,
-    mpsc_receiver: mpsc::Receiver<Action>,
+    sessions: Vec<SessionEntry<Msg>>,
+    mpsc_receiver: mpsc::Receiver<Action<Msg>>,
     mpsc_registration: mio::Registration,
-    handle_prototype: ClientHandle,
+    handle_prototype: ClientHandle<Msg>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ClientHandle {
-    mpsc_sender: mpsc::SyncSender<Action>,
+pub struct ClientHandle<Msg>
+where
+    Msg: Message,
+{
+    mpsc_sender: mpsc::SyncSender<Action<Msg>>,
     readiness_setter: mio::SetReadiness,
 }
 
 #[derive(Debug)]
-struct SessionEntry {
+struct SessionEntry<Msg>
+where
+    Msg: Message,
+{
     inner: Session<GenericConnection>,
     // TODO: use smallvec.
-    output_queue: Vec<Message>,
+    output_queue: Vec<Msg>,
     is_writable: bool,
 }
 
@@ -70,7 +80,10 @@ enum EventContextId {
     Session(SessionId),
 }
 
-impl Client {
+impl<Msg> Client<Msg>
+where
+    Msg: Message,
+{
     pub fn new() -> Self {
         let sessions = Vec::new();
         let (mpsc_sender, mpsc_receiver) = mpsc::sync_channel(MPSC_QUEUE_SIZE_LIMIT);
@@ -88,7 +101,7 @@ impl Client {
         }
     }
 
-    pub fn handle(&self) -> ClientHandle {
+    pub fn handle(&self) -> ClientHandle<Msg> {
         self.handle_prototype.clone()
     }
 
@@ -117,7 +130,7 @@ impl Client {
 
     pub fn run<MsgHandler>(mut self, msg_handler: MsgHandler) -> Result<()>
     where
-        MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
+        MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
     {
         let poll = match mio::Poll::new() {
             Ok(p) => p,
@@ -164,13 +177,14 @@ impl Client {
     }
 }
 
-fn process_session_event<MsgHandler>(
+fn process_session_event<Msg, MsgHandler>(
     readiness: mio::Ready,
-    session: &mut SessionEntry,
+    session: &mut SessionEntry<Msg>,
     session_id: &SessionId,
     msg_handler: MsgHandler,
 ) where
-    MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
+    Msg: Message,
+    MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
 {
     if readiness.is_writable() {
         session.is_writable = true;
@@ -185,20 +199,25 @@ fn process_session_event<MsgHandler>(
     }
 }
 
-fn process_readable<MsgHandler>(
-    session: &mut SessionEntry,
+fn process_readable<Msg, MsgHandler>(
+    session: &mut SessionEntry<Msg>,
     session_id: &SessionId,
     msg_handler: MsgHandler,
 ) where
-    MsgHandler: Fn(&MessageContext, Result<Message>) -> Reaction,
+    Msg: Message,
+    MsgHandler: Fn(&MessageContext, Result<Msg>) -> Reaction<Msg>,
 {
     let msg_ctx = MessageContext { session_id: session_id.clone() };
     let msg_handler_with_ctx = move |m| msg_handler(&msg_ctx, m);
 
     loop {
-        let reaction = match session.inner.recv() {
-            Ok(Some(ref msg)) if msg.raw_command() == "PING" => {
-                match msg.raw_message().replacen("I", "O", 1).parse() {
+        let reaction = match session.inner.recv::<Msg>() {
+            Ok(Some(ref msg)) if msg.command_bytes() == b"PING" => {
+                let mut pong_bytes = msg.as_bytes().to_owned();
+
+                pong_bytes[1] = b'O';
+
+                match Msg::try_from(Cow::Owned(pong_bytes)) {
                     Ok(pong) => Reaction::RawMsg(pong),
                     Err(err) => msg_handler_with_ctx(Err(err.into())),
                 }
@@ -216,11 +235,14 @@ fn process_readable<MsgHandler>(
     }
 }
 
-fn process_writable(session: &mut SessionEntry, session_id: &SessionId) {
+fn process_writable<Msg>(session: &mut SessionEntry<Msg>, session_id: &SessionId)
+where
+    Msg: Message,
+{
     let mut msgs_consumed = 0;
 
     for (index, msg) in session.output_queue.iter().enumerate() {
-        match session.inner.try_send(msg.clone()) {
+        match session.inner.try_send(msg) {
             Ok(()) => msgs_consumed += 1,
             Err(connection::Error(connection::ErrorKind::Io(ref err), _))
                 if [io::ErrorKind::WouldBlock, io::ErrorKind::TimedOut].contains(&err.kind()) => {
@@ -232,7 +254,7 @@ fn process_writable(session: &mut SessionEntry, session_id: &SessionId) {
                 error!(
                     "[session {}] Failed to send message {:?} (error: {})",
                     session_id.index,
-                    msg.raw_message(),
+                    msg.to_str_lossy(),
                     err
                 )
             }
@@ -242,10 +264,16 @@ fn process_writable(session: &mut SessionEntry, session_id: &SessionId) {
     session.output_queue.drain(..msgs_consumed);
 }
 
-fn process_reaction(session: &mut SessionEntry, session_id: &SessionId, reaction: Reaction) {
+fn process_reaction<Msg>(
+    session: &mut SessionEntry<Msg>,
+    session_id: &SessionId,
+    reaction: Reaction<Msg>,
+) where
+    Msg: Message,
+{
     match reaction {
         Reaction::None => {}
-        Reaction::RawMsg(msg) => session.send(session_id, msg),
+        Reaction::RawMsg(ref msg) => session.send(session_id, msg),
         Reaction::Multi(reactions) => {
             for r in reactions {
                 process_reaction(session, session_id, r);
@@ -254,27 +282,36 @@ fn process_reaction(session: &mut SessionEntry, session_id: &SessionId, reaction
     }
 }
 
-fn process_mpsc_queue(client: &mut Client) {
+fn process_mpsc_queue<Msg>(client: &mut Client<Msg>)
+where
+    Msg: Message,
+{
     while let Ok(action) = client.mpsc_receiver.try_recv() {
         process_action(client, action)
     }
 }
 
-fn process_action(client: &mut Client, action: Action) {
+fn process_action<Msg>(client: &mut Client<Msg>, action: Action<Msg>)
+where
+    Msg: Message,
+{
     match action {
         Action::None => {}
         Action::RawMsg {
-            session_id,
-            message,
+            ref session_id,
+            ref message,
         } => {
             let ref mut session = client.sessions[session_id.index];
-            session.send(&session_id, message)
+            session.send(session_id, message)
         }
     }
 }
 
-impl ClientHandle {
-    pub fn try_send(&mut self, session_id: SessionId, message: Message) -> Result<()> {
+impl<Msg> ClientHandle<Msg>
+where
+    Msg: Message,
+{
+    pub fn try_send(&mut self, session_id: SessionId, message: Msg) -> Result<()> {
         // Add the action to the client's MPSC queue.
         self.mpsc_sender
             .try_send(Action::RawMsg {
@@ -296,9 +333,12 @@ impl ClientHandle {
     }
 }
 
-impl SessionEntry {
-    fn send(&mut self, session_id: &SessionId, msg: Message) {
-        match self.inner.try_send(msg.clone()) {
+impl<Msg> SessionEntry<Msg>
+where
+    Msg: Message,
+{
+    fn send(&mut self, session_id: &SessionId, msg: &Msg) {
+        match self.inner.try_send(msg) {
             Ok(()) => {
                 // TODO: log the `session_id`.
             }
@@ -308,16 +348,16 @@ impl SessionEntry {
                     "[session {}] Write would block or timed out; enqueueing message for later \
                      transmission: {:?}",
                     session_id.index,
-                    msg.raw_message()
+                    msg.to_str_lossy()
                 );
                 self.is_writable = false;
-                self.output_queue.push(msg);
+                self.output_queue.push(msg.clone());
             }
             Err(err) => {
                 error!(
                     "[session {}] Failed to send message {:?} (error: {})",
                     session_id.index,
-                    msg.raw_message(),
+                    msg.to_str_lossy(),
                     err
                 )
             }

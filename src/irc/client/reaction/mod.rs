@@ -1,7 +1,10 @@
 use irc::Message;
 
 #[derive(Debug)]
-pub enum Reaction {
+pub enum Reaction<Msg>
+where
+    Msg: Message,
+{
     /// No reaction.
     None,
 
@@ -10,8 +13,8 @@ pub enum Reaction {
     /// and a line feed character ("CR-LF") will be appended. If the message exceeds 512 octets in
     /// length (including the terminating CR-LF sequence, but excluding any IRCv3 message tags), it
     /// may be truncated to 512 octets.
-    RawMsg(Message),
+    RawMsg(Msg),
 
     /// Return multiple reactions, which will be processed in the order given.
-    Multi(Vec<Reaction>),
+    Multi(Vec<Reaction<Msg>>),
 }

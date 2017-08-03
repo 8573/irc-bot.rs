@@ -16,6 +16,7 @@ use irc::client::Reaction as LibReaction;
 use irc::connection::prelude::*;
 use itertools::Itertools;
 use pircolate;
+use pircolate::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
@@ -25,7 +26,7 @@ use std::iter;
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
 impl<'server, 'modl> State<'server, 'modl> {
-    fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction>
+    fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction<Message>>
     where
         S1: Borrow<str>,
         S2: Display,
@@ -117,7 +118,11 @@ where
     Ok(())
 }
 
-fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<LibReaction> {
+fn handle_reaction(
+    state: &State,
+    msg: &PrivMsg,
+    reaction: Reaction,
+) -> Result<LibReaction<Message>> {
     let &PrivMsg {
         metadata: MsgMetadata {
             target,
@@ -152,7 +157,11 @@ fn handle_reaction(state: &State, msg: &PrivMsg, reaction: Reaction) -> Result<L
     }
 }
 
-fn handle_bot_command<C>(state: &State, msg: &PrivMsg, command_line: C) -> Result<LibReaction>
+fn handle_bot_command<C>(
+    state: &State,
+    msg: &PrivMsg,
+    command_line: C,
+) -> Result<LibReaction<Message>>
 where
     C: Borrow<str>,
 {
@@ -263,7 +272,7 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
     }
 }
 
-pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction {
+pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
     let default_quit_msg = format!(
         "<{}> v{}",
         env!("CARGO_PKG_HOMEPAGE"),
@@ -288,7 +297,7 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction {
     LibReaction::RawMsg(quit)
 }
 
-pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibReaction> {
+pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibReaction<Message>> {
     if let Some(msg) = parse_privmsg(&input_msg) {
         handle_privmsg(state, &msg)
     } else if let Some(pircolate::command::ServerInfo(..)) =
@@ -300,7 +309,7 @@ pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibRea
     }
 }
 
-fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction> {
+fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction<Message>> {
     trace!("Handling PRIVMSG: {:?}", msg);
 
     let &PrivMsg {
@@ -325,7 +334,7 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction> {
     }
 }
 
-fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction> {
+fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction<Message>> {
     debug!(
         "Updating stored message prefix information from received {:?}",
         prefix
@@ -336,13 +345,13 @@ fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction> 
     Ok(LibReaction::None)
 }
 
-fn handle_004(state: &State) -> Result<LibReaction> {
+fn handle_004(state: &State) -> Result<LibReaction<Message>> {
     // The server has finished sending the protocol-mandated welcome messages.
 
     send_msg_prefix_update_request(state)
 }
 
-fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction> {
+fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>> {
     use pircolate::message::client::priv_msg;
 
     Ok(LibReaction::RawMsg(

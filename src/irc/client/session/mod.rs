@@ -5,6 +5,7 @@ use irc::connection::GenericConnection;
 use irc::connection::GetMioTcpStream;
 use irc::connection::prelude::*;
 use mio;
+use pircolate;
 use std::borrow::Cow;
 use std::net::SocketAddr;
 
@@ -84,10 +85,10 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             realname,
         } = self;
 
-        connection.try_send(
-            Message::try_from(format!("NICK {}", nickname))?,
-        )?;
-        connection.try_send(Message::try_from(
+        connection.try_send(&pircolate::Message::try_from(
+            format!("NICK {}", nickname),
+        )?)?;
+        connection.try_send(&pircolate::Message::try_from(
             format!("USER {} 8 * :{}", username, realname),
         )?)?;
 
@@ -108,7 +109,10 @@ impl<Conn> ReceiveMessage for Session<Conn>
 where
     Conn: Connection,
 {
-    fn recv(&mut self) -> connection::Result<Option<Message>> {
+    fn recv<Msg>(&mut self) -> connection::Result<Option<Msg>>
+    where
+        Msg: Message,
+    {
         self.connection.recv()
     }
 }
@@ -117,7 +121,10 @@ impl<Conn> SendMessage for Session<Conn>
 where
     Conn: Connection,
 {
-    fn try_send(&mut self, msg: Message) -> connection::Result<()> {
+    fn try_send<Msg>(&mut self, msg: &Msg) -> connection::Result<()>
+    where
+        Msg: Message,
+    {
         self.connection.try_send(msg)
     }
 }

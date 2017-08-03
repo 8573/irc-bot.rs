@@ -7,6 +7,7 @@ use super::Result;
 use super::SendMessage;
 use irc::Message;
 use mio;
+use std::borrow::Cow;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::LineWriter;
@@ -46,8 +47,12 @@ impl PlaintextConnection {
 impl Connection for PlaintextConnection {}
 
 impl SendMessage for PlaintextConnection {
-    fn try_send(&mut self, msg: Message) -> Result<()> {
-        let msg = msg.raw_message();
+    fn try_send<Msg>(&mut self, msg: &Msg) -> Result<()>
+    where
+        Msg: Message,
+    {
+        // TODO: Use `as_bytes`, not `to_str`.
+        let msg = msg.to_str()?;
 
         // TODO: Using `write!`/`write_fmt` here incurs at least two system calls, one to send the
         // `msg` and one to send the `"\r\n"`. `format!`-ing the `msg` and CR-LF into a `String`
@@ -71,23 +76,27 @@ impl SendMessage for PlaintextConnection {
 }
 
 impl ReceiveMessage for PlaintextConnection {
-    fn recv(&mut self) -> Result<Option<Message>> {
-        let mut line = String::new();
+    fn recv<Msg>(&mut self) -> Result<Option<Msg>>
+    where
+        Msg: Message,
+    {
+        let mut line = Vec::new();
 
-        let bytes_read = self.tcp_stream.read_line(&mut line)?;
+        let bytes_read = self.tcp_stream.read_until(b'\n', &mut line)?;
 
         if bytes_read == 0 {
             return Ok(None);
         }
 
-        // TODO: Use trim_matches once Message doesn't need an owned string.
-        while line.ends_with("\n") || line.ends_with("\r") {
+        while line.ends_with(b"\n") || line.ends_with(b"\r") {
             let _popped_char = line.pop();
         }
 
-        debug!("Received message: {:?}", line);
+        debug!("Received message: {:?}", String::from_utf8_lossy(&line));
 
-        Message::try_from(line).map(Some).map_err(Into::into)
+        Msg::try_from(Cow::Owned(line)).map(Some).map_err(
+            Into::into,
+        )
     }
 }
 
