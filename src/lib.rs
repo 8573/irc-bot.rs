@@ -5,6 +5,7 @@ extern crate parking_lot;
 extern crate pircolate;
 extern crate skimmer;
 extern crate uuid;
+extern crate yak_irc;
 
 #[macro_use]
 extern crate bitflags;
@@ -27,5 +28,3 @@ pub use self::core::run;
 
 pub mod core;
 pub mod modules;
-
-mod irc;

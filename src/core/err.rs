@@ -1,6 +1,6 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
-use irc;
+use yak_irc;
 use pircolate;
 use std::borrow::Cow;
 use std::io;
@@ -13,8 +13,8 @@ error_chain! {
     }
 
     links {
-        IrcConnection(irc::connection::Error, irc::connection::ErrorKind);
-        IrcClient(irc::client::Error, irc::client::ErrorKind);
+        IrcConnection(yak_irc::connection::Error, yak_irc::connection::ErrorKind);
+        IrcClient(yak_irc::client::Error, yak_irc::client::ErrorKind);
         Pircolate(pircolate::error::Error, pircolate::error::ErrorKind);
     }
 

@@ -24,4 +24,5 @@ parking_lot = "0.4"
 pircolate = "0.2"
 skimmer = "0.0"
 uuid = {version = "0.5", features = ["v4"]}
+yak-irc = {path = "../yak-irc"}
 yamlette = "0.0"

@@ -39,9 +39,16 @@ with the `irc` crate, takes literally two minutes with this implementation
 (although that measurement is precise only to within five seconds).
 
 
-## Custom IRC client implementation
+## `yak-irc`
 
 (2017-06-25)
 
 I've now rewritten this library with a custom implementation of the necessary
 IRC client functionality, which is still a WIP.
+
+(2017-08-05)
+
+I've now split out the custom implementation of the necessary IRC client
+functionality (and surely some unnecessary functionality as well) as the crate
+`yak-irc` — so named, of course, because it was developed in an act of
+yak-shaving.
