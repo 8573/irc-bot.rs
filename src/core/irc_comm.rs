@@ -13,7 +13,6 @@ use super::irc_msgs::parse_privmsg;
 use super::irc_send;
 use super::parse_msg_to_nick;
 use yak_irc::client::Reaction as LibReaction;
-use yak_irc::connection::prelude::*;
 use itertools::Itertools;
 use pircolate;
 use pircolate::Message;
