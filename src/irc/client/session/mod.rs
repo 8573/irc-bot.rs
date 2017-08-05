@@ -7,6 +7,8 @@ use irc::connection::prelude::*;
 use mio;
 use pircolate;
 use std::borrow::Cow;
+use std::fmt;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 
 lazy_static! {
@@ -21,69 +23,174 @@ where
     Conn: Connection,
 {
     connection: Conn,
+    // TODO: Use string_cache.
+    nickname: String,
+    username: String,
+    realname: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct SessionBuilder<'nickname, 'username, 'realname> {
-    nickname: Cow<'nickname, str>,
-    username: Cow<'username, str>,
-    realname: Cow<'realname, str>,
+#[derive(Copy, Clone, Debug)]
+pub struct SessionBuilder<
+    Conn,
+    ConnField = Option<Conn>,
+    NicknameField = Option<String>,
+    UsernameField = Option<String>,
+    RealnameField = Option<String>,
+> where
+    Conn: Connection,
+    ConnField: Into<Option<Conn>>,
+    NicknameField: Into<Option<String>>,
+    UsernameField: Into<Option<String>>,
+    RealnameField: Into<Option<String>>,
+{
+    connection: ConnField,
+    nickname: NicknameField,
+    username: UsernameField,
+    realname: RealnameField,
+    _result_phantom: PhantomData<Session<Conn>>,
 }
 
-pub fn build<'nickname, 'username, 'realname>() -> SessionBuilder<'nickname, 'username, 'realname> {
-    SessionBuilder {
-        nickname: Cow::Borrowed(""),
-        username: Cow::Borrowed(""),
-        realname: Cow::Borrowed(&DEFAULT_REALNAME),
-    }
-}
+impl<Conn, ConnField, NicknameField, UsernameField, RealnameField>
+    SessionBuilder<Conn, ConnField, NicknameField, UsernameField, RealnameField>
+where
+    Conn: Connection,
+    ConnField: Into<Option<Conn>>,
+    NicknameField: Into<Option<String>>,
+    UsernameField: Into<Option<String>>,
+    RealnameField: Into<Option<String>>,
+{
+    pub fn connection(
+        self,
+        value: Conn,
+    ) -> SessionBuilder<Conn, Conn, NicknameField, UsernameField, RealnameField> {
+        let SessionBuilder {
+            connection: _,
+            nickname,
+            username,
+            realname,
+            _result_phantom,
+        } = self;
 
-impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'realname> {
-    pub fn nickname(self, nickname: &'nickname str) -> Self {
         SessionBuilder {
-            nickname: Cow::Borrowed(nickname),
-            ..self
+            connection: value,
+            nickname,
+            username,
+            realname,
+            _result_phantom,
         }
     }
 
-    pub fn username(self, username: &'username str) -> Self {
-        SessionBuilder {
-            username: Cow::Borrowed(username),
-            ..self
-        }
-    }
-
-    pub fn realname(self, realname: &'realname str) -> Self {
-        SessionBuilder {
-            realname: Cow::Borrowed(realname),
-            ..self
-        }
-    }
-
-    pub fn start<Conn>(mut self, mut connection: Conn) -> Result<Session<Conn>>
+    pub fn nickname<S>(
+        self,
+        value: S,
+    ) -> SessionBuilder<Conn, ConnField, String, UsernameField, RealnameField>
     where
-        Conn: Connection,
+        S: Into<String>,
     {
-        if self.nickname.is_empty() {
-            // TODO: return error.
-            unimplemented!()
-        }
+        let SessionBuilder {
+            connection,
+            nickname: _,
+            username,
+            realname,
+            _result_phantom,
+        } = self;
 
-        if self.username.is_empty() {
-            self.username = self.nickname.clone().into_owned().into();
+        SessionBuilder {
+            connection,
+            nickname: value.into(),
+            username,
+            realname,
+            _result_phantom,
         }
+    }
 
+    pub fn username<S>(
+        self,
+        value: S,
+    ) -> SessionBuilder<Conn, ConnField, NicknameField, String, RealnameField>
+    where
+        S: Into<String>,
+    {
+        let SessionBuilder {
+            connection,
+            nickname,
+            username: _,
+            realname,
+            _result_phantom,
+        } = self;
+
+        SessionBuilder {
+            connection,
+            nickname,
+            username: value.into(),
+            realname,
+            _result_phantom,
+        }
+    }
+
+    pub fn realname<S>(
+        self,
+        value: S,
+    ) -> SessionBuilder<Conn, ConnField, NicknameField, UsernameField, String>
+    where
+        S: Into<String>,
+    {
+        let SessionBuilder {
+            connection,
+            nickname,
+            username,
+            realname: _,
+            _result_phantom,
+        } = self;
+
+        SessionBuilder {
+            connection,
+            nickname,
+            username,
+            realname: value.into(),
+            _result_phantom,
+        }
+    }
+}
+
+pub fn build<Conn>() -> SessionBuilder<Conn>
+where
+    Conn: Connection,
+{
+    SessionBuilder {
+        connection: None,
+        nickname: None,
+        username: None,
+        realname: None,
+        _result_phantom: Default::default(),
+    }
+}
+
+impl<Conn, UsernameField, RealnameField>
+    SessionBuilder<Conn, Conn, String, UsernameField, RealnameField>
+where
+    Conn: Connection,
+    UsernameField: Into<Option<String>>,
+    RealnameField: Into<Option<String>>,
+    Self: fmt::Debug,
+{
+    pub fn start(mut self) -> Result<Session<Conn>> {
         trace!(
             "[{}] Initiating session from {:?}",
-            connection.peer_addr()?,
+            self.connection.peer_addr()?,
             self
         );
 
         let SessionBuilder {
+            mut connection,
             nickname,
             username,
             realname,
+            _result_phantom: _,
         } = self;
+
+        let username = username.into().unwrap_or(nickname.clone());
+        let realname = realname.into().unwrap_or(DEFAULT_REALNAME.clone());
 
         connection.try_send(&pircolate::Message::try_from(
             format!("NICK {}", nickname),
@@ -92,7 +199,12 @@ impl<'nickname, 'username, 'realname> SessionBuilder<'nickname, 'username, 'real
             format!("USER {} 8 * :{}", username, realname),
         )?)?;
 
-        Ok(Session { connection })
+        Ok(Session {
+            connection,
+            nickname,
+            username,
+            realname,
+        })
     }
 }
 
@@ -101,7 +213,19 @@ where
     Conn: Connection,
 {
     pub fn into_generic(self) -> Session<GenericConnection> {
-        Session { connection: self.connection.into() }
+        let Session {
+            connection,
+            nickname,
+            username,
+            realname,
+        } = self;
+
+        Session {
+            connection: connection.into(),
+            nickname,
+            username,
+            realname,
+        }
     }
 }
 

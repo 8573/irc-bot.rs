@@ -166,10 +166,11 @@ where
         };
 
         match session::build()
-            .nickname(&config.nick)
-            .username(&config.username)
-            .realname(&config.realname)
-            .start(connection) {
+            .nickname(config.nick.clone())
+            .username(config.username.clone())
+            .realname(config.realname.clone())
+            .connection(connection)
+            .start() {
             Ok(session) => cli.add_session(session).unwrap(),
             Err(err) => {
                 // TODO
