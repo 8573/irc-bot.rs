@@ -3,6 +3,7 @@ pub use self::generic::GenericConnection;
 pub use self::plaintext::PlaintextConnection;
 use irc::Message;
 use mio;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 
 // TODO: Delete in split-out.
@@ -24,17 +25,17 @@ mod auto_threading;
 const IRC_LINE_MAX_LEN: usize = 1024;
 
 pub trait Connection
-    : Send + ReceiveMessage + SendMessage + GetPeerAddr + Into<GenericConnection>
+    : Send + ReceiveMessage + SendMessage + GetPeerAddr + Into<GenericConnection> + Debug
     {
 }
 
-pub trait SendMessage: Send + GetPeerAddr {
+pub trait SendMessage: Send + GetPeerAddr + Debug {
     fn try_send<Msg>(&mut self, &Msg) -> Result<()>
     where
         Msg: Message;
 }
 
-pub trait ReceiveMessage: Send + GetPeerAddr {
+pub trait ReceiveMessage: Send + GetPeerAddr + Debug {
     /// Must perform a blocking read. Must return `Ok(None)` if there is no message to return, and
     /// not otherwise.
     fn recv<Msg>(&mut self) -> Result<Option<Msg>>
