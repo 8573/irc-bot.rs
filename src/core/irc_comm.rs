@@ -12,7 +12,6 @@ use super::irc_msgs::PrivMsg;
 use super::irc_msgs::parse_privmsg;
 use super::irc_send;
 use super::parse_msg_to_nick;
-use yak_irc::client::Reaction as LibReaction;
 use itertools::Itertools;
 use pircolate;
 use pircolate::Message;
@@ -21,6 +20,7 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
 use std::iter;
+use yak_irc::client::Reaction as LibReaction;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 

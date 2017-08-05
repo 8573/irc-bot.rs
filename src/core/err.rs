@@ -1,10 +1,10 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
-use yak_irc;
 use pircolate;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
+use yak_irc;
 
 error_chain! {
     foreign_links {
