@@ -53,7 +53,7 @@ the `owners` field — e.g., if one's nick is ["Ferris"]:
 Building
 ---
 
-For most users, it should suffice to simply use **[Cargo]**:
+For most users, it should suffice simply to use **[Cargo]**:
 
     $ cargo build
 
