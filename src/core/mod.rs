@@ -166,18 +166,13 @@ where
             }
         };
 
-        match session::build()
-            .nickname(config.nick.clone())
-            .username(config.username.clone())
-            .realname(config.realname.clone())
-            .connection(connection)
-            .start() {
-            Ok(session) => cli.add_session(session).unwrap(),
-            Err(err) => {
-                // TODO
-                unimplemented!()
-            }
-        };
+        cli.add_session(
+            session::build()
+                .nickname(config.nick.clone())
+                .username(config.username.clone())
+                .realname(config.realname.clone())
+                .connection(connection),
+        ).unwrap();
 
         cli
     };
