@@ -10,11 +10,17 @@ use.
 
 What documentation there is should be available [on Docs.rs][docs].
 
+To handle the IRC protocol, this library uses [`yak-irc`], which, in turn,
+uses [`mio`] to handle network I/O.
+
 [docs]: <https://docs.rs/irc-bot>
 [b-docs]: <https://docs.rs/irc-bot/badge.svg>
 
 [crate]: <https://crates.io/crates/irc-bot>
 [b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
+
+[`yak-irc`]: <https://github.com/8573/yak-irc.rs>
+[`mio`]: <https://docs.rs/crate/mio>
 
 
 Quick-start
@@ -34,26 +40,67 @@ also a pun on the name of [Eggdrop], an old IRC bot.
 ["e.g."]: <https://en.wiktionary.org/wiki/e.g.>
 [Eggdrop]: <https://en.wikipedia.org/wiki/Eggdrop>
 
-The bot can be configured by editing the [JSON] file `config.json`, which is
-passed through to [the `irc` crate], which documents its configuration options
-[in its README file][`irc` config]. One should at least add one's IRC nick to
-the `owners` field — e.g., if one's nick is ["Ferris"]:
+The bot can be configured by editing the [YAML] file `config.yaml`. One should
+at least put one's IRC nick in the `admins` field — e.g., if one's nick is
+["Ferris"]:
 
-    {
-      "owners": ["Ferris"],
-      ...
-    }
+    admins:
+      - nick: Ferris
 
-[JSON]: <https://en.wikipedia.org/wiki/JSON>
-[the `irc` crate]: <https://crates.io/crates/irc>
-[`irc` config]: <https://github.com/aatxe/irc#configuration>
+Configuration fields currently supported are as follows (with values given for
+example only):
+
+    # A string to be used as the bot's IRC nickname. This field is required.
+    nickname: egbot
+
+    # A string to be used as the bot's IRC username (which has little effect
+    # in most cases). Defaults to the nickname.
+    username: egbot
+
+    # A string to be used as the bot's IRC "realname" or "GECOS string", which
+    # has still less effect and is often used to display information about a
+    # bot's software. Defaults to displaying information about the bot's
+    # software.
+    realname: 'Built with `irc-bot.rs`.'
+
+    # A list of servers to which the bot should connect on start-up.
+    # Currently, only the first server will be used, and the bot will crash if
+    # no servers are listed; both of these issues should be fixed at some
+    # future point.
+    servers:
+      - host: irc.mozilla.org
+        port: 6667 # Sadly, TLS connections are not yet implemented.
+
+    # A list of IRC users who will be authorized to direct the bot to run
+    # certain priviledged commands. For each listed user, the fields `nick`,
+    # `user`, and `host` may be specified; for each of which that is
+    # specified, a user will need to have a matching nickname, username, or
+    # hostname (respectively) to be authorized. All the specified fields must
+    # match for a user to be authorized.
+    admins:
+      # To be authorized as an administrator of the bot, this user will need
+      # to have the nickname "Ferris", the username "~crab", and the hostname
+      # "rustacean.net":
+      - nick: Ferris
+        user: '~crab'
+        host: rustacean.net
+      # To be authorized as an administrator of the bot, this user will only
+      # need have the nickname "c74d":
+      - nick: c74d
+
+There is currently no way to specify in the configuration file which channels
+the bot should join (this should be fixed), but one can send commands such as
+`join #botters-test` to the bot in one-to-one messaging (more commonly called
+"query").
+
+[YAML]: <https://en.wikipedia.org/wiki/YAML>
 ["Ferris"]: <http://www.rustacean.net>
 
 
 Building
 ---
 
-For most users, it should suffice to simply use **[Cargo]**:
+For most users, it should suffice simply to use **[Cargo]**:
 
     $ cargo build
 
