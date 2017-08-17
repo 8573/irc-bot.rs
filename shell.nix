@@ -6,8 +6,6 @@ let
     clang
     rustc
     rustfmt
-    openssl
-    pkgconfig
   ;
 in
 
@@ -19,11 +17,9 @@ stdenv.mkDerivation rec {
     clang
     rustc
     rustfmt
-    pkgconfig
   ];
 
   buildInputs = [
-    openssl
   ];
 
   lib_path = lib.makeLibraryPath buildInputs;
