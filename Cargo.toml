@@ -22,7 +22,9 @@ log = "0.3"
 mio = "0.6"
 parking_lot = "0.4"
 pircolate = "0.2"
+rustls = "0.9"
 skimmer = "0.0"
 uuid = {version = "0.5", features = ["v4"]}
+webpki-roots = "0.12"
 yak-irc = {path = "../yak-irc"}
 yamlette = "0.0"

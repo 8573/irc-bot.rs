@@ -22,16 +22,18 @@ pub use self::reaction::Reaction;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use pircolate::Message;
+use rustls;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use webpki_roots;
 use yak_irc::client::Client;
 use yak_irc::client::ThinClient;
 use yak_irc::client::Reaction as LibReaction;
 use yak_irc::client::session;
-use yak_irc::connection::PlaintextConnection;
+use yak_irc::connection::TlsConnection;
 
 mod bot_cmd;
 mod bot_cmd_handler;
@@ -149,13 +151,18 @@ where
         }
     };
 
+    let mut tls_cfg = rustls::ClientConfig::new();
+
+    tls_cfg.root_store.add_trust_anchors(&webpki_roots::ROOTS);
+
+    let tls_cfg = Arc::new(tls_cfg);
 
     let client = {
         let ref server = config.servers[0];
 
         let mut cli = ThinClient::new();
 
-        let connection = match PlaintextConnection::from_addr(server.resolve()) {
+        let connection = match TlsConnection::from_addr(server.resolve(), &tls_cfg, &server.host) {
             Ok(conn) => conn,
             Err(err) => {
                 error_handler(err.into());

@@ -21,7 +21,7 @@ fn main() {
     irc_bot::run(
         irc_bot::Config::try_from_path(args.value_of("config-file").expect("default missing?")),
         |err| {
-            error!("{}", err);
+            error!("{:?}", err);
             irc_bot::ErrorReaction::Proceed
         },
         &[modules::default(), modules::test()],

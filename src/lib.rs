@@ -3,8 +3,10 @@ extern crate itertools;
 extern crate mio;
 extern crate parking_lot;
 extern crate pircolate;
+extern crate rustls;
 extern crate skimmer;
 extern crate uuid;
+extern crate webpki_roots;
 extern crate yak_irc;
 
 #[macro_use]
