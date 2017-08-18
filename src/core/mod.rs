@@ -28,6 +28,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use yak_irc::client::Client;
+use yak_irc::client::ThinClient;
 use yak_irc::client::Reaction as LibReaction;
 use yak_irc::client::session;
 use yak_irc::connection::PlaintextConnection;
@@ -152,7 +153,7 @@ where
     let client = {
         let ref server = config.servers[0];
 
-        let mut cli = Client::new();
+        let mut cli = ThinClient::new();
 
         let connection = match PlaintextConnection::from_addr(server.resolve()) {
             Ok(conn) => conn,
