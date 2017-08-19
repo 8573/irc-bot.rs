@@ -14,7 +14,7 @@ use super::irc_send;
 use super::parse_msg_to_nick;
 use itertools::Itertools;
 use pircolate;
-use pircolate::Message;
+use irc::proto::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;

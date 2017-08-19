@@ -21,19 +21,13 @@ pub use self::reaction::ErrorReaction;
 pub use self::reaction::Reaction;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use pircolate::Message;
-use rustls;
+use irc::client::prelude as aatxe;
+use irc::proto::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use webpki_roots;
-use yak_irc::client::Client;
-use yak_irc::client::ThinClient;
-use yak_irc::client::Reaction as LibReaction;
-use yak_irc::client::session;
-use yak_irc::connection::TlsConnection;
 
 mod bot_cmd;
 mod bot_cmd_handler;
@@ -50,6 +44,7 @@ mod state;
 pub struct State<'server, 'modl> {
     _lifetime_server: PhantomData<&'server ()>,
     config: Config,
+    servers: Vec<aatxe::IrcServer>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
     modules: BTreeMap<Cow<'static, str>, &'modl Module<'modl>>,
@@ -80,6 +75,7 @@ impl<'server, 'modl> State<'server, 'modl> {
         State {
             _lifetime_server: PhantomData,
             config: config,
+            servers: Default::default(),
             addressee_suffix: ": ".into(),
             chars_indicating_msg_is_addressed_to_nick: vec![':', ','],
             modules: Default::default(),
@@ -151,40 +147,6 @@ where
         }
     };
 
-    let mut tls_cfg = rustls::ClientConfig::new();
-
-    tls_cfg.root_store.add_trust_anchors(&webpki_roots::ROOTS);
-
-    let tls_cfg = Arc::new(tls_cfg);
-
-    let client = {
-        let ref server = config.servers[0];
-
-        let mut cli = ThinClient::new();
-
-        let connection = match TlsConnection::from_addr(server.resolve(), &tls_cfg, &server.host) {
-            Ok(conn) => conn,
-            Err(err) => {
-                error_handler(err.into());
-                error!(
-                    "Terminal error: Failed to connect to server {}.",
-                    server.socket_addr_string()
-                );
-                return;
-            }
-        };
-
-        cli.add_session(
-            session::build()
-                .nickname(config.nick.clone())
-                .username(config.username.clone())
-                .realname(config.realname.clone())
-                .connection(connection),
-        ).unwrap();
-
-        cli
-    };
-
     let mut state = State::new(config, error_handler);
 
     match state.load_modules(modules.as_ref().iter(), ModuleLoadMode::Add) {
@@ -216,11 +178,49 @@ where
         state.commands.keys().collect::<Vec<_>>()
     );
 
-    trace!("Running bot....");
+    let state = Arc::new(RwLock::new(state));
 
-    client
-        .run(|ctx, msg| handle_msg(&state, msg.map_err(Into::into)))
-        .unwrap()
+    let servers = Vec::new();
+
+    for server_config in &state.config.servers {
+        let aatxe_config = aatxe::Config {
+            nickname: Some(state.config.nickname.to_owned()),
+            username: Some(state.config.username.to_owned()),
+            realname: Some(state.config.realname.to_owned()),
+            server: Some(server_config.host),
+            port: Some(server_config.port),
+            use_ssl: Some(server_config.tls),
+            ..Default::default()
+        };
+
+        let aatxe_server = match aatxe::IrcServer::from_config(aatxe_config) {
+            Ok(s) => {
+                trace!("Connected to server {:?}.", server_config.host);
+                s
+            }
+            Err(err) => {
+                match (state.error_handler)(err) {
+                    ErrorReaction::Proceed => {}
+                    ErrorReaction::Quit(msg) => {
+                        error!(
+                            "Terminal error while connecting to server {:?}: {:?}",
+                            server_config.host,
+                            msg.unwrap_or_default().as_ref()
+                        );
+                        return;
+                    }
+                }
+            }
+        };
+
+        servers.push(aatxe_server);
+    }
+
+    state.write().servers = servers;
+
+    for server in state.read().servers {
+        // TODO: start threads
+    }
 }
 
 fn handle_msg(state: &State, input: Result<Message>) -> LibReaction<Message> {

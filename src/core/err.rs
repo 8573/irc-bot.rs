@@ -1,21 +1,18 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
-use pircolate;
+use irc;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
-use yak_irc;
 
 error_chain! {
     foreign_links {
         Io(io::Error);
-        OutboxPush(mpsc::TrySendError<pircolate::Message>);
+        OutboxPush(mpsc::TrySendError<irc::proto::Message>);
     }
 
     links {
-        IrcConnection(yak_irc::connection::Error, yak_irc::connection::ErrorKind);
-        IrcClient(yak_irc::client::Error, yak_irc::client::ErrorKind);
-        Pircolate(pircolate::error::Error, pircolate::error::ErrorKind);
+        IrcCrate(irc::error::Error, irc::error::ErrorKind);
     }
 
     errors {

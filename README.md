@@ -10,17 +10,11 @@ use.
 
 What documentation there is should be available [on Docs.rs][docs].
 
-To handle the IRC protocol, this library uses [`yak-irc`], which, in turn,
-uses [`mio`] to handle network I/O.
-
 [docs]: <https://docs.rs/irc-bot>
 [b-docs]: <https://docs.rs/irc-bot/badge.svg>
 
 [crate]: <https://crates.io/crates/irc-bot>
 [b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
-
-[`yak-irc`]: <https://github.com/8573/yak-irc.rs>
-[`mio`]: <https://docs.rs/crate/mio>
 
 
 Quick-start

@@ -24,9 +24,11 @@ stdenv.mkDerivation rec {
     }).rust
     clang
     rustfmt
+    pkgconfig
   ];
 
   buildInputs = [
+    openssl
   ];
 
   lib_path = lib.makeLibraryPath buildInputs;
