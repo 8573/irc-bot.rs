@@ -20,7 +20,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     (rustChannelOf {
-      channel = "1.19.0";
+      channel = "1.20.0";
     }).rust
     clang
     rustfmt
