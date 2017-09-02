@@ -12,15 +12,16 @@ use super::irc_msgs::PrivMsg;
 use super::irc_msgs::parse_privmsg;
 use super::irc_send;
 use super::parse_msg_to_nick;
-use itertools::Itertools;
-use pircolate;
+use super::reaction::LibReaction;
+use irc::client::prelude as aatxe;
+use irc::client::prelude::Server as AatxeServer;
 use irc::proto::Message;
+use itertools::Itertools;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
 use std::iter;
-use yak_irc::client::Reaction as LibReaction;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -44,10 +45,13 @@ impl<'server, 'modl> State<'server, 'modl> {
         info!("Sending message to {:?}: {:?}", target, final_msg);
         let mut wrapped_msg = vec![];
         wrap_msg(self, target, &final_msg, |line| {
-            use pircolate::message::client::priv_msg;
-            Ok(wrapped_msg.push(
-                LibReaction::RawMsg(priv_msg(target.0, line)?),
-            ))
+            wrapped_msg.push(LibReaction::RawMsg(
+                aatxe::Command::PRIVMSG(
+                    target.0.to_owned(),
+                    line.to_owned(),
+                ).into(),
+            ));
+            Ok(())
         })?;
         // TODO: optimize for case where no wrapping, and thus no `Vec`, is needed.
         Ok(LibReaction::Multi(wrapped_msg))
@@ -296,12 +300,15 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message
     LibReaction::RawMsg(quit)
 }
 
-pub fn handle_msg(state: &State, input_msg: pircolate::Message) -> Result<LibReaction<Message>> {
+pub fn handle_msg(state: &State, input_msg: Message) -> Result<LibReaction<Message>> {
+    trace!(
+        "Received {:?}",
+        input_msg.to_string().trim_right_matches("\r\n")
+    );
+
     if let Some(msg) = parse_privmsg(&input_msg) {
         handle_privmsg(state, &msg)
-    } else if let Some(pircolate::command::ServerInfo(..)) =
-        input_msg.command::<pircolate::command::ServerInfo>()
-    {
+    } else if let aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..) = input_msg.command {
         handle_004(state)
     } else {
         Ok(LibReaction::None)
@@ -351,19 +358,22 @@ fn handle_004(state: &State) -> Result<LibReaction<Message>> {
 }
 
 fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>> {
-    use pircolate::message::client::priv_msg;
-
     Ok(LibReaction::RawMsg(
-        priv_msg(&state.nick()?, UPDATE_MSG_PREFIX_STR)?,
+        aatxe::Command::PRIVMSG(
+            state.nick()?.to_owned(),
+            UPDATE_MSG_PREFIX_STR.to_owned(),
+        ).into(),
     ))
 }
 
-fn connection_sequence(state: &State) -> Result<Vec<pircolate::Message>> {
-    use pircolate::message::client::nick;
-    use pircolate::message::client::user;
-
+fn connection_sequence(state: &State) -> Result<Vec<Message>> {
     Ok(vec![
-        nick(&state.config.nick)?,
-        user(&state.config.username, &state.config.realname)?,
+        aatxe::Command::NICK(state.config.nick.to_owned())
+            .into(),
+        aatxe::Command::USER(
+            state.config.username.to_owned(),
+            "8".to_owned(),
+            state.config.realname.to_owned()
+        ).into(),
     ])
 }

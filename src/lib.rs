@@ -1,4 +1,5 @@
 extern crate clap;
+extern crate crossbeam;
 extern crate irc;
 extern crate itertools;
 extern crate parking_lot;

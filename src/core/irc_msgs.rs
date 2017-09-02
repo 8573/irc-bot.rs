@@ -1,5 +1,6 @@
 use super::State;
-use pircolate;
+use irc::client::prelude as aatxe;
+use irc::proto::Message;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MsgTarget<'a>(pub &'a str);
@@ -28,6 +29,7 @@ pub struct OwningMsgPrefix {
     backing: String,
 }
 
+#[cfg(feature = "pircolate")]
 fn prefix_from_pircolate<'a>(
     pirc_pfx: Option<(&'a str, Option<&'a str>, Option<&'a str>)>,
 ) -> MsgPrefix<'a> {
@@ -49,18 +51,18 @@ fn prefix_from_pircolate<'a>(
     }
 }
 
-pub fn parse_privmsg(input: &pircolate::Message) -> Option<PrivMsg> {
-    input.command::<pircolate::command::PrivMsg>().map(
-        |pircolate::command::PrivMsg(target, msg)| {
-            PrivMsg {
-                metadata: MsgMetadata {
-                    target: MsgTarget(target),
-                    prefix: prefix_from_pircolate(input.prefix()),
-                },
-                text: msg,
-            }
-        },
-    )
+pub fn parse_privmsg(input: &Message) -> Option<PrivMsg> {
+    if let aatxe::Command::PRIVMSG(ref target, ref msg) = input.command {
+        Some(PrivMsg {
+            metadata: MsgMetadata {
+                target: MsgTarget(target),
+                prefix: parse_prefix(input.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
+            },
+            text: msg,
+        })
+    } else {
+        None
+    }
 }
 
 fn is_msg_to_nick(state: &State, MsgTarget(target): MsgTarget, msg: &str, nick: &str) -> bool {

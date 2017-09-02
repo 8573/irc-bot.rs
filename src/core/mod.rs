@@ -18,16 +18,21 @@ use self::modl_sys::ModuleInfo;
 use self::modl_sys::ModuleLoadMode;
 pub use self::modl_sys::mk_module;
 pub use self::reaction::ErrorReaction;
+use self::reaction::LibReaction;
 pub use self::reaction::Reaction;
+use crossbeam;
+use irc::client::prelude as aatxe;
+use irc::client::server::Server as AatxeServer;
+use irc::client::server::utils::ServerExt as AatxeServerExt;
+use irc::proto::Message;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use irc::client::prelude as aatxe;
-use irc::proto::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::thread;
 
 mod bot_cmd;
 mod bot_cmd_handler;
@@ -44,7 +49,7 @@ mod state;
 pub struct State<'server, 'modl> {
     _lifetime_server: PhantomData<&'server ()>,
     config: Config,
-    servers: Vec<aatxe::IrcServer>,
+    servers: Vec<Server>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
     modules: BTreeMap<Cow<'static, str>, &'modl Module<'modl>>,
@@ -62,6 +67,11 @@ pub struct Config {
     admins: Vec<config::Admin>,
     servers: Vec<config::Server>,
     channels: Vec<String>,
+}
+
+struct Server {
+    inner: aatxe::IrcServer,
+    config: config::Server,
 }
 
 impl<'server, 'modl> State<'server, 'modl> {
@@ -178,16 +188,14 @@ where
         state.commands.keys().collect::<Vec<_>>()
     );
 
-    let state = Arc::new(RwLock::new(state));
-
-    let servers = Vec::new();
+    let mut servers = Vec::new();
 
     for server_config in &state.config.servers {
         let aatxe_config = aatxe::Config {
-            nickname: Some(state.config.nickname.to_owned()),
+            nickname: Some(state.config.nick.to_owned()),
             username: Some(state.config.username.to_owned()),
             realname: Some(state.config.realname.to_owned()),
-            server: Some(server_config.host),
+            server: Some(server_config.host.clone()),
             port: Some(server_config.port),
             use_ssl: Some(server_config.tls),
             ..Default::default()
@@ -199,8 +207,14 @@ where
                 s
             }
             Err(err) => {
-                match (state.error_handler)(err) {
-                    ErrorReaction::Proceed => {}
+                match (state.error_handler)(err.into()) {
+                    ErrorReaction::Proceed => {
+                        error!(
+                            "Failed to connect to server {:?}; ignoring.",
+                            server_config.host
+                        );
+                        continue;
+                    }
                     ErrorReaction::Quit(msg) => {
                         error!(
                             "Terminal error while connecting to server {:?}: {:?}",
@@ -213,19 +227,78 @@ where
             }
         };
 
-        servers.push(aatxe_server);
+        servers.push(Server {
+            inner: aatxe_server,
+            config: server_config.clone(),
+        });
     }
 
-    state.write().servers = servers;
+    state.servers = servers;
 
-    for server in state.read().servers {
-        // TODO: start threads
-    }
+    let state = Arc::new(state);
+
+    crossbeam::scope(|scope| {
+        let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
+
+        for server in &state.servers {
+            let state_handle = state.clone();
+            let server_handle = server.inner.clone();
+            let addr = server.config.socket_addr_string();
+            let label = format!("server[{}]", addr);
+
+            let thread_build_result = scope.builder().name(label).spawn(move || -> () {
+                let current_thread = thread::current();
+                let label = current_thread.name().expect(
+                    "This thread is unnamed?! We specifically gave \
+                     it a name, what happened?!",
+                );
+
+                match server_handle.identify() {
+                    Ok(()) => debug!("{}: Sent identification sequence to server.", label),
+                    Err(err) => {
+                        error!(
+                            "{}: Failed to send identification sequence to server.",
+                            label
+                        )
+                    }
+                }
+
+                match server_handle.for_each_incoming(|msg| handle_msg(&state_handle, Ok(msg))) {
+                    Ok(()) => debug!("{}: Thread exited successfully.", label),
+                    Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
+                }
+            });
+
+            match thread_build_result {
+                Ok(join_handle) => join_handles.push(join_handle),
+                Err(err) => {
+                    match (state.error_handler)(err.into()) {
+                        ErrorReaction::Proceed => {
+                            error!("Failed to create thread for server {:?}; ignoring.", addr)
+                        }
+                        ErrorReaction::Quit(msg) => {
+                            error!(
+                                "Terminal error: Failed to create thread for server {:?}: {:?}",
+                                addr,
+                                msg
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
-fn handle_msg(state: &State, input: Result<Message>) -> LibReaction<Message> {
-    match input.and_then(|msg| irc_comm::handle_msg(&state, msg)) {
+fn handle_msg(state: &State, input: Result<Message>) {
+    let reaction = match input.and_then(|msg| irc_comm::handle_msg(&state, msg)) {
         Ok(r) => r,
         Err(e) => state.handle_err_generic(e),
-    }
+    };
+
+    process_reaction(state, reaction);
+}
+
+fn process_reaction(state: &State, reaction: LibReaction<Message>) {
+    // TODO
 }
