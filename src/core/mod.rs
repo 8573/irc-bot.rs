@@ -300,5 +300,34 @@ fn handle_msg(state: &State, input: Result<Message>) {
 }
 
 fn process_reaction(state: &State, reaction: LibReaction<Message>) {
-    // TODO
+    process_reaction_with_err_cb(state, reaction, |err| {
+        process_reaction_with_err_cb(state, state.handle_err_generic(err), |err| {
+            error!(
+                "Encountered error {:?} while handling error; stopping error handling to avoid \
+                 potential infinite recursion.",
+                err
+            )
+        })
+    })
+}
+
+fn process_reaction_with_err_cb<ErrCb>(state: &State, reaction: LibReaction<Message>, err_cb: ErrCb)
+where
+    ErrCb: Fn(Error) -> (),
+{
+    match reaction {
+        LibReaction::RawMsg(msg) => {
+            let result = state.servers[0].inner.send(msg);
+            match result {
+                Ok(()) => {}
+                Err(e) => err_cb(e.into()),
+            }
+        }
+        LibReaction::Multi(reactions) => {
+            for reaction in reactions {
+                process_reaction(state, reaction)
+            }
+        }
+        LibReaction::None => {}
+    }
 }
