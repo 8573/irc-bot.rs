@@ -154,7 +154,8 @@ fn handle_reaction(
                 .map(|s| state.say(reply_target, reply_addressee, &s))
                 .collect::<Result<_>>()?))
         }
-        Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
+        // TODO: Stop appending CR-LF if I switch to an IRC library that does so itself.
+        Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(format!("{}\r\n", s).parse()?)),
         Reaction::BotCmd(cmd_ln) => handle_bot_command(state, msg, cmd_ln),
         Reaction::Quit(msg) => bail!(ErrorKind::ModuleRequestedQuit(msg)),
     }
