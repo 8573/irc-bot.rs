@@ -12,16 +12,16 @@ categories = ["network-programming"]
 license = "Apache-2.0"
 
 [dependencies]
-bitflags = "0.9"
+bitflags = "1"
 clap = "2"
 crossbeam = "0.3"
 env_logger = "0.4"
 error-chain = "0.10"
 irc = "0.12"
-itertools = "0.6"
-lazy_static = "0.2"
-log = "0.3"
-parking_lot = "0.4"
+itertools = "0.7"
+lazy_static = "1"
+log = "0.4"
+parking_lot = "0.5"
 skimmer = "0.0"
 uuid = {version = "0.5", features = ["v4"]}
 yamlette = "0.0"
