@@ -317,6 +317,7 @@ where
 {
     match reaction {
         LibReaction::RawMsg(msg) => {
+            trace!("Passing outgoing message to IRC library: {:?}", msg);
             let result = state.servers[0].inner.send(msg);
             match result {
                 Ok(()) => {}
