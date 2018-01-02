@@ -24,4 +24,5 @@ log = "0.4"
 parking_lot = "0.5"
 skimmer = "0.0"
 uuid = {version = "0.5", features = ["v4"]}
+yaml-rust = "0.4"
 yamlette = "0.0"

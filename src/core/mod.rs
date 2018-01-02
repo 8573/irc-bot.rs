@@ -34,7 +34,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::thread;
 
-mod bot_cmd;
+pub(crate) mod bot_cmd;
+
 mod bot_cmd_handler;
 mod config;
 mod err;
@@ -317,6 +318,7 @@ where
 {
     match reaction {
         LibReaction::RawMsg(msg) => {
+            // TODO: use process_outgoing_message
             trace!("Passing outgoing message to IRC library: {:?}", msg);
             let result = state.servers[0].inner.send(msg);
             match result {

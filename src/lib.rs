@@ -5,6 +5,7 @@ extern crate itertools;
 extern crate parking_lot;
 extern crate skimmer;
 extern crate uuid;
+extern crate yaml_rust;
 
 #[macro_use]
 extern crate bitflags;
@@ -27,3 +28,4 @@ pub use self::core::run;
 
 pub mod core;
 pub mod modules;
+pub mod util;

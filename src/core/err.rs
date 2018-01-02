@@ -4,6 +4,7 @@ use irc;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
+use util;
 
 error_chain! {
     foreign_links {
@@ -13,6 +14,7 @@ error_chain! {
 
     links {
         IrcCrate(irc::error::Error, irc::error::ErrorKind);
+        YamlUtil(util::yaml::Error, util::yaml::ErrorKind);
     }
 
     errors {

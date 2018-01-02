@@ -2,7 +2,11 @@ use super::BotCmdHandler;
 use super::Error;
 use super::Module;
 use super::Reaction;
+use std;
 use std::borrow::Cow;
+use util;
+use yaml_rust::Yaml;
+use yaml_rust::yaml;
 
 pub struct BotCommand<'modl> {
     pub name: Cow<'static, str>,
@@ -10,7 +14,8 @@ pub struct BotCommand<'modl> {
     pub auth_lvl: BotCmdAuthLvl,
     // TODO: once 1.18 is stable, make this pub_restricted to super.
     pub handler: &'modl BotCmdHandler,
-    pub usage: Cow<'static, str>,
+    pub usage_str: Cow<'static, str>,
+    pub usage_yaml: Yaml,
     pub help_msg: Cow<'static, str>,
 }
 
@@ -62,4 +67,14 @@ impl From<Reaction> for BotCmdResult {
 pub enum BotCmdAuthLvl {
     Public,
     Admin,
+}
+
+pub fn parse_arg<'s>(syntax: &'s Yaml, arg_str: &str) -> std::result::Result<Yaml, BotCmdResult> {
+    use util::yaml as uy;
+
+    match uy::parse_and_check_node(arg_str, syntax, "<argument>") {
+        Ok(arg) => Ok(arg.unwrap_or(Yaml::Null)),
+        Err(uy::Error(uy::ErrorKind::YamlScan(_), _)) => Err(BotCmdResult::SyntaxErr),
+        Err(err) => Err(BotCmdResult::LibErr(err.into())),
+    }
 }

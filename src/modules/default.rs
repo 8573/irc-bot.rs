@@ -1,12 +1,17 @@
 use core::*;
 use core::BotCmdAuthLvl as Auth;
+use std::borrow::Cow;
+use util;
+use yaml_rust::Yaml;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("default")
         .command(
             "join",
             "<channel>",
-            "Have the bot join the given channel.",
+            "Have the bot join the given channel. Note that a channel name containing the \
+             character '#' will need to be enclosed in quotation marks, like '#channel' or \
+             \"#channel\".",
             Auth::Admin,
             Box::new(join),
         )
@@ -41,7 +46,7 @@ pub fn mk<'a>() -> Module<'a> {
         )
         .command(
             "help",
-            "{cmd: [command], list: [list name]}",
+            "{cmd: '[command]', list: '[list name]'}",
             "Request help with the bot's features, such as commands.",
             Auth::Public,
             Box::new(help),
@@ -49,27 +54,48 @@ pub fn mk<'a>() -> Module<'a> {
         .end()
 }
 
-fn join(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
-    Reaction::RawMsg(format!("JOIN {}", arg).into())
+static FW_SYNTAX_CHECK_FAIL: &str =
+    "The framework should have caught this syntax error before it tried to run this command \
+     handler!";
+
+lazy_static! {
+    static ref YAML_STR_CHAN: Yaml = Yaml::String("chan".into());
+    static ref YAML_STR_CMD: Yaml = Yaml::String("cmd".into());
+    static ref YAML_STR_LIST: Yaml = Yaml::String("list".into());
+    static ref YAML_STR_MSG: Yaml = Yaml::String("msg".into());
+}
+
+fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
+    Reaction::RawMsg(
+        format!(
+            "JOIN {}",
+            util::yaml::scalar_to_str(arg, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
+        ).into(),
+    )
 }
 
 fn part(
     state: &State,
-    &MsgMetadata { target: MsgTarget(target), .. }: &MsgMetadata,
-    arg: &str,
+    &MsgMetadata { target: MsgTarget(msg_target), .. }: &MsgMetadata,
+    arg: &Yaml,
 ) -> BotCmdResult {
-    yamlette!(read; arg.as_bytes(); [[
-        {"chan" => (chan: String), "msg" => (comment: String)}
-    ]]);
+    let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
 
-    let chan = match (chan, target) {
+    let chan = arg.get(&YAML_STR_CHAN).map(|y| {
+        util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
+    });
+
+    let chan = match (chan, msg_target) {
         (Some(c), _) => c,
-        (None, _) if !arg.is_empty() => return BotCmdResult::SyntaxErr,
         (None, t) if t == state.nick().unwrap_or("".into()) => {
             return BotCmdResult::ArgMissing1To1("channel".into())
         }
-        (None, t) => t.to_owned(),
+        (None, t) => t.into(),
     };
+
+    let comment = arg.get(&YAML_STR_MSG).map(|y| {
+        util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
+    });
 
     Reaction::RawMsg(
         format!(
@@ -81,54 +107,46 @@ fn part(
     ).into()
 }
 
-fn quit(_: &State, _: &MsgMetadata, arg: &str) -> Reaction {
-    yamlette!(read; arg.as_bytes(); [[
-        {"msg" => (comment: String)}
-    ]]);
+fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
+    let comment = arg.as_hash()
+        .expect(FW_SYNTAX_CHECK_FAIL)
+        .get(&YAML_STR_MSG)
+        .map(|y| {
+            util::yaml::scalar_to_str(y, |s| Cow::Owned(s.to_owned())).expect(FW_SYNTAX_CHECK_FAIL)
+        });
 
-    Reaction::Quit(comment.map(Into::into))
+    Reaction::Quit(comment)
 }
 
-fn ping(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
-    if arg.is_empty() {
-        Reaction::Reply("pong".into()).into()
-    } else {
-        BotCmdResult::SyntaxErr
-    }
+fn ping(_: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
+    Reaction::Reply("pong".into()).into()
 }
 
-fn source(_: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
+fn source(_: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
     let src_url = match env!("CARGO_PKG_HOMEPAGE") {
         s if !s.is_empty() => s,
         _ => "unknown",
     };
 
-    if arg.is_empty() {
-        Reaction::Reply(format!("<{}>", src_url).into()).into()
-    } else {
-        BotCmdResult::SyntaxErr
-    }
+    Reaction::Reply(format!("<{}>", src_url).into()).into()
 }
 
-fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
-    yamlette!(read; arg.as_bytes(); [[
-        {"cmd" => (cmd: &str), "list" => (list: &str)}
-    ]]);
+fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
+    let arg = arg.as_hash();
 
-    let argc = [cmd, list].iter().filter(|x| x.is_some()).count();
+    let cmd = arg.and_then(|m| m.get(&YAML_STR_CMD));
+    let list = arg.and_then(|m| m.get(&YAML_STR_LIST));
 
-    if argc == 0 && !arg.is_empty() {
-        return BotCmdResult::SyntaxErr;
-    } else if argc > 1 {
+    if [cmd, list].iter().filter(|x| x.is_some()).count() > 1 {
         return Reaction::Msg("Please ask for help with one thing at a time.".into()).into();
     }
 
-    if let Some(cmd_name) = cmd {
+    if let Some(&Yaml::String(ref cmd_name)) = cmd {
         let &BotCommand {
             ref name,
             ref provider,
             ref auth_lvl,
-            ref usage,
+            ref usage_str,
             ref help_msg,
             ..
         } = match state.command(cmd_name) {
@@ -143,11 +161,11 @@ fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
             vec![
                 format!("= Help for command {:?}:", name).into(),
                 format!("- [module {:?}, auth level {:?}]", provider.name, auth_lvl).into(),
-                format!("- Syntax: {} {}", name, usage).into(),
+                format!("- Syntax: {} {}", name, usage_str).into(),
                 help_msg.clone(),
             ].into(),
         ).into()
-    } else if let Some(list_name) = list {
+    } else if let Some(&Yaml::String(ref list_name)) = list {
         let list_names = ["commands", "lists"];
 
         if list_name == "commands" {
@@ -157,7 +175,7 @@ fn help(state: &State, _: &MsgMetadata, arg: &str) -> BotCmdResult {
         } else if list_name == "lists" {
             Reaction::Msg(format!("Available lists: {:?}", list_names).into()).into()
         } else {
-            if list_names.contains(&list_name) {
+            if list_names.contains(&list_name.as_ref()) {
                 error!("Help list {:?} declared but not defined.", list_name);
             }
 

@@ -10,7 +10,9 @@ use itertools::Itertools;
 use std;
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use util;
 use uuid::Uuid;
+use yaml_rust::Yaml;
 
 pub struct Module<'modl> {
     pub name: Cow<'static, str>,
@@ -78,14 +80,24 @@ impl<'modl> ModuleBuilder<'modl> {
             name.as_ref()
         );
 
-        self.features.push(ModuleFeature::Command {
+        let syntax = syntax.into();
+        let usage_yaml = util::yaml::parse_node(&syntax).unwrap().unwrap_or(
+            Yaml::Hash(
+                Default::default(),
+            ),
+        );
+
+        let cmd = ModuleFeature::Command {
             name: name,
-            usage: syntax.into(),
+            usage_str: syntax,
+            usage_yaml,
             help_msg: help_msg.into(),
             auth_lvl: auth_lvl,
             handler: handler,
             _lifetime: PhantomData,
-        });
+        };
+
+        self.features.push(cmd);
 
         self
     }
@@ -113,7 +125,8 @@ pub struct ModuleInfo {
 pub enum ModuleFeature<'modl> {
     Command {
         name: Cow<'static, str>,
-        usage: Cow<'static, str>,
+        usage_str: Cow<'static, str>,
+        usage_yaml: Yaml,
         help_msg: Cow<'static, str>,
         auth_lvl: BotCmdAuthLvl,
         handler: Box<BotCmdHandler>,
@@ -306,7 +319,8 @@ impl<'server, 'modl> State<'server, 'modl> {
                 ref name,
                 ref handler,
                 ref auth_lvl,
-                ref usage,
+                ref usage_str,
+                ref usage_yaml,
                 ref help_msg,
                 _lifetime: _,
             } => {
@@ -317,7 +331,8 @@ impl<'server, 'modl> State<'server, 'modl> {
                         name: name.clone(),
                         auth_lvl: auth_lvl.clone(),
                         handler: handler.as_ref(),
-                        usage: usage.clone(),
+                        usage_str: usage_str.clone(),
+                        usage_yaml: usage_yaml.clone(),
                         help_msg: help_msg.clone(),
                     },
                 )

@@ -1,9 +1,10 @@
 use super::BotCmdResult;
 use super::MsgMetadata;
 use super::State;
+use yaml_rust::Yaml;
 
 pub trait BotCmdHandler: Send + Sync {
-    fn run(&self, &State, &MsgMetadata, &str) -> BotCmdResult;
+    fn run(&self, &State, &MsgMetadata, &Yaml) -> BotCmdResult;
 }
 
 macro_rules! impl_fn {
@@ -12,7 +13,7 @@ macro_rules! impl_fn {
             where F: Fn($($param_ty),*) -> R + Send + Sync,
                   R: Into<BotCmdResult>
         {
-            fn run(&self, $state_pat: &State, $msg_md_pat: &MsgMetadata, $arg_pat: &str)
+            fn run(&self, $state_pat: &State, $msg_md_pat: &MsgMetadata, $arg_pat: &Yaml)
                     -> BotCmdResult {
                 self($($param_id),*).into()
             }
@@ -27,11 +28,11 @@ macro_rules! impl_fn {
 // TODO: Occasionally check whether this has become allowed, using the test case that I have saved
 // as <https://play.rust-lang.org/?gist=1d71b909f6e4adeddda89134031d4b1d>.
 
-// impl_fn!((                                              ) => (_,     _,      _  ));
-// impl_fn!((                                     arg: &str) => (_,     _,      arg));
-// impl_fn!((               msg_md: &MsgMetadata           ) => (_,     msg_md, _  ));
-// impl_fn!((               msg_md: &MsgMetadata, arg: &str) => (_,     msg_md, _  ));
-// impl_fn!((state: &State                                 ) => (state, _,      _  ));
-// impl_fn!((state: &State,                       arg: &str) => (state, _,      arg));
-// impl_fn!((state: &State, msg_md: &MsgMetadata           ) => (state, msg_md, _  ));
-impl_fn!(   (state: &State, msg_md: &MsgMetadata, arg: &str) => (state, msg_md, arg));
+// impl_fn!((                                               ) => (_,     _,      _  ));
+// impl_fn!((                                     arg: &Yaml) => (_,     _,      arg));
+// impl_fn!((               msg_md: &MsgMetadata            ) => (_,     msg_md, _  ));
+// impl_fn!((               msg_md: &MsgMetadata, arg: &Yaml) => (_,     msg_md, _  ));
+// impl_fn!((state: &State                                  ) => (state, _,      _  ));
+// impl_fn!((state: &State,                       arg: &Yaml) => (state, _,      arg));
+// impl_fn!((state: &State, msg_md: &MsgMetadata            ) => (state, msg_md, _  ));
+impl_fn!(   (state: &State, msg_md: &MsgMetadata, arg: &Yaml) => (state, msg_md, arg));

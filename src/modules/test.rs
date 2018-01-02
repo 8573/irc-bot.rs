@@ -1,5 +1,6 @@
 use core::*;
 use core::BotCmdAuthLvl as Auth;
+use yaml_rust::Yaml;
 
 pub fn mk<'a>() -> Module<'a> {
     mk_module("test")
@@ -27,6 +28,6 @@ const LOREM_IPSUM_TEXT: &'static str =
      sagittis in. Mauris a lectus nec ligula eleifend rutrum. Class aptent taciti sociosqu ad \
      litora torquent per conubia massa nunc.";
 
-fn test_line_wrap(_: &State, _: &MsgMetadata, _: &str) -> BotCmdResult {
+fn test_line_wrap(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into()))
 }

@@ -8,6 +8,7 @@ use super::MsgTarget;
 use super::Reaction;
 use super::Result;
 use super::State;
+use super::bot_cmd;
 use super::irc_msgs::PrivMsg;
 use super::irc_msgs::parse_privmsg;
 use super::irc_send;
@@ -189,7 +190,8 @@ where
                  ref provider,
                  ref auth_lvl,
                  ref handler,
-                 usage: _,
+                 ref usage_yaml,
+                 usage_str: _,
                  help_msg: _,
 }: &BotCommand, cmd_args: &str) -> BotCmdResult{
 
@@ -198,8 +200,16 @@ where
         &BotCmdAuthLvl::Admin => state.have_admin(metadata.prefix),
     };
 
+    let arg = match bot_cmd::parse_arg(usage_yaml, cmd_args) {
+        Ok(arg) => arg,
+        Err(res) => return res,
+    };
+
     let result = match user_authorized {
-        Ok(true) => handler.run(state, &metadata, cmd_args),
+        Ok(true) => {
+            debug!("Running bot command {:?} with arg: {:?}", name, arg);
+            handler.run(state, &metadata, &arg)
+        }
         Ok(false) => BotCmdResult::Unauthorized,
         Err(e) => BotCmdResult::LibErr(e),
     };
@@ -234,7 +244,7 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
 
     let &BotCommand {
         ref name,
-        ref usage,
+        ref usage_str,
         ..
     } = cmd;
 
@@ -247,7 +257,7 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
                 name
             ))
         }
-        BotCmdResult::SyntaxErr => Err(format!("Syntax: {} {}", name, usage)),
+        BotCmdResult::SyntaxErr => Err(format!("Syntax: {} {}", name, usage_str)),
         BotCmdResult::ArgMissing(arg_name) => {
             Err(format!(
                 "Syntax error: For command {:?}, the argument {:?} is \
@@ -332,6 +342,7 @@ fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction<Message>> 
         None => return Ok(LibReaction::None),
     };
 
+    // TODO: Catch panics.
     if msg_for_bot.is_empty() {
         handle_reaction(state, msg, Reaction::Reply("Yes?".into()))
     } else if prefix.nick == Some(target.0) && text == UPDATE_MSG_PREFIX_STR {
