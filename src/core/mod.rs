@@ -71,8 +71,9 @@ impl<'server, 'modl> State<'server, 'modl> {
     where
         ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     {
-        let nickname = config.nickname.clone();
-        let username = config.username.clone();
+        let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
+            format!("{}!{}@", config.nickname, config.username),
+        ));
 
         State {
             _lifetime_server: PhantomData,
@@ -82,9 +83,7 @@ impl<'server, 'modl> State<'server, 'modl> {
             chars_indicating_msg_is_addressed_to_nick: vec![':', ','],
             modules: Default::default(),
             commands: Default::default(),
-            msg_prefix: RwLock::new(OwningMsgPrefix::from_string(
-                format!("{}!{}@", nickname, username),
-            )),
+            msg_prefix,
             error_handler: Arc::new(error_handler),
         }
     }
