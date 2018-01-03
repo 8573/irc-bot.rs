@@ -3,7 +3,8 @@ extern crate crossbeam;
 extern crate irc;
 extern crate itertools;
 extern crate parking_lot;
-extern crate skimmer;
+extern crate serde;
+extern crate serde_yaml;
 extern crate uuid;
 extern crate yaml_rust;
 
@@ -20,7 +21,7 @@ extern crate lazy_static;
 extern crate log;
 
 #[macro_use]
-extern crate yamlette;
+extern crate serde_derive;
 
 pub use self::core::Config;
 pub use self::core::ErrorReaction;

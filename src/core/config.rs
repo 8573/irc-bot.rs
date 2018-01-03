@@ -1,27 +1,49 @@
-use super::Config;
 use super::ErrorKind;
 use super::Result;
-use skimmer;
+use serde_yaml;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::path::Path;
-use yamlette::book::extractor::pointer::Pointer;
-use yamlette::book::extractor::traits::FromPointer;
 
-#[derive(Clone, Debug)]
+// TODO: Hide the Deserialize implementation, which doesn't validate.
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub(crate) nickname: String,
+
+    #[serde(default)]
+    pub(crate) username: String,
+
+    #[serde(default)]
+    pub(crate) realname: String,
+
+    #[serde(default)]
+    pub(crate) admins: Vec<Admin>,
+
+    pub(crate) servers: Vec<Server>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Admin {
+    #[serde(default)]
     pub nick: Option<String>,
+
+    #[serde(default)]
     pub user: Option<String>,
+
+    #[serde(default)]
     pub host: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Server {
     pub host: String,
+
     pub port: u16,
+
+    #[serde(default = "mk_true")]
     pub tls: bool,
 }
 
@@ -44,7 +66,7 @@ impl Config {
     }
 
     pub fn build() -> ConfigBuilder {
-        Self::build_from("{nick: ''}")
+        Self::build_from("{nickname: ''}")
     }
 
     pub fn build_from<T>(input: T) -> ConfigBuilder
@@ -77,19 +99,20 @@ impl Server {
 }
 
 impl ConfigBuilder {
-    pub fn nick<S>(self, nick: S) -> Self
+    pub fn nickname<S>(self, nickname: S) -> Self
     where
         S: Into<String>,
     {
-        let nick = nick.into();
+        let nickname = nickname.into();
 
-        if nick.is_empty() {
+        if nickname.is_empty() {
             return ConfigBuilder(Err(
-                ErrorKind::Config("nick".into(), "is empty".into()).into(),
+                ErrorKind::Config("nickname".into(), "is empty".into())
+                    .into(),
             ));
         }
 
-        ConfigBuilder(self.0.map(|cfg| Config { nick: nick, ..cfg }))
+        ConfigBuilder(self.0.map(|cfg| Config { nickname, ..cfg }))
     }
 
     pub fn username<S>(self, username: S) -> Self
@@ -140,7 +163,7 @@ impl IntoConfig for ConfigBuilder {
     }
 }
 
-impl IntoConfig for &'static str {
+impl<'a> IntoConfig for &'a str {
     fn into_config(self) -> Result<Config> {
         read_config(self)
     }
@@ -148,7 +171,7 @@ impl IntoConfig for &'static str {
 
 impl IntoConfig for String {
     fn into_config(self) -> Result<Config> {
-        read_config(self)
+        read_config(&self)
     }
 }
 
@@ -169,129 +192,42 @@ impl IntoConfig for File {
     }
 }
 
-// I only want to pass `&str` and `String` to `skimmer`/`yamlette`, because I dislike how readily
-// it will fail silently in other cases, and that it pre-allocates 32 KiB of buffer if given a
-// reader (and fails silently if the input doesn't fit).
-trait AcceptableSkimmerInput {}
-
-impl AcceptableSkimmerInput for &'static str {}
-
-impl AcceptableSkimmerInput for String {}
-
-fn read_config<R>(input: R) -> Result<Config>
-    where R: skimmer::reader::IntoReader + AcceptableSkimmerInput,
-<<R as skimmer::reader::IntoReader>::Reader as skimmer::Read>::Datum: 'static + skimmer::Datum{
-    yamlette!(read; input; [[
-        {
-            "nickname" => (nickname: String),
-            "username" => (username: String),
-            "realname" => (realname: String),
-            "admins" => (list admins: Vec<Admin>),
-            "servers" => (list servers: Vec<Server>),
-
-            // For compatibility with the `irc` crate's configuration files....
-            "channels" => (list channels: Vec<String>)
-        }
-    ]]);
-
-    let nickname = nickname.ok_or(ErrorKind::Config(
-        "nickname".into(),
-        "is not specified".into(),
-    ))?;
+fn read_config(input: &str) -> Result<Config> {
+    let mut cfg: Config = serde_yaml::from_str(input)?;
 
     ensure!(
-        !nickname.is_empty(),
+        !cfg.nickname.is_empty(),
         ErrorKind::Config("nickname".into(), "is empty".into())
     );
 
-    let username = username.unwrap_or(nickname.clone());
+    if cfg.username.is_empty() {
+        cfg.username = cfg.nickname.clone();
+    }
 
-    let realname = realname.unwrap_or(format!(
-        "Built with <{}> v{}",
-        env!("CARGO_PKG_HOMEPAGE"),
-        env!("CARGO_PKG_VERSION")
-    ));
-
-    let servers = servers.ok_or(ErrorKind::Config(
-        "servers".into(),
-        "is not specified".into(),
-    ))?;
+    if cfg.realname.is_empty() {
+        cfg.realname = format!(
+            "Built with <{}> v{}",
+            env!("CARGO_PKG_HOMEPAGE"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     ensure!(
-        !servers.is_empty(),
+        !cfg.servers.is_empty(),
         ErrorKind::Config("servers".into(), "is empty".into())
     );
 
     ensure!(
-        servers.len() == 1,
+        cfg.servers.len() == 1,
         ErrorKind::Config(
             "servers".into(),
             "lists multiple servers, which is not yet supported".into(),
         )
     );
 
-    Ok(Config {
-        nick: nickname,
-        username: username,
-        realname: realname,
-        admins: admins.unwrap_or(vec![]),
-        servers: servers,
-        channels: channels.unwrap(),
-    })
+    Ok(cfg)
 }
 
-impl<'a> FromPointer<'a> for Admin {
-    fn from_pointer(pointer: Pointer<'a>) -> Option<Admin> {
-        yamlette_reckon!(ptr; Some(pointer); {
-            "nick" => (nick: String),
-            "user" => (user: String),
-            "host" => (host: String)
-        });
-
-        match (nick, user, host) {
-            (None, None, None) => {
-                error!("Admins list entry has no keys; ignoring.");
-                None
-            }
-            (n, u, h) => {
-                Some(Admin {
-                    nick: n,
-                    user: u,
-                    host: h,
-                })
-            }
-        }
-    }
-}
-
-impl<'a> FromPointer<'a> for Server {
-    fn from_pointer(pointer: Pointer<'a>) -> Option<Server> {
-        yamlette_reckon!(ptr; Some(pointer); {
-            "host" => (host: String),
-            "port" => (port: u16),
-            "TLS" => (tls: bool)
-        });
-
-        match (host, port) {
-            (None, None) => {
-                error!("Server list entry has no host or port; ignoring.");
-                None
-            }
-            (None, Some(_)) => {
-                error!("Server list entry has no host; ignoring.");
-                None
-            }
-            (Some(_), None) => {
-                error!("Server list entry has no port; ignoring.");
-                None
-            }
-            (Some(h), Some(p)) => {
-                Some(Server {
-                    host: h,
-                    port: p,
-                    tls: tls.unwrap_or(true),
-                })
-            }
-        }
-    }
+fn mk_true() -> bool {
+    true
 }

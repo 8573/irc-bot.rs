@@ -380,7 +380,7 @@ fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>>
 
 fn connection_sequence(state: &State) -> Result<Vec<Message>> {
     Ok(vec![
-        aatxe::Command::NICK(state.config.nick.to_owned())
+        aatxe::Command::NICK(state.config.nickname.to_owned())
             .into(),
         aatxe::Command::USER(
             state.config.username.to_owned(),

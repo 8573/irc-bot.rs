@@ -1,6 +1,7 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
 use irc;
+use serde_yaml;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
@@ -10,6 +11,7 @@ error_chain! {
     foreign_links {
         Io(io::Error);
         OutboxPush(mpsc::TrySendError<irc::proto::Message>);
+        SerdeYaml(serde_yaml::Error);
     }
 
     links {

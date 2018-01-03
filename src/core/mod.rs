@@ -2,6 +2,7 @@ pub use self::bot_cmd::BotCmdAuthLvl;
 pub use self::bot_cmd::BotCmdResult;
 pub use self::bot_cmd::BotCommand;
 pub use self::bot_cmd_handler::BotCmdHandler;
+pub use self::config::Config;
 pub use self::err::Error;
 pub use self::err::ErrorKind;
 pub use self::err::Result;
@@ -59,17 +60,6 @@ pub struct State<'server, 'modl> {
     error_handler: Arc<Fn(Error) -> ErrorReaction + Send + Sync>,
 }
 
-// TODO: once pub_restricted hits stable (1.18), move this into the `config` module.
-#[derive(Debug)]
-pub struct Config {
-    nick: String,
-    username: String,
-    realname: String,
-    admins: Vec<config::Admin>,
-    servers: Vec<config::Server>,
-    channels: Vec<String>,
-}
-
 struct Server {
     inner: aatxe::IrcServer,
     config: config::Server,
@@ -80,7 +70,7 @@ impl<'server, 'modl> State<'server, 'modl> {
     where
         ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     {
-        let nick = config.nick.clone();
+        let nickname = config.nickname.clone();
         let username = config.username.clone();
 
         State {
@@ -92,7 +82,7 @@ impl<'server, 'modl> State<'server, 'modl> {
             modules: Default::default(),
             commands: Default::default(),
             msg_prefix: RwLock::new(OwningMsgPrefix::from_string(
-                format!("{}!{}@", nick, username),
+                format!("{}!{}@", nickname, username),
             )),
             error_handler: Arc::new(error_handler),
         }
@@ -193,7 +183,7 @@ where
 
     for server_config in &state.config.servers {
         let aatxe_config = aatxe::Config {
-            nickname: Some(state.config.nick.to_owned()),
+            nickname: Some(state.config.nickname.to_owned()),
             username: Some(state.config.username.to_owned()),
             realname: Some(state.config.realname.to_owned()),
             server: Some(server_config.host.clone()),
