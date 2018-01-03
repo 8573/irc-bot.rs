@@ -1,6 +1,7 @@
 use super::ErrorKind;
 use super::Result;
 use serde_yaml;
+use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
@@ -8,21 +9,29 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::path::Path;
 
-// TODO: Hide the Deserialize implementation, which doesn't validate.
-#[derive(Debug, Deserialize)]
+pub(crate) mod inner {
+    /// Configuration structure that can be deserialized by Serde.
+    ///
+    /// This is hidden from the consumer because Serde won't validate the configuration.
+    #[derive(Debug, Deserialize)]
+    pub(crate) struct Config {
+        pub(crate) nickname: String,
+
+        #[serde(default)]
+        pub(crate) username: String,
+
+        #[serde(default)]
+        pub(crate) realname: String,
+
+        #[serde(default)]
+        pub(crate) admins: Vec<super::Admin>,
+
+        pub(crate) servers: Vec<super::Server>,
+    }
+}
+
 pub struct Config {
-    pub(crate) nickname: String,
-
-    #[serde(default)]
-    pub(crate) username: String,
-
-    #[serde(default)]
-    pub(crate) realname: String,
-
-    #[serde(default)]
-    pub(crate) admins: Vec<Admin>,
-
-    pub(crate) servers: Vec<Server>,
+    pub(crate) inner: inner::Config,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -48,7 +57,7 @@ pub struct Server {
 }
 
 #[derive(Debug)]
-pub struct ConfigBuilder(Result<Config>);
+pub struct ConfigBuilder(Result<inner::Config>);
 
 impl Config {
     pub fn try_from<T>(input: T) -> Result<Config>
@@ -73,14 +82,14 @@ impl Config {
     where
         T: IntoConfig,
     {
-        ConfigBuilder(Self::try_from(input))
+        ConfigBuilder(Self::try_from(input).map(|cfg| cfg.inner))
     }
 
     pub fn build_from_path<P>(path: P) -> ConfigBuilder
     where
         P: AsRef<Path>,
     {
-        ConfigBuilder(Self::try_from_path(path))
+        ConfigBuilder(Self::try_from_path(path).map(|cfg| cfg.inner))
     }
 }
 
@@ -112,7 +121,7 @@ impl ConfigBuilder {
             ));
         }
 
-        ConfigBuilder(self.0.map(|cfg| Config { nickname, ..cfg }))
+        ConfigBuilder(self.0.map(|cfg| inner::Config { nickname, ..cfg }))
     }
 
     pub fn username<S>(self, username: S) -> Self
@@ -120,7 +129,7 @@ impl ConfigBuilder {
         S: Into<String>,
     {
         ConfigBuilder(self.0.map(|cfg| {
-            Config {
+            inner::Config {
                 username: username.into(),
                 ..cfg
             }
@@ -132,7 +141,7 @@ impl ConfigBuilder {
         S: Into<String>,
     {
         ConfigBuilder(self.0.map(|cfg| {
-            Config {
+            inner::Config {
                 realname: realname.into(),
                 ..cfg
             }
@@ -159,7 +168,7 @@ impl IntoConfig for Result<Config> {
 
 impl IntoConfig for ConfigBuilder {
     fn into_config(self) -> Result<Config> {
-        self.0
+        self.0.and_then(cook_config)
     }
 }
 
@@ -193,24 +202,24 @@ impl IntoConfig for File {
 }
 
 fn read_config(input: &str) -> Result<Config> {
-    let mut cfg: Config = serde_yaml::from_str(input)?;
+    serde_yaml::from_str(input).map_err(Into::into).and_then(
+        cook_config,
+    )
+}
 
+fn cook_config(mut cfg: inner::Config) -> Result<Config> {
+    validate_config(&cfg)?;
+
+    fill_in_config_defaults(&mut cfg)?;
+
+    Ok(Config { inner: cfg })
+}
+
+fn validate_config(cfg: &inner::Config) -> Result<()> {
     ensure!(
         !cfg.nickname.is_empty(),
         ErrorKind::Config("nickname".into(), "is empty".into())
     );
-
-    if cfg.username.is_empty() {
-        cfg.username = cfg.nickname.clone();
-    }
-
-    if cfg.realname.is_empty() {
-        cfg.realname = format!(
-            "Built with <{}> v{}",
-            env!("CARGO_PKG_HOMEPAGE"),
-            env!("CARGO_PKG_VERSION")
-        );
-    }
 
     ensure!(
         !cfg.servers.is_empty(),
@@ -225,9 +234,38 @@ fn read_config(input: &str) -> Result<Config> {
         )
     );
 
-    Ok(cfg)
+    Ok(())
+}
+
+fn fill_in_config_defaults(cfg: &mut inner::Config) -> Result<()> {
+    if cfg.username.is_empty() {
+        cfg.username = cfg.nickname.clone();
+    }
+
+    if cfg.realname.is_empty() {
+        cfg.realname = format!(
+            "Built with <{}> v{}",
+            env!("CARGO_PKG_HOMEPAGE"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    Ok(())
 }
 
 fn mk_true() -> bool {
     true
+}
+
+// Manually implement `Debug` so we get
+//
+//     Config { .. }
+//
+// rather than
+//
+//     Config { inner: Config { .. } }
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
+    }
 }

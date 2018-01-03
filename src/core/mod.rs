@@ -3,6 +3,7 @@ pub use self::bot_cmd::BotCmdResult;
 pub use self::bot_cmd::BotCommand;
 pub use self::bot_cmd_handler::BotCmdHandler;
 pub use self::config::Config;
+pub use self::config::IntoConfig;
 pub use self::err::Error;
 pub use self::err::ErrorKind;
 pub use self::err::Result;
@@ -50,7 +51,7 @@ mod state;
 
 pub struct State<'server, 'modl> {
     _lifetime_server: PhantomData<&'server ()>,
-    config: Config,
+    config: config::inner::Config,
     servers: Vec<Server>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
@@ -66,7 +67,7 @@ struct Server {
 }
 
 impl<'server, 'modl> State<'server, 'modl> {
-    fn new<ErrF>(config: Config, error_handler: ErrF) -> State<'server, 'modl>
+    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State<'server, 'modl>
     where
         ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     {
@@ -132,14 +133,14 @@ impl<'server, 'modl> State<'server, 'modl> {
 
 pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
 where
-    Cfg: config::IntoConfig,
+    Cfg: IntoConfig,
     ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     Modls: AsRef<[Module<'modl>]>,
 {
     let config = match config.into_config() {
         Ok(c) => {
             trace!("Loaded configuration: {:#?}", c);
-            c
+            c.inner
         }
         Err(e) => {
             error_handler(e.into());
