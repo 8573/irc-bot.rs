@@ -246,7 +246,12 @@ where
                 Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
             }
         },
-        |state, server, label| {},
+        |state, server, label| {
+            match irc_send::send_main(state, server, label) {
+                Ok(()) => debug!("{}: Thread exited successfully.", label),
+                Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
+            }
+        },
     );
 }
 
