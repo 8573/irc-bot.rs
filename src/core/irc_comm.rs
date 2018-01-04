@@ -26,7 +26,7 @@ use std::iter;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
-impl<'server, 'modl> State<'server, 'modl> {
+impl State {
     fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction<Message>>
     where
         S1: Borrow<str>,

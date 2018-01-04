@@ -10,19 +10,19 @@ use itertools::Itertools;
 use std;
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use util;
 use uuid::Uuid;
 use yaml_rust::Yaml;
 
-pub struct Module<'modl> {
+pub struct Module {
     pub name: Cow<'static, str>,
     uuid: Uuid,
     // TODO: once 1.18 is stable, make this pub_restricted to super.
-    pub features: Vec<ModuleFeature<'modl>>,
-    _lifetime: PhantomData<&'modl ()>,
+    pub features: Vec<ModuleFeature>,
 }
 
-impl<'modl> PartialEq for Module<'modl> {
+impl PartialEq for Module {
     fn eq(&self, other: &Self) -> bool {
         if self.uuid == other.uuid {
             debug_assert_eq!(self.name, other.name);
@@ -33,9 +33,9 @@ impl<'modl> PartialEq for Module<'modl> {
     }
 }
 
-impl<'modl> Eq for Module<'modl> {}
+impl Eq for Module {}
 
-impl<'modl> GetDebugInfo for Module<'modl> {
+impl GetDebugInfo for Module {
     type Output = ModuleInfo;
 
     fn dbg_info(&self) -> ModuleInfo {
@@ -43,12 +43,12 @@ impl<'modl> GetDebugInfo for Module<'modl> {
     }
 }
 
-pub struct ModuleBuilder<'modl> {
+pub struct ModuleBuilder {
     name: Cow<'static, str>,
-    features: Vec<ModuleFeature<'modl>>,
+    features: Vec<ModuleFeature>,
 }
 
-pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder<'modl>
+pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder
 where
     S: Into<Cow<'static, str>>,
 {
@@ -58,7 +58,7 @@ where
     }
 }
 
-impl<'modl> ModuleBuilder<'modl> {
+impl ModuleBuilder {
     pub fn command<S1, S2, S3>(
         mut self,
         name: S1,
@@ -93,8 +93,7 @@ impl<'modl> ModuleBuilder<'modl> {
             usage_yaml,
             help_msg: help_msg.into(),
             auth_lvl: auth_lvl,
-            handler: handler,
-            _lifetime: PhantomData,
+            handler: handler.into(),
         };
 
         self.features.push(cmd);
@@ -102,7 +101,7 @@ impl<'modl> ModuleBuilder<'modl> {
         self
     }
 
-    pub fn end(self) -> Module<'modl> {
+    pub fn end(self) -> Module {
         let ModuleBuilder { name, mut features } = self;
 
         features.shrink_to_fit();
@@ -111,7 +110,6 @@ impl<'modl> ModuleBuilder<'modl> {
             name: name,
             uuid: Uuid::new_v4(),
             features: features,
-            _lifetime: PhantomData,
         }
     }
 }
@@ -122,20 +120,19 @@ pub struct ModuleInfo {
     name: String,
 }
 
-pub enum ModuleFeature<'modl> {
+pub enum ModuleFeature {
     Command {
         name: Cow<'static, str>,
         usage_str: Cow<'static, str>,
         usage_yaml: Yaml,
         help_msg: Cow<'static, str>,
         auth_lvl: BotCmdAuthLvl,
-        handler: Box<BotCmdHandler>,
-        _lifetime: PhantomData<&'modl ()>,
+        handler: Arc<BotCmdHandler>,
     },
     Trigger,
 }
 
-impl<'modl> GetDebugInfo for ModuleFeature<'modl> {
+impl GetDebugInfo for ModuleFeature {
     type Output = ModuleFeatureInfo;
 
     fn dbg_info(&self) -> ModuleFeatureInfo {
@@ -163,7 +160,7 @@ pub enum ModuleFeatureKind {
     Trigger,
 }
 
-impl<'modl> ModuleFeature<'modl> {
+impl ModuleFeature {
     pub fn name(&self) -> &str {
         match self {
             &ModuleFeature::Command { ref name, .. } => name.as_ref(),
@@ -179,7 +176,7 @@ impl<'modl> ModuleFeature<'modl> {
     // }
 }
 
-impl<'modl> GetDebugInfo for BotCommand<'modl> {
+impl GetDebugInfo for BotCommand {
     type Output = ModuleFeatureInfo;
 
     fn dbg_info(&self) -> ModuleFeatureInfo {
@@ -202,14 +199,14 @@ pub enum ModuleLoadMode {
     Force,
 }
 
-impl<'server, 'modl> State<'server, 'modl> {
+impl State {
     pub fn load_modules<Modls>(
         &mut self,
         modules: Modls,
         mode: ModuleLoadMode,
     ) -> std::result::Result<(), Vec<Error>>
     where
-        Modls: IntoIterator<Item = &'modl Module<'modl>>,
+        Modls: IntoIterator<Item = Module>,
     {
         let errs = modules
             .into_iter()
@@ -225,7 +222,7 @@ impl<'server, 'modl> State<'server, 'modl> {
 
     pub fn load_module(
         &mut self,
-        module: &'modl Module,
+        module: Module,
         mode: ModuleLoadMode,
     ) -> std::result::Result<(), Vec<Error>> {
         debug!(
@@ -255,13 +252,15 @@ impl<'server, 'modl> State<'server, 'modl> {
             ]);
         }
 
-        self.modules.insert(module.name.clone(), module);
+        let module = Arc::new(module);
+
+        self.modules.insert(module.name.clone(), module.clone());
 
         let errs = module
             .features
             .iter()
             .filter_map(|feature| match self.load_module_feature(
-                module,
+                module.clone(),
                 feature,
                 mode,
             ) {
@@ -273,9 +272,9 @@ impl<'server, 'modl> State<'server, 'modl> {
         if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
 
-    fn load_module_feature(
+    fn load_module_feature<'modl>(
         &mut self,
-        provider: &'modl Module,
+        provider: Arc<Module>,
         feature: &'modl ModuleFeature,
         mode: ModuleLoadMode,
     ) -> Result<()> {
@@ -307,9 +306,9 @@ impl<'server, 'modl> State<'server, 'modl> {
         Ok(())
     }
 
-    fn force_load_module_feature(
+    fn force_load_module_feature<'modl>(
         &mut self,
-        provider: &'modl Module,
+        provider: Arc<Module>,
         feature: &'modl ModuleFeature,
     ) {
         debug!("Loading module feature (f2): {:?}", feature.dbg_info());
@@ -322,7 +321,6 @@ impl<'server, 'modl> State<'server, 'modl> {
                 ref usage_str,
                 ref usage_yaml,
                 ref help_msg,
-                _lifetime: _,
             } => {
                 self.commands.insert(
                     name.clone(),
@@ -330,7 +328,7 @@ impl<'server, 'modl> State<'server, 'modl> {
                         provider: provider,
                         name: name.clone(),
                         auth_lvl: auth_lvl.clone(),
-                        handler: handler.as_ref(),
+                        handler: handler.clone(),
                         usage_str: usage_str.clone(),
                         usage_yaml: usage_yaml.clone(),
                         help_msg: help_msg.clone(),

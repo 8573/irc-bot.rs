@@ -49,14 +49,13 @@ mod modl_sys;
 mod reaction;
 mod state;
 
-pub struct State<'server, 'modl> {
-    _lifetime_server: PhantomData<&'server ()>,
+pub struct State {
     config: config::inner::Config,
     servers: Vec<Server>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
-    modules: BTreeMap<Cow<'static, str>, &'modl Module<'modl>>,
-    commands: BTreeMap<Cow<'static, str>, BotCommand<'modl>>,
+    modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
+    commands: BTreeMap<Cow<'static, str>, BotCommand>,
     msg_prefix: RwLock<OwningMsgPrefix>,
     error_handler: Arc<Fn(Error) -> ErrorReaction + Send + Sync>,
 }
@@ -66,8 +65,8 @@ struct Server {
     config: config::Server,
 }
 
-impl<'server, 'modl> State<'server, 'modl> {
-    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State<'server, 'modl>
+impl State {
+    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State
     where
         ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
     {
@@ -76,7 +75,6 @@ impl<'server, 'modl> State<'server, 'modl> {
         ));
 
         State {
-            _lifetime_server: PhantomData,
             config: config,
             servers: Default::default(),
             addressee_suffix: ": ".into(),
@@ -130,11 +128,12 @@ impl<'server, 'modl> State<'server, 'modl> {
     }
 }
 
-pub fn run<'modl, Cfg, ErrF, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
+pub fn run<Cfg, ErrF, ModlCtor, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
 where
     Cfg: IntoConfig,
     ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
-    Modls: AsRef<[Module<'modl>]>,
+    Modls: IntoIterator<Item = ModlCtor>,
+    ModlCtor: Fn() -> Module,
 {
     let config = match config.into_config() {
         Ok(c) => {
@@ -150,7 +149,7 @@ where
 
     let mut state = State::new(config, error_handler);
 
-    match state.load_modules(modules.as_ref().iter(), ModuleLoadMode::Add) {
+    match state.load_modules(modules.into_iter().map(|f| f()), ModuleLoadMode::Add) {
         Ok(()) => {
             trace!("Loaded all requested modules without error.")
         }

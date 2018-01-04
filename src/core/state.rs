@@ -7,7 +7,7 @@ use super::State;
 use super::config;
 use std::borrow::Cow;
 
-impl<'server, 'modl> State<'server, 'modl> {
+impl State {
     pub fn nick(&self) -> Result<String> {
         self.msg_prefix
             .read()

@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use util;
 use yaml_rust::Yaml;
 
-pub fn mk<'a>() -> Module<'a> {
+pub fn mk() -> Module {
     mk_module("default")
         .command(
             "join",

@@ -2,7 +2,7 @@ use core::*;
 use core::BotCmdAuthLvl as Auth;
 use yaml_rust::Yaml;
 
-pub fn mk<'a>() -> Module<'a> {
+pub fn mk() -> Module {
     mk_module("test")
         .command(
             "test-line-wrap",

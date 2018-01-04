@@ -24,6 +24,6 @@ fn main() {
             error!("{:?}", err);
             irc_bot::ErrorReaction::Proceed
         },
-        &[modules::default(), modules::test()],
+        &[modules::default, modules::test],
     );
 }

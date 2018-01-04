@@ -4,16 +4,17 @@ use super::Module;
 use super::Reaction;
 use std;
 use std::borrow::Cow;
+use std::sync::Arc;
 use util;
 use yaml_rust::Yaml;
 use yaml_rust::yaml;
 
-pub struct BotCommand<'modl> {
+pub struct BotCommand {
     pub name: Cow<'static, str>,
-    pub provider: &'modl Module<'modl>,
+    pub provider: Arc<Module>,
     pub auth_lvl: BotCmdAuthLvl,
     // TODO: once 1.18 is stable, make this pub_restricted to super.
-    pub handler: &'modl BotCmdHandler,
+    pub handler: Arc<BotCmdHandler>,
     pub usage_str: Cow<'static, str>,
     pub usage_yaml: Yaml,
     pub help_msg: Cow<'static, str>,
