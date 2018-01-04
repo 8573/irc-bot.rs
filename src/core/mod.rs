@@ -266,10 +266,8 @@ where
                 "send",
                 "sending",
                 &send_fn,
-            )
-        }
+            );
 
-        for server in &state.servers {
             spawn_server_thread(
                 scope,
                 &mut join_handles,
@@ -278,7 +276,7 @@ where
                 "recv",
                 "receiving",
                 &recv_fn,
-            )
+            );
         }
     })
 }
