@@ -241,24 +241,18 @@ where
                 }
             }
 
-            match server.for_each_incoming(|msg| handle_msg(&state, Ok(msg))) {
-                Ok(()) => debug!("{}: Thread exited successfully.", label),
-                Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
-            }
+            server
+                .for_each_incoming(|msg| handle_msg(&state, Ok(msg)))
+                .map_err(Into::into)
         },
-        |state, server, label| {
-            match irc_send::send_main(state, server, label) {
-                Ok(()) => debug!("{}: Thread exited successfully.", label),
-                Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
-            }
-        },
+        |state, server, label| irc_send::send_main(state, server, label),
     );
 }
 
 fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
 where
-    RF: Fn(Arc<State>, Server, &str) -> () + Send + Sync,
-    SF: Fn(Arc<State>, Server, &str) -> () + Send + Sync,
+    RF: Fn(Arc<State>, Server, &str) -> Result<()> + Send + Sync,
+    SF: Fn(Arc<State>, Server, &str) -> Result<()> + Send + Sync,
 {
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
@@ -298,7 +292,7 @@ fn spawn_server_thread<'s, F>(
     purpose_desc_full: &str,
     business: F,
 ) where
-    F: FnOnce(Arc<State>, Server, &str) -> () + Send + 's,
+    F: FnOnce(Arc<State>, Server, &str) -> Result<()> + Send + 's,
 {
     let state_handle = state.clone();
     let server_clone = server.clone();
@@ -312,7 +306,10 @@ fn spawn_server_thread<'s, F>(
              name; what happened?!",
         );
 
-        business(state_handle, server_clone, label)
+        match business(state_handle, server_clone, label) {
+            Ok(()) => debug!("{}: Thread exited successfully.", label),
+            Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
+        }
     });
 
     match thread_build_result {
