@@ -60,6 +60,7 @@ pub struct State {
     error_handler: Arc<Fn(Error) -> ErrorReaction + Send + Sync>,
 }
 
+#[derive(Clone)]
 struct Server {
     inner: aatxe::IrcServer,
     config: config::Server,
@@ -227,57 +228,111 @@ where
 
     let state = Arc::new(state);
 
+    run_server_threads(
+        &state,
+        |state, Server { inner: server, .. }, label| {
+            match server.identify() {
+                Ok(()) => debug!("{}: Sent identification sequence to server.", label),
+                Err(err) => {
+                    error!(
+                        "{}: Failed to send identification sequence to server.",
+                        label
+                    )
+                }
+            }
+
+            match server.for_each_incoming(|msg| handle_msg(&state, Ok(msg))) {
+                Ok(()) => debug!("{}: Thread exited successfully.", label),
+                Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
+            }
+        },
+        |state, server, label| {},
+    );
+}
+
+fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
+where
+    RF: Fn(Arc<State>, Server, &str) -> () + Send + Sync,
+    SF: Fn(Arc<State>, Server, &str) -> () + Send + Sync,
+{
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
 
         for server in &state.servers {
-            let state_handle = state.clone();
-            let server_handle = server.inner.clone();
-            let addr = server.config.socket_addr_string();
-            let label = format!("server[{}]", addr);
+            spawn_server_thread(
+                scope,
+                &mut join_handles,
+                state,
+                server,
+                "send",
+                "sending",
+                &send_fn,
+            )
+        }
 
-            let thread_build_result = scope.builder().name(label).spawn(move || -> () {
-                let current_thread = thread::current();
-                let label = current_thread.name().expect(
-                    "This thread is unnamed?! We specifically gave \
-                     it a name, what happened?!",
-                );
+        for server in &state.servers {
+            spawn_server_thread(
+                scope,
+                &mut join_handles,
+                state,
+                server,
+                "recv",
+                "receiving",
+                &recv_fn,
+            )
+        }
+    })
+}
 
-                match server_handle.identify() {
-                    Ok(()) => debug!("{}: Sent identification sequence to server.", label),
-                    Err(err) => {
-                        error!(
-                            "{}: Failed to send identification sequence to server.",
-                            label
-                        )
-                    }
+fn spawn_server_thread<'s, F>(
+    scope: &crossbeam::Scope<'s>,
+    join_handles: &mut Vec<crossbeam::ScopedJoinHandle<()>>,
+    state: &Arc<State>,
+    server: &Server,
+    purpose_desc_abbr: &str,
+    purpose_desc_full: &str,
+    business: F,
+) where
+    F: FnOnce(Arc<State>, Server, &str) -> () + Send + 's,
+{
+    let state_handle = state.clone();
+    let server_clone = server.clone();
+    let addr = server.config.socket_addr_string();
+    let label = format!("{}[{}]", purpose_desc_abbr, addr);
+
+    let thread_build_result = scope.builder().name(label).spawn(move || {
+        let current_thread = thread::current();
+        let label = current_thread.name().expect(
+            "This thread is unnamed?! We specifically gave it a \
+             name; what happened?!",
+        );
+
+        business(state_handle, server_clone, label)
+    });
+
+    match thread_build_result {
+        Ok(join_handle) => join_handles.push(join_handle),
+        Err(err) => {
+            match (state.error_handler)(err.into()) {
+                ErrorReaction::Proceed => {
+                    error!(
+                        "Failed to create {purpose} thread for server {addr:?}; ignoring.",
+                        purpose = purpose_desc_full,
+                        addr = addr
+                    )
                 }
-
-                match server_handle.for_each_incoming(|msg| handle_msg(&state_handle, Ok(msg))) {
-                    Ok(()) => debug!("{}: Thread exited successfully.", label),
-                    Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
-                }
-            });
-
-            match thread_build_result {
-                Ok(join_handle) => join_handles.push(join_handle),
-                Err(err) => {
-                    match (state.error_handler)(err.into()) {
-                        ErrorReaction::Proceed => {
-                            error!("Failed to create thread for server {:?}; ignoring.", addr)
-                        }
-                        ErrorReaction::Quit(msg) => {
-                            error!(
-                                "Terminal error: Failed to create thread for server {:?}: {:?}",
-                                addr,
-                                msg
-                            )
-                        }
-                    }
+                ErrorReaction::Quit(msg) => {
+                    error!(
+                        "Terminal error: Failed to create {purpose} thread for server {addr:?}: \
+                         {msg:?}",
+                        purpose = purpose_desc_full,
+                        addr = addr,
+                        msg = msg
+                    )
                 }
             }
         }
-    })
+    }
 }
 
 fn handle_msg(state: &State, input: Result<Message>) {
