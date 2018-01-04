@@ -12,6 +12,8 @@ pub use self::irc_msgs::MsgPrefix;
 pub use self::irc_msgs::MsgTarget;
 use self::irc_msgs::OwningMsgPrefix;
 use self::irc_msgs::parse_msg_to_nick;
+use self::irc_send::OutboxRecord;
+use self::irc_send::push_to_outbox;
 use self::misc_traits::GetDebugInfo;
 pub use self::modl_sys::Module;
 use self::modl_sys::ModuleFeatureInfo;
@@ -34,6 +36,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::thread;
 
 pub(crate) mod bot_cmd;
@@ -57,7 +60,7 @@ pub struct State {
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
     msg_prefix: RwLock<OwningMsgPrefix>,
-    error_handler: Arc<Fn(Error) -> ErrorReaction + Send + Sync>,
+    error_handler: Arc<Fn(&Error) -> ErrorReaction + Send + Sync>,
 }
 
 #[derive(Clone)]
@@ -69,7 +72,7 @@ struct Server {
 impl State {
     fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State
     where
-        ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
+        ErrF: 'static + Fn(&Error) -> ErrorReaction + Send + Sync,
     {
         let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
             format!("{}!{}@", config.nickname, config.username),
@@ -87,15 +90,14 @@ impl State {
         }
     }
 
-    fn handle_err<E, S>(&self, err: E, desc: S) -> LibReaction<Message>
+    fn handle_err<S>(&self, err: &Error, desc: S) -> LibReaction<Message>
     where
-        E: Into<Error>,
         S: Borrow<str>,
     {
         let desc = desc.borrow();
 
-        let reaction = match err.into() {
-            Error(ErrorKind::ModuleRequestedQuit(msg), _) => ErrorReaction::Quit(msg),
+        let reaction = match err {
+            &Error(ErrorKind::ModuleRequestedQuit(ref msg), _) => ErrorReaction::Quit(msg.clone()),
             e => (self.error_handler)(e),
         };
 
@@ -121,10 +123,7 @@ impl State {
         }
     }
 
-    fn handle_err_generic<E>(&self, err: E) -> LibReaction<Message>
-    where
-        E: Into<Error>,
-    {
+    fn handle_err_generic(&self, err: &Error) -> LibReaction<Message> {
         self.handle_err(err, "")
     }
 }
@@ -132,7 +131,7 @@ impl State {
 pub fn run<Cfg, ErrF, ModlCtor, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
 where
     Cfg: IntoConfig,
-    ErrF: 'static + Fn(Error) -> ErrorReaction + Send + Sync,
+    ErrF: 'static + Fn(&Error) -> ErrorReaction + Send + Sync,
     Modls: IntoIterator<Item = ModlCtor>,
     ModlCtor: Fn() -> Module,
 {
@@ -142,7 +141,7 @@ where
             c.inner
         }
         Err(e) => {
-            error_handler(e.into());
+            error_handler(&e);
             error!("Terminal error: Failed to load configuration.");
             return;
         }
@@ -156,7 +155,7 @@ where
         }
         Err(errs) => {
             for err in errs {
-                match (state.error_handler)(err) {
+                match (state.error_handler)(&err) {
                     ErrorReaction::Proceed => {}
                     ErrorReaction::Quit(msg) => {
                         error!(
@@ -198,7 +197,7 @@ where
                 s
             }
             Err(err) => {
-                match (state.error_handler)(err.into()) {
+                match (state.error_handler)(&err.into()) {
                     ErrorReaction::Proceed => {
                         error!(
                             "Failed to connect to server {:?}; ignoring.",
@@ -230,7 +229,7 @@ where
 
     run_server_threads(
         &state,
-        |state, Server { inner: server, .. }, label| {
+        |state, Server { inner: server, .. }, label, outbox| {
             match server.identify() {
                 Ok(()) => debug!("{}: Sent identification sequence to server.", label),
                 Err(err) => {
@@ -242,22 +241,43 @@ where
             }
 
             server
-                .for_each_incoming(|msg| handle_msg(&state, Ok(msg)))
+                .for_each_incoming(|msg| handle_msg(&state, &outbox, label, Ok(msg)))
                 .map_err(Into::into)
         },
-        |state, server, label| irc_send::send_main(state, server, label),
+        |state, server, label, outbox| irc_send::send_main(state, server, label, outbox),
     );
+}
+
+fn handle_msg(
+    state: &State,
+    outbox: &irc_send::OutboxPort,
+    thread_label: &str,
+    input: Result<Message>,
+) {
+    let reaction = match input {
+        Ok(ref msg) => {
+            match irc_comm::handle_msg(&state, msg.clone()) {
+                Ok(r) => r,
+                Err(e) => state.handle_err_generic(&e),
+            }
+        }
+        Err(ref e) => state.handle_err_generic(e),
+    };
+
+    push_to_outbox(outbox, thread_label, input, reaction);
 }
 
 fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
 where
-    RF: Fn(Arc<State>, Server, &str) -> Result<()> + Send + Sync,
-    SF: Fn(Arc<State>, Server, &str) -> Result<()> + Send + Sync,
+    RF: Fn(Arc<State>, Server, &str, mpsc::SyncSender<OutboxRecord>) -> Result<()> + Send + Sync,
+    SF: Fn(Arc<State>, Server, &str, mpsc::Receiver<OutboxRecord>) -> Result<()> + Send + Sync,
 {
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
 
         for server in &state.servers {
+            let (outbox_sender, outbox_receiver) = mpsc::sync_channel(irc_send::OUTBOX_SIZE);
+
             spawn_server_thread(
                 scope,
                 &mut join_handles,
@@ -266,6 +286,7 @@ where
                 "send",
                 "sending",
                 &send_fn,
+                outbox_receiver,
             );
 
             spawn_server_thread(
@@ -276,12 +297,13 @@ where
                 "recv",
                 "receiving",
                 &recv_fn,
+                outbox_sender,
             );
         }
     })
 }
 
-fn spawn_server_thread<'s, F>(
+fn spawn_server_thread<'s, F, OutboxPort>(
     scope: &crossbeam::Scope<'s>,
     join_handles: &mut Vec<crossbeam::ScopedJoinHandle<()>>,
     state: &Arc<State>,
@@ -289,8 +311,10 @@ fn spawn_server_thread<'s, F>(
     purpose_desc_abbr: &str,
     purpose_desc_full: &str,
     business: F,
+    outbox_port: OutboxPort,
 ) where
-    F: FnOnce(Arc<State>, Server, &str) -> Result<()> + Send + 's,
+    F: FnOnce(Arc<State>, Server, &str, OutboxPort) -> Result<()> + Send + 's,
+    OutboxPort: Send + 's,
 {
     let state_handle = state.clone();
     let server_clone = server.clone();
@@ -304,7 +328,7 @@ fn spawn_server_thread<'s, F>(
              name; what happened?!",
         );
 
-        match business(state_handle, server_clone, label) {
+        match business(state_handle, server_clone, label, outbox_port) {
             Ok(()) => debug!("{}: Thread exited successfully.", label),
             Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
         }
@@ -313,7 +337,7 @@ fn spawn_server_thread<'s, F>(
     match thread_build_result {
         Ok(join_handle) => join_handles.push(join_handle),
         Err(err) => {
-            match (state.error_handler)(err.into()) {
+            match (state.error_handler)(&err.into()) {
                 ErrorReaction::Proceed => {
                     error!(
                         "Failed to create {purpose} thread for server {addr:?}; ignoring.",
@@ -332,49 +356,5 @@ fn spawn_server_thread<'s, F>(
                 }
             }
         }
-    }
-}
-
-fn handle_msg(state: &State, input: Result<Message>) {
-    let reaction = match input.and_then(|msg| irc_comm::handle_msg(&state, msg)) {
-        Ok(r) => r,
-        Err(e) => state.handle_err_generic(e),
-    };
-
-    process_reaction(state, reaction);
-}
-
-fn process_reaction(state: &State, reaction: LibReaction<Message>) {
-    process_reaction_with_err_cb(state, reaction, |err| {
-        process_reaction_with_err_cb(state, state.handle_err_generic(err), |err| {
-            error!(
-                "Encountered error {:?} while handling error; stopping error handling to avoid \
-                 potential infinite recursion.",
-                err
-            )
-        })
-    })
-}
-
-fn process_reaction_with_err_cb<ErrCb>(state: &State, reaction: LibReaction<Message>, err_cb: ErrCb)
-where
-    ErrCb: Fn(Error) -> (),
-{
-    match reaction {
-        LibReaction::RawMsg(msg) => {
-            // TODO: use process_outgoing_message
-            trace!("Passing outgoing message to IRC library: {:?}", msg);
-            let result = state.servers[0].inner.send(msg);
-            match result {
-                Ok(()) => {}
-                Err(e) => err_cb(e.into()),
-            }
-        }
-        LibReaction::Multi(reactions) => {
-            for reaction in reactions {
-                process_reaction(state, reaction)
-            }
-        }
-        LibReaction::None => {}
     }
 }

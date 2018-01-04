@@ -1,3 +1,4 @@
+use irc::proto::Message;
 use std::borrow::Cow;
 use std::fmt;
 

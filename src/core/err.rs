@@ -1,5 +1,6 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
+use super::OutboxRecord;
 use irc;
 use serde_yaml;
 use std::any::Any;
@@ -11,7 +12,6 @@ use util;
 error_chain! {
     foreign_links {
         Io(io::Error);
-        OutboxPush(mpsc::TrySendError<irc::proto::Message>);
         SerdeYaml(serde_yaml::Error);
     }
 

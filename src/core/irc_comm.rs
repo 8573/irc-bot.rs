@@ -301,7 +301,7 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message
         .map_err(Into::into) {
         Ok(m) => m,
         Err(e) => {
-            (state.error_handler)(e);
+            (state.error_handler)(&e);
             error!("Failed to construct quit message.");
             return LibReaction::None;
         }
