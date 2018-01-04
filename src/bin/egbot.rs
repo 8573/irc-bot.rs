@@ -13,6 +13,7 @@ fn main() {
     let args = clap::App::new("egbot")
         .arg(
             clap::Arg::with_name("config-file")
+                .long("config-file")
                 .short("c")
                 .default_value("config.yaml"),
         )
