@@ -73,8 +73,13 @@ pub enum BotCmdAuthLvl {
 pub fn parse_arg<'s>(syntax: &'s Yaml, arg_str: &str) -> std::result::Result<Yaml, BotCmdResult> {
     use util::yaml as uy;
 
-    match uy::parse_and_check_node(arg_str, syntax, "<argument>") {
-        Ok(arg) => Ok(arg.unwrap_or(Yaml::Null)),
+    match uy::parse_and_check_node(
+        arg_str,
+        syntax,
+        "<argument>",
+        || Yaml::Hash(Default::default()),
+    ) {
+        Ok(arg) => Ok(arg),
         Err(uy::Error(uy::ErrorKind::YamlScan(_), _)) => Err(BotCmdResult::SyntaxErr),
         Err(err) => Err(BotCmdResult::LibErr(err.into())),
     }

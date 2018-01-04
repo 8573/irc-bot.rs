@@ -145,27 +145,21 @@ pub fn parse_node(src: &str) -> Result<Option<Yaml>> {
     }
 }
 
-pub(crate) fn parse_and_check_node<'s, O1, S1>(
+pub(crate) fn parse_and_check_node<'s, DefaultCtor, S1>(
     src: &str,
-    expected_syntax: O1,
+    expected_syntax: &'s Yaml,
     subject_label: S1,
-) -> Result<Option<Yaml>>
+    default: DefaultCtor,
+) -> Result<Yaml>
 where
-    O1: Into<Option<&'s Yaml>>,
+    DefaultCtor: Fn() -> Yaml,
     S1: Into<Cow<'s, str>>,
 {
-    match (expected_syntax.into(), parse_node(src)?) {
-        (Some(syntax), Some(node)) => {
-            check_type(syntax, &node, subject_label)?;
-            Ok(Some(node))
-        }
-        (Some(syntax), None) => {
-            check_type(syntax, &Yaml::Hash(Default::default()), subject_label)?;
-            Ok(None)
-        }
-        (None, Some(_)) => bail!(ErrorKind::ExpectedEmptyStream),
-        (None, None) => Ok(None),
-    }
+    let node = parse_node(src)?.unwrap_or_else(default);
+
+    check_type(expected_syntax, &node, subject_label)?;
+
+    Ok(node)
 }
 
 /// Checks that a YAML object has a given type and structure.
