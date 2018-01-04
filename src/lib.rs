@@ -1,3 +1,5 @@
+#![recursion_limit="128"]
+
 extern crate clap;
 extern crate crossbeam;
 extern crate irc;

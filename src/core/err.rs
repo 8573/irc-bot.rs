@@ -2,6 +2,7 @@ use super::ModuleFeatureInfo;
 use super::ModuleInfo;
 use irc;
 use serde_yaml;
+use std::any::Any;
 use std::borrow::Cow;
 use std::io;
 use std::sync::mpsc;
@@ -26,6 +27,13 @@ error_chain! {
         Config(key: String, problem: String) {
             description("configuration error")
             display("Configuration error: Key {:?} {}.", key, problem)
+        }
+        HandlerPanic(handler_purpose: Cow<'static, str>, payload: Box<Any + Send + 'static>) {
+            description("panic in module feature handler function")
+            display("A panic occurred in a module feature handler function (while handling: {}): \
+                     {}",
+                     handler_purpose,
+                     util::fmt::FmtAny(payload.as_ref()))
         }
         MsgPrefixUpdateRequestedButPrefixMissing
         ModuleRequestedQuit(quit_msg: Option<Cow<'static, str>>)
