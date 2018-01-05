@@ -8,6 +8,7 @@ use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 pub(super) const OUTBOX_SIZE: usize = 1024;
@@ -55,18 +56,18 @@ pub(super) fn push_to_outbox(
 
 pub(super) fn send_main(
     state: Arc<State>,
-    server: Server,
+    server: &RwLock<Server>,
     thread_label: &str,
     outbox_receiver: crossbeam_channel::Receiver<OutboxRecord>,
 ) -> Result<()> {
     for record in outbox_receiver {
         let OutboxRecord { output, .. } =
-            match process_outgoing_msg(&state, &server, thread_label, record) {
+            match process_outgoing_msg(&state, server, thread_label, record) {
                 Some(a) => a,
                 None => continue,
             };
 
-        send_reaction(&state, &server.inner, thread_label, output)
+        send_reaction(&state, &server.read().inner, thread_label, output)
     }
 
     Ok(())
@@ -76,7 +77,7 @@ pub(super) fn send_main(
 /// may prevent a message from being sent by returning `None`.
 pub(super) fn process_outgoing_msg(
     _state: &State,
-    _server: &Server,
+    _server: &RwLock<Server>,
     thread_label: &str,
     OutboxRecord { output, cause }: OutboxRecord,
 ) -> Option<OutboxRecord> {

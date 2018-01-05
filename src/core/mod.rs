@@ -38,6 +38,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::thread;
+use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
 
@@ -54,7 +55,7 @@ mod state;
 
 pub struct State {
     config: config::inner::Config,
-    servers: Vec<Server>,
+    servers: BTreeMap<ServerId, RwLock<Server>>,
     addressee_suffix: Cow<'static, str>,
     chars_indicating_msg_is_addressed_to_nick: Vec<char>,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
@@ -63,10 +64,21 @@ pub struct State {
     error_handler: Arc<Fn(&Error) -> ErrorReaction + Send + Sync>,
 }
 
-#[derive(Clone)]
 struct Server {
+    id: ServerId,
     inner: aatxe::IrcServer,
     config: config::Server,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ServerId {
+    uuid: Uuid,
+}
+
+impl ServerId {
+    fn new() -> Self {
+        ServerId { uuid: Uuid::new_v4() }
+    }
 }
 
 impl State {
@@ -178,7 +190,7 @@ where
         state.commands.keys().collect::<Vec<_>>()
     );
 
-    let mut servers = Vec::new();
+    let mut servers = BTreeMap::new();
 
     for server_config in &state.config.servers {
         let aatxe_config = aatxe::Config {
@@ -217,10 +229,27 @@ where
             }
         };
 
-        servers.push(Server {
+        let server_id = ServerId::new();
+
+        let server = Server {
+            id: server_id,
             inner: aatxe_server,
             config: server_config.clone(),
-        });
+        };
+
+        match servers.insert(server_id, RwLock::new(server)) {
+            None => {}
+            Some(_other_server) => {
+                // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
+                // `IrcServer` implementing `Debug`, add the other server to this message.
+                error!(
+                    "This shouldn't happen, but there was already a server registered with UUID \
+                     {uuid}!",
+                    uuid = server_id.uuid.hyphenated(),
+                );
+                return;
+            }
+        }
     }
 
     state.servers = servers;
@@ -229,7 +258,9 @@ where
 
     run_server_threads(
         &state,
-        |state, Server { inner: server, .. }, label, outbox| {
+        |state, server_lock, label, outbox| {
+            let server = server_lock.read().inner.clone();
+
             match server.identify() {
                 Ok(()) => debug!("{}: Sent identification sequence to server.", label),
                 Err(err) => {
@@ -244,7 +275,7 @@ where
                 .for_each_incoming(|msg| handle_msg(&state, &outbox, label, Ok(msg)))
                 .map_err(Into::into)
         },
-        |state, server, label, outbox| irc_send::send_main(state, server, label, outbox),
+        irc_send::send_main,
     );
 }
 
@@ -270,14 +301,14 @@ fn handle_msg(
 fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
 where
     RF: Fn(Arc<State>,
-       Server,
+       &RwLock<Server>,
        &str,
        crossbeam_channel::Sender<OutboxRecord>)
        -> Result<()>
         + Send
         + Sync,
     SF: Fn(Arc<State>,
-       Server,
+       &RwLock<Server>,
        &str,
        crossbeam_channel::Receiver<OutboxRecord>)
        -> Result<()>
@@ -287,7 +318,7 @@ where
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
 
-        for server in &state.servers {
+        for (_server_id, server) in &state.servers {
             let (outbox_sender, outbox_receiver) =
                 crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
 
@@ -320,18 +351,17 @@ fn spawn_server_thread<'s, F, OutboxPort>(
     scope: &crossbeam::Scope<'s>,
     join_handles: &mut Vec<crossbeam::ScopedJoinHandle<()>>,
     state: &Arc<State>,
-    server: &Server,
+    server: &'s RwLock<Server>,
     purpose_desc_abbr: &str,
     purpose_desc_full: &str,
     business: F,
     outbox_port: OutboxPort,
 ) where
-    F: FnOnce(Arc<State>, Server, &str, OutboxPort) -> Result<()> + Send + 's,
+    F: FnOnce(Arc<State>, &'s RwLock<Server>, &str, OutboxPort) -> Result<()> + Send + 's,
     OutboxPort: Send + 's,
 {
     let state_handle = state.clone();
-    let server_clone = server.clone();
-    let addr = server.config.socket_addr_string();
+    let addr = server.read().config.socket_addr_string();
     let label = format!("{}[{}]", purpose_desc_abbr, addr);
 
     let thread_build_result = scope.builder().name(label).spawn(move || {
@@ -341,7 +371,7 @@ fn spawn_server_thread<'s, F, OutboxPort>(
              name; what happened?!",
         );
 
-        match business(state_handle, server_clone, label, outbox_port) {
+        match business(state_handle, server, label, outbox_port) {
             Ok(()) => debug!("{}: Thread exited successfully.", label),
             Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
         }
