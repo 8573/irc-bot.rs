@@ -3,16 +3,16 @@ use core::Error;
 use core::Result;
 use core::Server;
 use core::State;
+use crossbeam_channel;
 use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
 use std::sync::Arc;
-use std::sync::mpsc;
 
 pub(super) const OUTBOX_SIZE: usize = 1024;
 
-pub(super) type OutboxPort = mpsc::SyncSender<OutboxRecord>;
+pub(super) type OutboxPort = crossbeam_channel::Sender<OutboxRecord>;
 
 #[derive(Debug)]
 pub(super) struct OutboxRecord {
@@ -36,14 +36,14 @@ pub(super) fn push_to_outbox(
 
     match result {
         Ok(()) => {}
-        Err(mpsc::TrySendError::Full(record)) => {
+        Err(crossbeam_channel::TrySendError::Full(record)) => {
             error!(
                 "{thread_label}: Outbox full!!! Could not send {record:?}",
                 thread_label = thread_label,
                 record = record
             )
         }
-        Err(mpsc::TrySendError::Disconnected(record)) => {
+        Err(crossbeam_channel::TrySendError::Disconnected(record)) => {
             error!(
                 "{thread_label}: Outbox receiver disconnected!!! Could not send {record:?}",
                 thread_label = thread_label,
@@ -57,7 +57,7 @@ pub(super) fn send_main(
     state: Arc<State>,
     server: Server,
     thread_label: &str,
-    outbox_receiver: mpsc::Receiver<OutboxRecord>,
+    outbox_receiver: crossbeam_channel::Receiver<OutboxRecord>,
 ) -> Result<()> {
     for record in outbox_receiver {
         let OutboxRecord { output, .. } =
@@ -136,7 +136,7 @@ fn send_reaction_with_err_cb<ErrCb>(
         LibReaction::None => {
             error!(
                 "Someone put a `{lib_reaction}::{none}` in the {thread_label:?} outbox! Such a \
-                 reaction should have been discarded, not sent through the MPSC queue.",
+                 reaction should have been discarded, not sent to the outbox.",
                 thread_label = thread_label,
                 lib_reaction = stringify!(LibReaction),
                 none = stringify!(None)

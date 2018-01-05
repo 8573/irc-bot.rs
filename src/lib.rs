@@ -2,6 +2,7 @@
 
 extern crate clap;
 extern crate crossbeam;
+extern crate crossbeam_channel;
 extern crate irc;
 extern crate itertools;
 extern crate parking_lot;

@@ -25,6 +25,7 @@ pub use self::reaction::ErrorReaction;
 use self::reaction::LibReaction;
 pub use self::reaction::Reaction;
 use crossbeam;
+use crossbeam_channel;
 use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
@@ -36,7 +37,6 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::mpsc;
 use std::thread;
 
 pub(crate) mod bot_cmd;
@@ -269,14 +269,27 @@ fn handle_msg(
 
 fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
 where
-    RF: Fn(Arc<State>, Server, &str, mpsc::SyncSender<OutboxRecord>) -> Result<()> + Send + Sync,
-    SF: Fn(Arc<State>, Server, &str, mpsc::Receiver<OutboxRecord>) -> Result<()> + Send + Sync,
+    RF: Fn(Arc<State>,
+       Server,
+       &str,
+       crossbeam_channel::Sender<OutboxRecord>)
+       -> Result<()>
+        + Send
+        + Sync,
+    SF: Fn(Arc<State>,
+       Server,
+       &str,
+       crossbeam_channel::Receiver<OutboxRecord>)
+       -> Result<()>
+        + Send
+        + Sync,
 {
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
 
         for server in &state.servers {
-            let (outbox_sender, outbox_receiver) = mpsc::sync_channel(irc_send::OUTBOX_SIZE);
+            let (outbox_sender, outbox_receiver) =
+                crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
 
             spawn_server_thread(
                 scope,
