@@ -1,4 +1,5 @@
 use super::LibReaction;
+use super::ServerId;
 use core::Error;
 use core::Result;
 use core::Server;
@@ -17,13 +18,14 @@ pub(super) type OutboxPort = crossbeam_channel::Sender<OutboxRecord>;
 
 #[derive(Debug)]
 pub(super) struct OutboxRecord {
+    server_id: ServerId,
     output: LibReaction<Message>,
     cause: Result<Message>,
 }
 
 pub(super) fn push_to_outbox(
     outbox_sender: &OutboxPort,
-    thread_label: &str,
+    server_id: ServerId,
     cause: Result<Message>,
     output: LibReaction<Message>,
 ) {
@@ -33,21 +35,20 @@ pub(super) fn push_to_outbox(
         LibReaction::None => return,
     };
 
-    let result = outbox_sender.try_send(OutboxRecord { output, cause });
+    let result = outbox_sender.try_send(OutboxRecord {
+        server_id,
+        output,
+        cause,
+    });
 
     match result {
         Ok(()) => {}
         Err(crossbeam_channel::TrySendError::Full(record)) => {
-            error!(
-                "{thread_label}: Outbox full!!! Could not send {record:?}",
-                thread_label = thread_label,
-                record = record
-            )
+            error!("Outbox full!!! Could not send {record:?}", record = record)
         }
         Err(crossbeam_channel::TrySendError::Disconnected(record)) => {
             error!(
-                "{thread_label}: Outbox receiver disconnected!!! Could not send {record:?}",
-                thread_label = thread_label,
+                "Outbox receiver disconnected!!! Could not send {record:?}",
                 record = record
             )
         }
@@ -56,18 +57,29 @@ pub(super) fn push_to_outbox(
 
 pub(super) fn send_main(
     state: Arc<State>,
-    server: &RwLock<Server>,
     thread_label: &str,
     outbox_receiver: crossbeam_channel::Receiver<OutboxRecord>,
 ) -> Result<()> {
     for record in outbox_receiver {
-        let OutboxRecord { output, .. } =
-            match process_outgoing_msg(&state, server, thread_label, record) {
+        let OutboxRecord { server_id, output, .. } =
+            match process_outgoing_msg(&state, thread_label, record) {
                 Some(a) => a,
                 None => continue,
             };
 
-        send_reaction(&state, &server.read().inner, thread_label, output)
+        let aatxe_server = match state.servers.get(&server_id) {
+            Some(s) => s.read().inner.clone(),
+            None => {
+                warn!(
+                    "Can't send to unknown server {uuid}. Discarding {output:?}.",
+                    uuid = server_id.uuid.hyphenated(),
+                    output = output
+                );
+                continue;
+            }
+        };
+
+        send_reaction(&state, &aatxe_server, thread_label, output)
     }
 
     Ok(())
@@ -77,13 +89,20 @@ pub(super) fn send_main(
 /// may prevent a message from being sent by returning `None`.
 pub(super) fn process_outgoing_msg(
     _state: &State,
-    _server: &RwLock<Server>,
     thread_label: &str,
-    OutboxRecord { output, cause }: OutboxRecord,
+    OutboxRecord {
+        server_id,
+        output,
+        cause,
+    }: OutboxRecord,
 ) -> Option<OutboxRecord> {
     if true {
         debug!("Sending {:?}", output);
-        Some(OutboxRecord { output, cause })
+        Some(OutboxRecord {
+            server_id,
+            output,
+            cause,
+        })
     } else {
         debug!("Dropping {:?}", output);
         None

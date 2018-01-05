@@ -35,6 +35,7 @@ use parking_lot::RwLock;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::thread;
@@ -64,10 +65,12 @@ pub struct State {
     error_handler: Arc<Fn(&Error) -> ErrorReaction + Send + Sync>,
 }
 
+// TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
 struct Server {
     id: ServerId,
     inner: aatxe::IrcServer,
     config: config::Server,
+    socket_addr_string: String,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -235,6 +238,7 @@ where
             id: server_id,
             inner: aatxe_server,
             config: server_config.clone(),
+            socket_addr_string: server_config.socket_addr_string(),
         };
 
         match servers.insert(server_id, RwLock::new(server)) {
@@ -256,33 +260,27 @@ where
 
     let state = Arc::new(state);
 
-    run_server_threads(
-        &state,
-        |state, server_lock, label, outbox| {
-            let server = server_lock.read().inner.clone();
-
-            match server.identify() {
-                Ok(()) => debug!("{}: Sent identification sequence to server.", label),
-                Err(err) => {
-                    error!(
-                        "{}: Failed to send identification sequence to server.",
-                        label
-                    )
-                }
+    run_server_threads(&state, |state, server_id, aatxe_server, label, outbox| {
+        match aatxe_server.identify() {
+            Ok(()) => debug!("{}: Sent identification sequence to server.", label),
+            Err(err) => {
+                error!(
+                    "{}: Failed to send identification sequence to server.",
+                    label
+                )
             }
+        }
 
-            server
-                .for_each_incoming(|msg| handle_msg(&state, &outbox, label, Ok(msg)))
-                .map_err(Into::into)
-        },
-        irc_send::send_main,
-    );
+        aatxe_server
+            .for_each_incoming(|msg| handle_msg(&state, server_id, &outbox, Ok(msg)))
+            .map_err(Into::into)
+    });
 }
 
 fn handle_msg(
     state: &State,
+    server_id: ServerId,
     outbox: &irc_send::OutboxPort,
-    thread_label: &str,
     input: Result<Message>,
 ) {
     let reaction = match input {
@@ -295,22 +293,16 @@ fn handle_msg(
         Err(ref e) => state.handle_err_generic(e),
     };
 
-    push_to_outbox(outbox, thread_label, input, reaction);
+    push_to_outbox(outbox, server_id, input, reaction);
 }
 
-fn run_server_threads<RF, SF>(state: &Arc<State>, recv_fn: RF, send_fn: SF)
+fn run_server_threads<RF>(state: &Arc<State>, recv_fn: RF)
 where
     RF: Fn(Arc<State>,
-       &RwLock<Server>,
+       ServerId,
+       aatxe::IrcServer,
        &str,
        crossbeam_channel::Sender<OutboxRecord>)
-       -> Result<()>
-        + Send
-        + Sync,
-    SF: Fn(Arc<State>,
-       &RwLock<Server>,
-       &str,
-       crossbeam_channel::Receiver<OutboxRecord>)
        -> Result<()>
         + Send
         + Sync,
@@ -318,50 +310,57 @@ where
     crossbeam::scope(|scope| {
         let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
 
+        let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
+
+        spawn_thread(
+            scope,
+            &mut join_handles,
+            state,
+            "*".into(),
+            "send",
+            |_| "sending thread".into(),
+            |thread_label| irc_send::send_main(state.clone(), thread_label, outbox_receiver)
+        );
+
         for (_server_id, server) in &state.servers {
-            let (outbox_sender, outbox_receiver) =
-                crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
 
-            spawn_server_thread(
+            let (aatxe_server, server_id, addr) = {
+                let s = server.read();
+                (s.inner.clone(), s.id, s.socket_addr_string.clone())
+            };
+
+            let outbox_sender_clone = outbox_sender.clone();
+
+            let f = &recv_fn;
+
+            spawn_thread(
                 scope,
                 &mut join_handles,
                 state,
-                server,
-                "send",
-                "sending",
-                &send_fn,
-                outbox_receiver,
-            );
-
-            spawn_server_thread(
-                scope,
-                &mut join_handles,
-                state,
-                server,
+                addr,
                 "recv",
-                "receiving",
-                &recv_fn,
-                outbox_sender,
+                |addr| format!("receiving thread for server {addr:?}", addr = addr),
+                move |thread_label| (f)(
+                    state.clone(), server_id, aatxe_server, thread_label, outbox_sender_clone
+                )
             );
         }
     })
 }
 
-fn spawn_server_thread<'s, F, OutboxPort>(
+fn spawn_thread<'s, F, PurposeF>(
     scope: &crossbeam::Scope<'s>,
     join_handles: &mut Vec<crossbeam::ScopedJoinHandle<()>>,
     state: &Arc<State>,
-    server: &'s RwLock<Server>,
+    addr: String,
     purpose_desc_abbr: &str,
-    purpose_desc_full: &str,
+    purpose_desc_full: PurposeF,
     business: F,
-    outbox_port: OutboxPort,
 ) where
-    F: FnOnce(Arc<State>, &'s RwLock<Server>, &str, OutboxPort) -> Result<()> + Send + 's,
-    OutboxPort: Send + 's,
+    F: FnOnce(&str) -> Result<()> + Send + 's,
+    PurposeF: FnOnce(&str) -> String,
 {
     let state_handle = state.clone();
-    let addr = server.read().config.socket_addr_string();
     let label = format!("{}[{}]", purpose_desc_abbr, addr);
 
     let thread_build_result = scope.builder().name(label).spawn(move || {
@@ -371,7 +370,7 @@ fn spawn_server_thread<'s, F, OutboxPort>(
              name; what happened?!",
         );
 
-        match business(state_handle, server, label, outbox_port) {
+        match business(label) {
             Ok(()) => debug!("{}: Thread exited successfully.", label),
             Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
         }
@@ -383,17 +382,14 @@ fn spawn_server_thread<'s, F, OutboxPort>(
             match (state.error_handler)(&err.into()) {
                 ErrorReaction::Proceed => {
                     error!(
-                        "Failed to create {purpose} thread for server {addr:?}; ignoring.",
-                        purpose = purpose_desc_full,
-                        addr = addr
+                        "Failed to create {purpose}; ignoring.",
+                        purpose = purpose_desc_full(&addr),
                     )
                 }
                 ErrorReaction::Quit(msg) => {
                     error!(
-                        "Terminal error: Failed to create {purpose} thread for server {addr:?}: \
-                         {msg:?}",
-                        purpose = purpose_desc_full,
-                        addr = addr,
+                        "Terminal error: Failed to create {purpose}: {msg:?}",
+                        purpose = purpose_desc_full(&addr),
                         msg = msg
                     )
                 }
