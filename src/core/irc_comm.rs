@@ -386,8 +386,6 @@ where
     } else {
         // This could take a while or panic, so do it in a new thread.
 
-        // TODO: Add a command that specifically panics, to test panic catching.
-
         // These are cheap to clone, supposedly.
         let state = state.clone();
         let outbox = outbox.clone();

@@ -11,6 +11,14 @@ pub fn mk() -> Module {
             Auth::Admin,
             Box::new(test_line_wrap),
         )
+        .command(
+            "test-panic-catching",
+            "",
+            "This command's handler function panics, to test the bot framework's panic-catching \
+             mechanism.",
+            Auth::Admin,
+            Box::new(test_panic_catching),
+        )
         .end()
 }
 
@@ -30,4 +38,8 @@ const LOREM_IPSUM_TEXT: &'static str =
 
 fn test_line_wrap(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into()))
+}
+
+fn test_panic_catching(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+    panic!("Panicking for testing purposes....")
 }
