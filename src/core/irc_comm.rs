@@ -311,16 +311,9 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message
 
     info!("Quitting. Quit message: {:?}.", msg);
 
-    let quit = match format!("QUIT :{}", msg.unwrap_or(&default_quit_msg))
-        .parse()
-        .map_err(Into::into) {
-        Ok(m) => m,
-        Err(e) => {
-            (state.error_handler)(&e);
-            error!("Failed to construct quit message.");
-            return LibReaction::None;
-        }
-    };
+    let quit = aatxe::Command::QUIT(msg.map(ToOwned::to_owned).or_else(
+        || Some(DEFAULT_QUIT_MSG.clone()),
+    )).into();
 
     LibReaction::RawMsg(quit)
 }
