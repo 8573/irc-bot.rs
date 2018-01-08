@@ -18,7 +18,7 @@ use super::irc_msgs::parse_privmsg;
 use super::irc_send;
 use super::parse_msg_to_nick;
 use super::reaction::LibReaction;
-use crossbeam;
+use crossbeam_utils;
 use irc::client::prelude as aatxe;
 use irc::client::prelude::Server as AatxeServer;
 use irc::proto::Message;
@@ -316,7 +316,7 @@ pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
 
 pub(super) fn handle_msg<'xbs, 'xbsr>(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
+    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &irc_send::OutboxPort,
     input_msg: Message,
@@ -355,7 +355,7 @@ where
 
 fn handle_privmsg<'xbs, 'xbsr>(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
+    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &irc_send::OutboxPort,
     prefix: OwningMsgPrefix,

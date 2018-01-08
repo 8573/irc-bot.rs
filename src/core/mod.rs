@@ -24,8 +24,8 @@ pub use self::modl_sys::mk_module;
 pub use self::reaction::ErrorReaction;
 use self::reaction::LibReaction;
 pub use self::reaction::Reaction;
-use crossbeam;
 use crossbeam_channel;
+use crossbeam_utils;
 use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
@@ -260,7 +260,7 @@ where
     let state = Arc::new(state);
     let state = &state;
 
-    crossbeam::scope(|crossbeam_scope| {
+    crossbeam_utils::scoped::scope(|crossbeam_scope| {
         let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
 
         spawn_thread(
@@ -295,7 +295,7 @@ where
                     }
                 }
 
-                crossbeam::scope(|crossbeam_scope| {
+                crossbeam_utils::scoped::scope(|crossbeam_scope| {
                     aatxe_server
                         .for_each_incoming(|msg| {
                             handle_msg(
@@ -324,7 +324,7 @@ where
 
 fn handle_msg<'xbs, 'xbsr>(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
+    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &irc_send::OutboxPort,
     input: Result<Message>,
@@ -349,7 +349,7 @@ fn handle_msg<'xbs, 'xbsr>(
 }
 
 fn spawn_thread<'xbs, F, PurposeF>(
-    crossbeam_scope: &crossbeam::Scope<'xbs>,
+    crossbeam_scope: &crossbeam_utils::scoped::Scope<'xbs>,
     state: &Arc<State>,
     addr: String,
     purpose_desc_abbr: &str,
