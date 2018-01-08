@@ -132,7 +132,7 @@ impl State {
                     desc,
                     if desc.is_empty() { "" } else { ")" }
                 );
-                irc_comm::quit(self, msg)
+                irc_comm::mk_quit(msg)
             }
         }
     }

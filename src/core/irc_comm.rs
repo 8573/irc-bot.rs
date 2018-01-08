@@ -156,9 +156,7 @@ fn handle_reaction(
                 .collect::<Result<_>>()?))
         }
         Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
-        Reaction::Quit(msg) => Ok(LibReaction::RawMsg(
-            aatxe::Command::QUIT(msg.map(Into::into)).into(),
-        )),
+        Reaction::Quit(msg) => Ok(mk_quit(msg)),
     }
 }
 
@@ -300,18 +298,16 @@ fn bot_command_reaction(
     }
 }
 
-pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
-    let default_quit_msg = format!(
-        "<{}> v{}",
-        env!("CARGO_PKG_HOMEPAGE"),
-        env!("CARGO_PKG_VERSION")
-    );
+pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
+    lazy_static! {
+        static ref DEFAULT_QUIT_MSG: String = format!(
+            "Built with <{}> v{}",
+            env!("CARGO_PKG_HOMEPAGE"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
-    let msg: Option<&str> = msg.as_ref().map(Borrow::borrow);
-
-    info!("Quitting. Quit message: {:?}.", msg);
-
-    let quit = aatxe::Command::QUIT(msg.map(ToOwned::to_owned).or_else(
+    let quit = aatxe::Command::QUIT(msg.map(Cow::into_owned).or_else(
         || Some(DEFAULT_QUIT_MSG.clone()),
     )).into();
 
