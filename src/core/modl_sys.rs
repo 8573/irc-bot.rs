@@ -18,8 +18,7 @@ use yaml_rust::Yaml;
 pub struct Module {
     pub name: Cow<'static, str>,
     uuid: Uuid,
-    // TODO: once 1.18 is stable, make this pub_restricted to super.
-    pub features: Vec<ModuleFeature>,
+    pub(super) features: Vec<ModuleFeature>,
 }
 
 impl PartialEq for Module {

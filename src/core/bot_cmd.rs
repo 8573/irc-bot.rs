@@ -13,10 +13,9 @@ pub struct BotCommand {
     pub name: Cow<'static, str>,
     pub provider: Arc<Module>,
     pub auth_lvl: BotCmdAuthLvl,
-    // TODO: once 1.18 is stable, make this pub_restricted to super.
-    pub handler: Arc<BotCmdHandler>,
+    pub(super) handler: Arc<BotCmdHandler>,
     pub usage_str: Cow<'static, str>,
-    pub usage_yaml: Yaml,
+    pub(super) usage_yaml: Yaml,
     pub help_msg: Cow<'static, str>,
 }
 
