@@ -193,16 +193,21 @@ fn handle_bot_command(
     handle_reaction(state, prefix, target, msg, reaction)
 }
 
-    fn run_bot_command(state: &State, metadata: MsgMetadata, &BotCommand {
-                 ref name,
-                 ref provider,
-                 ref auth_lvl,
-                 ref handler,
-                 ref usage_yaml,
-                 usage_str: _,
-                 help_msg: _,
-}: &BotCommand, cmd_args: &str) -> BotCmdResult{
-
+fn run_bot_command(
+    state: &State,
+    metadata: MsgMetadata,
+    &BotCommand {
+        ref name,
+        ref provider,
+        ref auth_lvl,
+        ref handler,
+        ref usage_yaml,
+        usage_str: _,
+        help_msg: _,
+    }: &BotCommand,
+    cmd_args: &str
+) -> BotCmdResult
+{
     let user_authorized = match auth_lvl {
         &BotCmdAuthLvl::Public => Ok(true),
         &BotCmdAuthLvl::Admin => state.have_admin(metadata.prefix),
