@@ -331,21 +331,12 @@ fn handle_msg<'xbs, 'xbsr>(
 ) where
     'xbs: 'xbsr,
 {
-    let reaction = match input {
-        Ok(ref msg) => {
-            match irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg.clone()) {
-                Ok(r) => r,
-                Err(e) => state.handle_err_generic(&e),
-            }
-        }
-        Err(ref e) => state.handle_err_generic(e),
-    };
-
-    // Only the "Yes?" and UPDATE_MSG_PREFIX_STR messages will ever be sent via this path;
-    // everything else will be sent via other `push_to_outbox` calls (in other threads).
-    //
-    // TODO: Eliminate this path of message sending.
-    push_to_outbox(outbox, server_id, reaction);
+    match input.and_then(|msg| {
+        irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg)
+    }) {
+        Ok(()) => {}
+        Err(e) => push_to_outbox(outbox, server_id, state.handle_err_generic(&e)),
+    }
 }
 
 fn spawn_thread<'xbs, F, PurposeF>(

@@ -15,7 +15,8 @@ use super::irc_msgs::PrivMsg;
 use super::irc_msgs::is_msg_to_nick;
 use super::irc_msgs::parse_prefix;
 use super::irc_msgs::parse_privmsg;
-use super::irc_send;
+use super::irc_send::OutboxPort;
+use super::irc_send::push_to_outbox;
 use super::parse_msg_to_nick;
 use super::reaction::LibReaction;
 use crossbeam_utils;
@@ -322,9 +323,9 @@ pub(super) fn handle_msg<'xbs, 'xbsr>(
     state: &Arc<State>,
     crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
-    outbox: &irc_send::OutboxPort,
+    outbox: &OutboxPort,
     input_msg: Message,
-) -> Result<LibReaction<Message>>
+) -> Result<()>
 where
     'xbs: 'xbsr,
 {
@@ -351,9 +352,10 @@ where
             )
         }
         Message { command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..), .. } => {
-            handle_004(state)
+            push_to_outbox(outbox, server_id, handle_004(state)?);
+            Ok(())
         }
-        _ => Ok(LibReaction::None),
+        _ => Ok(()),
     }
 }
 
@@ -361,11 +363,11 @@ fn handle_privmsg<'xbs, 'xbsr>(
     state: &Arc<State>,
     crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
-    outbox: &irc_send::OutboxPort,
+    outbox: &OutboxPort,
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
-) -> Result<LibReaction<Message>>
+) -> Result<()>
 where
     'xbs: 'xbsr,
 {
@@ -376,7 +378,7 @@ where
     );
 
     if !is_msg_to_nick(MsgTarget(&target), &msg, &state.nick()?) {
-        return Ok(LibReaction::None);
+        return Ok(());
     }
 
     if parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
@@ -384,7 +386,13 @@ where
         .is_empty()
     {
         // TODO: Use a trigger for this.
-        handle_reaction(state, prefix, target, msg, Reaction::Reply("Yes?".into()))
+        push_to_outbox(
+            &outbox,
+            server_id,
+            handle_reaction(state, prefix, target, msg, Reaction::Reply("Yes?".into()))?,
+        );
+
+        Ok(())
     } else if prefix.parse().nick == Some(&target) && msg.trim() == UPDATE_MSG_PREFIX_STR {
         update_prefix_info(state, &prefix.parse())
     } else {
@@ -404,14 +412,14 @@ where
                 }
             };
 
-            irc_send::push_to_outbox(&outbox, server_id, lib_reaction);
+            push_to_outbox(&outbox, server_id, lib_reaction);
         });
 
-        Ok(LibReaction::None)
+        Ok(())
     }
 }
 
-fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction<Message>> {
+fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
     debug!(
         "Updating stored message prefix information from received {:?}",
         prefix
@@ -419,7 +427,7 @@ fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<LibReaction<M
 
     state.msg_prefix.write().update_from(prefix);
 
-    Ok(LibReaction::None)
+    Ok(())
 }
 
 fn handle_004(state: &State) -> Result<LibReaction<Message>> {
