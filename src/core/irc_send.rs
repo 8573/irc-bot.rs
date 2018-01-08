@@ -58,6 +58,9 @@ pub(super) fn send_main(
     let current_thread = thread::current();
     let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
 
+    // [2018-01-08 - c74d] At least with `crossbeam_channel`'s MPSC queue implementation, this loop
+    // will run until — and the sending thread will exit when — all receiving (and
+    // command-handling, etc.) threads have exited. Not having to implement that myself is nice.
     for record in outbox_receiver {
         let OutboxRecord { server_id, output, .. } =
             match process_outgoing_msg(&state, thread_label, record) {
