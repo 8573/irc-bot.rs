@@ -23,6 +23,7 @@ use irc::client::prelude as aatxe;
 use irc::client::prelude::Server as AatxeServer;
 use irc::proto::Message;
 use itertools::Itertools;
+use smallvec::SmallVec;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
@@ -50,7 +51,7 @@ impl State {
             msg,
         );
         info!("Sending message to {:?}: {:?}", target, final_msg);
-        let mut wrapped_msg = vec![];
+        let mut wrapped_msg = SmallVec::<[_; 1]>::new();
         wrap_msg(self, target, &final_msg, |line| {
             wrapped_msg.push(LibReaction::RawMsg(
                 aatxe::Command::PRIVMSG(
@@ -60,8 +61,11 @@ impl State {
             ));
             Ok(())
         })?;
-        // TODO: optimize for case where no wrapping, and thus no `Vec`, is needed.
-        Ok(LibReaction::Multi(wrapped_msg))
+        match wrapped_msg.len() {
+            0 => Ok(LibReaction::None),
+            1 => Ok(wrapped_msg.remove(0)),
+            _ => Ok(LibReaction::Multi(wrapped_msg.into_vec())),
+        }
     }
 
     fn prefix_len(&self) -> Result<usize> {

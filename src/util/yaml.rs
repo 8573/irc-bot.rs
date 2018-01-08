@@ -1,3 +1,5 @@
+use smallvec;
+use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
 use yaml_rust;
@@ -175,8 +177,7 @@ where
 {
     let subject_label = subject_label.into();
 
-    // TODO: Use smallvec.
-    let mut path_buf = vec![];
+    let mut path_buf = SmallVec::<[_; 8]>::new();
 
     check_type_inner(expected, actual, &mut path_buf, subject_label)?;
 
@@ -185,12 +186,15 @@ where
     Ok(())
 }
 
-fn check_type_inner<'s>(
+fn check_type_inner<'s, AS>(
     expected: &'s Yaml,
     actual: &Yaml,
-    path_buf: &mut Vec<Cow<'s, str>>,
+    path_buf: &mut SmallVec<AS>,
     subject_label: Cow<'s, str>,
-) -> Result<()> {
+) -> Result<()>
+where
+    AS: smallvec::Array<Item = Cow<'s, str>>,
+{
     trace!(
         "Checking YAML object's type and structure. Expected: {expected:?}; actual: {actual:?}.",
         expected = expected,
@@ -233,11 +237,14 @@ fn check_type_inner<'s>(
     Ok(())
 }
 
-fn check_field_types<'s>(
+fn check_field_types<'s, AS>(
     expected_fields: &'s yaml::Hash,
     actual_fields: &yaml::Hash,
-    path_buf: &mut Vec<Cow<'s, str>>,
-) -> Result<()> {
+    path_buf: &mut SmallVec<AS>,
+) -> Result<()>
+where
+    AS: smallvec::Array<Item = Cow<'s, str>>,
+{
     for (key, expected_value) in expected_fields {
         match (expected_value, actual_fields.get(key)) {
             (_, Some(actual_value)) => {

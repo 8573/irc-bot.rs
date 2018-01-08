@@ -8,6 +8,7 @@ extern crate itertools;
 extern crate parking_lot;
 extern crate serde;
 extern crate serde_yaml;
+extern crate smallvec;
 extern crate uuid;
 extern crate yaml_rust;
 
