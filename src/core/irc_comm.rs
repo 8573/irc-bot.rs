@@ -35,7 +35,12 @@ use std::sync::Arc;
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
 impl State {
-    fn say<S1, S2>(&self, target: MsgTarget, addressee: S1, msg: S2) -> Result<LibReaction<Message>>
+    fn compose_msg<S1, S2>(
+        &self,
+        target: MsgTarget,
+        addressee: S1,
+        msg: S2,
+    ) -> Result<LibReaction<Message>>
     where
         S1: Borrow<str>,
         S2: Display,
@@ -148,16 +153,16 @@ fn handle_reaction(
 
     match reaction {
         Reaction::None => Ok(LibReaction::None),
-        Reaction::Msg(s) => state.say(reply_target, "", &s),
+        Reaction::Msg(s) => state.compose_msg(reply_target, "", &s),
         Reaction::Msgs(a) => {
             Ok(LibReaction::Multi(a.iter()
-                .map(|s| state.say(reply_target, "", &s))
+                .map(|s| state.compose_msg(reply_target, "", &s))
                 .collect::<Result<_>>()?))
         }
-        Reaction::Reply(s) => state.say(reply_target, reply_addressee, &s),
+        Reaction::Reply(s) => state.compose_msg(reply_target, reply_addressee, &s),
         Reaction::Replies(a) => {
             Ok(LibReaction::Multi(a.iter()
-                .map(|s| state.say(reply_target, reply_addressee, &s))
+                .map(|s| state.compose_msg(reply_target, reply_addressee, &s))
                 .collect::<Result<_>>()?))
         }
         Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
