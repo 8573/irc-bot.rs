@@ -40,7 +40,7 @@ impl State {
         target: MsgTarget,
         addressee: S1,
         msg: S2,
-    ) -> Result<LibReaction<Message>>
+    ) -> Result<Option<LibReaction<Message>>>
     where
         S1: Borrow<str>,
         S2: Display,
@@ -68,9 +68,9 @@ impl State {
             Ok(())
         })?;
         match wrapped_msg.len() {
-            0 => Ok(LibReaction::None),
-            1 => Ok(wrapped_msg.remove(0)),
-            _ => Ok(LibReaction::Multi(wrapped_msg.into_vec())),
+            0 => Ok(None),
+            1 => Ok(Some(wrapped_msg.remove(0))),
+            _ => Ok(Some(LibReaction::Multi(wrapped_msg.into_vec()))),
         }
     }
 
@@ -79,15 +79,27 @@ impl State {
         target: MsgTarget,
         addressee: S1,
         msgs: M,
-    ) -> Result<LibReaction<Message>>
+    ) -> Result<Option<LibReaction<Message>>>
     where
         S1: Borrow<str>,
         S2: Display,
         M: IntoIterator<Item = S2>,
     {
-        Ok(LibReaction::Multi(msgs.into_iter()
-            .map(|s| self.compose_msg(target, addressee.borrow(), s))
-            .collect::<Result<_>>()?))
+        // Not `SmallVec`, because we're guessing that the caller expects multiple messages.
+        let mut output = Vec::new();
+
+        for msg in msgs {
+            match self.compose_msg(target, addressee.borrow(), msg)? {
+                Some(m) => output.push(m),
+                None => {}
+            }
+        }
+
+        match output.len() {
+            0 => Ok(None),
+            1 => Ok(Some(output.remove(0))),
+            _ => Ok(Some(LibReaction::Multi(output))),
+        }
     }
 
     fn prefix_len(&self) -> Result<usize> {
@@ -160,7 +172,7 @@ fn handle_reaction(
     target: String,
     msg: String,
     reaction: Reaction,
-) -> Result<LibReaction<Message>> {
+) -> Result<Option<LibReaction<Message>>> {
     let (reply_target, reply_addressee) = if target == state.nick()? {
         (MsgTarget(prefix.parse().nick.unwrap()), "")
     } else {
@@ -168,13 +180,13 @@ fn handle_reaction(
     };
 
     match reaction {
-        Reaction::None => Ok(LibReaction::None),
+        Reaction::None => Ok(None),
         Reaction::Msg(s) => state.compose_msg(reply_target, "", &s),
         Reaction::Msgs(a) => state.compose_msgs(reply_target, "", a.iter()),
         Reaction::Reply(s) => state.compose_msg(reply_target, reply_addressee, &s),
         Reaction::Replies(a) => state.compose_msgs(reply_target, reply_addressee, a.iter()),
-        Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
-        Reaction::Quit(msg) => Ok(mk_quit(msg)),
+        Reaction::RawMsg(s) => Ok(Some(LibReaction::RawMsg(s.parse()?))),
+        Reaction::Quit(msg) => Ok(Some(mk_quit(msg))),
     }
 }
 
@@ -183,7 +195,7 @@ fn handle_bot_command(
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
-) -> Result<LibReaction<Message>> {
+) -> Result<Option<LibReaction<Message>>> {
     let reaction = {
         let cmd_ln = parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
             .expect("`handle_bot_command` shouldn't have been called!");

@@ -24,15 +24,13 @@ pub(super) struct OutboxRecord {
     output: LibReaction<Message>,
 }
 
-pub(super) fn push_to_outbox(
-    outbox_sender: &OutboxPort,
-    server_id: ServerId,
-    output: LibReaction<Message>,
-) {
-    let output = match output {
-        LibReaction::RawMsg(_) |
-        LibReaction::Multi(_) => output,
-        LibReaction::None => return,
+pub(super) fn push_to_outbox<O>(outbox_sender: &OutboxPort, server_id: ServerId, output: O)
+where
+    O: Into<Option<LibReaction<Message>>>,
+{
+    let output = match output.into() {
+        Some(r) => r,
+        None => return,
     };
 
     let result = outbox_sender.try_send(OutboxRecord { server_id, output });
@@ -113,19 +111,18 @@ fn send_reaction(
     reaction: LibReaction<Message>,
 ) {
     send_reaction_with_err_cb(state, server, thread_label, reaction, |err| {
-        send_reaction_with_err_cb(
-            state,
-            server,
-            thread_label,
-            state.handle_err_generic(&err),
-            |err| {
-                error!(
-                    "Encountered error {:?} while handling error; stopping error handling to avoid \
-                     potential infinite recursion.",
-                    err
-                )
-            },
-        )
+        let err_reaction = match state.handle_err_generic(&err) {
+            Some(r) => r,
+            None => return,
+        };
+
+        send_reaction_with_err_cb(state, server, thread_label, err_reaction, |err| {
+            error!(
+                "Encountered error {:?} while handling error; stopping error handling to avoid \
+                 potential infinite recursion.",
+                err
+            )
+        })
     })
 }
 
@@ -149,15 +146,6 @@ fn send_reaction_with_err_cb<ErrCb>(
             for reaction in reactions {
                 send_reaction(state, server, thread_label, reaction)
             }
-        }
-        LibReaction::None => {
-            error!(
-                "Someone put a `{lib_reaction}::{none}` in the {thread_label:?} outbox! Such a \
-                 reaction should have been discarded, not sent to the outbox.",
-                thread_label = thread_label,
-                lib_reaction = stringify!(LibReaction),
-                none = stringify!(None)
-            );
         }
     }
 }

@@ -107,7 +107,7 @@ impl State {
         }
     }
 
-    fn handle_err<S>(&self, err: &Error, desc: S) -> LibReaction<Message>
+    fn handle_err<S>(&self, err: &Error, desc: S) -> Option<LibReaction<Message>>
     where
         S: Borrow<str>,
     {
@@ -123,7 +123,7 @@ impl State {
                     desc,
                     if desc.is_empty() { "" } else { ")" }
                 );
-                LibReaction::None
+                None
             }
             ErrorReaction::Quit(msg) => {
                 trace!(
@@ -132,12 +132,12 @@ impl State {
                     desc,
                     if desc.is_empty() { "" } else { ")" }
                 );
-                irc_comm::mk_quit(msg)
+                Some(irc_comm::mk_quit(msg))
             }
         }
     }
 
-    fn handle_err_generic(&self, err: &Error) -> LibReaction<Message> {
+    fn handle_err_generic(&self, err: &Error) -> Option<LibReaction<Message>> {
         self.handle_err(err, "")
     }
 }

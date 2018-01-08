@@ -25,9 +25,6 @@ pub enum LibReaction<Msg>
 where
     Msg: Clone + fmt::Debug,
 {
-    /// No reaction.
-    None,
-
     /// React by sending an IRC message. No line-wrapping or other formatting will be performed on
     /// the message, except that the message-terminating sequence of a carriage return character
     /// and a line feed character ("CR-LF") will be appended. If the message exceeds 512 octets in
