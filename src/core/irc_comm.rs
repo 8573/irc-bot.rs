@@ -74,6 +74,22 @@ impl State {
         }
     }
 
+    fn compose_msgs<S1, S2, M>(
+        &self,
+        target: MsgTarget,
+        addressee: S1,
+        msgs: M,
+    ) -> Result<LibReaction<Message>>
+    where
+        S1: Borrow<str>,
+        S2: Display,
+        M: IntoIterator<Item = S2>,
+    {
+        Ok(LibReaction::Multi(msgs.into_iter()
+            .map(|s| self.compose_msg(target, addressee.borrow(), s))
+            .collect::<Result<_>>()?))
+    }
+
     fn prefix_len(&self) -> Result<usize> {
         Ok(self.msg_prefix.read().len())
     }
@@ -154,17 +170,9 @@ fn handle_reaction(
     match reaction {
         Reaction::None => Ok(LibReaction::None),
         Reaction::Msg(s) => state.compose_msg(reply_target, "", &s),
-        Reaction::Msgs(a) => {
-            Ok(LibReaction::Multi(a.iter()
-                .map(|s| state.compose_msg(reply_target, "", &s))
-                .collect::<Result<_>>()?))
-        }
+        Reaction::Msgs(a) => state.compose_msgs(reply_target, "", a.iter()),
         Reaction::Reply(s) => state.compose_msg(reply_target, reply_addressee, &s),
-        Reaction::Replies(a) => {
-            Ok(LibReaction::Multi(a.iter()
-                .map(|s| state.compose_msg(reply_target, reply_addressee, &s))
-                .collect::<Result<_>>()?))
-        }
+        Reaction::Replies(a) => state.compose_msgs(reply_target, reply_addressee, a.iter()),
         Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
         Reaction::Quit(msg) => Ok(mk_quit(msg)),
     }
