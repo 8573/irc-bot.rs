@@ -37,13 +37,13 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(ping),
         )
-        // TODO: Expand into `bot-info` command with source, docs, etc. URLs.
         .command(
-            "source",
+            "framework-info",
             "",
-            "Request information about the bot, such as the URL of a Web page about its software.",
+            "Request information about the framework with which the bot was built, such as the URL \
+             of a Web page about it.",
             Auth::Public,
-            Box::new(source),
+            Box::new(bot_fw_info),
         )
         .command(
             "help",
@@ -123,13 +123,19 @@ fn ping(_: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
     Reaction::Reply("pong".into()).into()
 }
 
-fn source(_: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
-    let src_url = match env!("CARGO_PKG_HOMEPAGE") {
-        s if !s.is_empty() => s,
-        _ => "unknown",
-    };
+fn bot_fw_info(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+    fn d(l: &'static [&'static str]) -> &'static str {
+        l.iter().find(|s| !s.is_empty()).unwrap_or(&"unknown")
+    }
 
-    Reaction::Reply(format!("<{}>", src_url).into()).into()
+    Reaction::Reply(
+        format!(
+            "This bot was built with `{name}.rs`, version {ver}; see <{url}>.",
+            name = d(&[env!("CARGO_PKG_NAME")]),
+            ver = d(&[env!("IRC_BOT_RS_GIT_VERSION"), env!("CARGO_PKG_VERSION")]),
+            url = d(&[env!("CARGO_PKG_HOMEPAGE")])
+        ).into(),
+    ).into()
 }
 
 fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {

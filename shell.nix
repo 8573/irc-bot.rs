@@ -23,6 +23,7 @@ stdenv.mkDerivation rec {
       channel = "1.22.1";
     }).rust
     clang
+    git
     rustfmt
     pkgconfig
   ];
