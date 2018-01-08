@@ -65,28 +65,20 @@ pub fn parse_privmsg(input: &Message) -> Option<PrivMsg> {
     }
 }
 
-fn is_msg_to_nick(state: &State, MsgTarget(target): MsgTarget, msg: &str, nick: &str) -> bool {
+pub(super) fn is_msg_to_nick(MsgTarget(target): MsgTarget, msg: &str, nick: &str) -> bool {
     target == nick || msg == nick ||
-        (msg.starts_with(nick) &&
-             (msg.find(|c: char| {
-                state.chars_indicating_msg_is_addressed_to_nick.contains(&c)
-            }) == Some(nick.len())))
+        (msg.starts_with(nick) && (msg.find(|c: char| [':', ','].contains(&c)) == Some(nick.len())))
 }
 
 pub fn parse_msg_to_nick<'msg>(
-    state: &State,
-    &PrivMsg {
-        metadata: MsgMetadata { target, .. },
-        text,
-    }: &PrivMsg<'msg>,
+    text: &'msg str,
+    target: MsgTarget,
     nick: &str,
 ) -> Option<&'msg str> {
-    if is_msg_to_nick(state, target, text, nick) {
+    if is_msg_to_nick(target, text, nick) {
         Some(
             text.trim_left_matches(nick)
-                .trim_left_matches(|c: char| {
-                    state.chars_indicating_msg_is_addressed_to_nick.contains(&c)
-                })
+                .trim_left_matches(|c: char| [':', ','].contains(&c))
                 .trim(),
         )
     } else {

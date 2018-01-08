@@ -1,5 +1,6 @@
 use super::LibReaction;
 use super::ServerId;
+use super::THREAD_NAME_FAIL;
 use core::Error;
 use core::Result;
 use core::Server;
@@ -11,6 +12,7 @@ use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::thread;
 
 pub(super) const OUTBOX_SIZE: usize = 1024;
 
@@ -20,13 +22,11 @@ pub(super) type OutboxPort = crossbeam_channel::Sender<OutboxRecord>;
 pub(super) struct OutboxRecord {
     server_id: ServerId,
     output: LibReaction<Message>,
-    cause: Result<Message>,
 }
 
 pub(super) fn push_to_outbox(
     outbox_sender: &OutboxPort,
     server_id: ServerId,
-    cause: Result<Message>,
     output: LibReaction<Message>,
 ) {
     let output = match output {
@@ -35,11 +35,7 @@ pub(super) fn push_to_outbox(
         LibReaction::None => return,
     };
 
-    let result = outbox_sender.try_send(OutboxRecord {
-        server_id,
-        output,
-        cause,
-    });
+    let result = outbox_sender.try_send(OutboxRecord { server_id, output });
 
     match result {
         Ok(()) => {}
@@ -57,9 +53,11 @@ pub(super) fn push_to_outbox(
 
 pub(super) fn send_main(
     state: Arc<State>,
-    thread_label: &str,
     outbox_receiver: crossbeam_channel::Receiver<OutboxRecord>,
 ) -> Result<()> {
+    let current_thread = thread::current();
+    let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
+
     for record in outbox_receiver {
         let OutboxRecord { server_id, output, .. } =
             match process_outgoing_msg(&state, thread_label, record) {
@@ -90,19 +88,15 @@ pub(super) fn send_main(
 pub(super) fn process_outgoing_msg(
     _state: &State,
     thread_label: &str,
-    OutboxRecord {
-        server_id,
-        output,
-        cause,
-    }: OutboxRecord,
+    OutboxRecord { server_id, output }: OutboxRecord,
 ) -> Option<OutboxRecord> {
+    // TODO: Deny sending a message if too many identical messages have been sent too recently in
+    // the same channel/query.
+    //
+    // TODO: Deny sending a `QUIT` if the originating command lacks `Admin` authorization.
     if true {
         debug!("Sending {:?}", output);
-        Some(OutboxRecord {
-            server_id,
-            output,
-            cause,
-        })
+        Some(OutboxRecord { server_id, output })
     } else {
         debug!("Dropping {:?}", output);
         None

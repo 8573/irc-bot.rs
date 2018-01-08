@@ -3,6 +3,7 @@ use super::ErrorKind;
 use super::ModuleFeatureKind;
 use super::MsgPrefix;
 use super::Result;
+use super::ServerId;
 use super::State;
 use super::config;
 use std::borrow::Cow;
@@ -42,6 +43,16 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
             check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2) &&
                 check_admin_cred(host_1, host_2)
         }))
+    }
+
+    /// TODO: This should return something less allocate-y.
+    pub(super) fn server_socket_addr_string(&self, server_id: ServerId) -> String {
+        self.servers
+            .get(&server_id)
+            .map(|s| s.read().socket_addr_string.clone())
+            .unwrap_or_else(|| {
+                format!("<unknown server {}>", server_id.uuid.hyphenated())
+            })
     }
 }
 

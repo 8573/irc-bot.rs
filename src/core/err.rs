@@ -36,7 +36,6 @@ error_chain! {
                      util::fmt::FmtAny(payload.as_ref()))
         }
         MsgPrefixUpdateRequestedButPrefixMissing
-        ModuleRequestedQuit(quit_msg: Option<Cow<'static, str>>)
         NicknameUnknown {
             description("nickname retrieval error")
             display("Puzzlingly, the bot seems to have forgotten its own nickname.")

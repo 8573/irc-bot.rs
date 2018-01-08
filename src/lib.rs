@@ -1,6 +1,7 @@
 #![recursion_limit="128"]
 
 extern crate clap;
+// TODO: Switch to `crossbeam-utils`.
 extern crate crossbeam;
 extern crate crossbeam_channel;
 extern crate irc;

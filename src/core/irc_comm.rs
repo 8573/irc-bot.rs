@@ -7,13 +7,18 @@ use super::MsgPrefix;
 use super::MsgTarget;
 use super::Reaction;
 use super::Result;
+use super::ServerId;
 use super::State;
 use super::bot_cmd;
+use super::irc_msgs::OwningMsgPrefix;
 use super::irc_msgs::PrivMsg;
+use super::irc_msgs::is_msg_to_nick;
+use super::irc_msgs::parse_prefix;
 use super::irc_msgs::parse_privmsg;
 use super::irc_send;
 use super::parse_msg_to_nick;
 use super::reaction::LibReaction;
+use crossbeam;
 use irc::client::prelude as aatxe;
 use irc::client::prelude::Server as AatxeServer;
 use irc::proto::Message;
@@ -23,6 +28,7 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
 use std::iter;
+use std::sync::Arc;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -123,22 +129,16 @@ where
 }
 
 fn handle_reaction(
-    state: &State,
-    msg: &PrivMsg,
+    state: &Arc<State>,
+    prefix: OwningMsgPrefix,
+    target: String,
+    msg: String,
     reaction: Reaction,
 ) -> Result<LibReaction<Message>> {
-    let &PrivMsg {
-        metadata: MsgMetadata {
-            target,
-            prefix: MsgPrefix { nick, .. },
-        },
-        ..
-    } = msg;
-
-    let (reply_target, reply_addressee) = if target.0 == state.nick()? {
-        (MsgTarget(nick.unwrap()), "")
+    let (reply_target, reply_addressee) = if target == state.nick()? {
+        (MsgTarget(prefix.parse().nick.unwrap()), "")
     } else {
-        (target, nick.unwrap_or(""))
+        (MsgTarget(&target), prefix.parse().nick.unwrap_or(""))
     };
 
     match reaction {
@@ -156,35 +156,41 @@ fn handle_reaction(
                 .collect::<Result<_>>()?))
         }
         Reaction::RawMsg(s) => Ok(LibReaction::RawMsg(s.parse()?)),
-        Reaction::BotCmd(cmd_ln) => handle_bot_command(state, msg, cmd_ln),
-        Reaction::Quit(msg) => bail!(ErrorKind::ModuleRequestedQuit(msg)),
+        Reaction::Quit(msg) => Ok(LibReaction::RawMsg(
+            aatxe::Command::QUIT(msg.map(Into::into)).into(),
+        )),
     }
 }
 
-fn handle_bot_command<C>(
-    state: &State,
-    msg: &PrivMsg,
-    command_line: C,
-) -> Result<LibReaction<Message>>
-where
-    C: Borrow<str>,
-{
-    let cmd_ln = command_line.borrow();
+fn handle_bot_command(
+    state: &Arc<State>,
+    prefix: OwningMsgPrefix,
+    target: String,
+    msg: String,
+) -> Result<LibReaction<Message>> {
+    let reaction = {
+        let cmd_ln = parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
+            .expect("`handle_bot_command` shouldn't have been called!");
 
-    debug_assert!(!cmd_ln.trim().is_empty());
+        debug_assert!(!cmd_ln.trim().is_empty());
 
-    let mut cmd_name_and_args = cmd_ln.splitn(2, char::is_whitespace);
-    let cmd_name = cmd_name_and_args.next().unwrap_or("");
-    let cmd_args = cmd_name_and_args.next().unwrap_or("");
+        let mut cmd_name_and_args = cmd_ln.splitn(2, char::is_whitespace);
+        let cmd_name = cmd_name_and_args.next().unwrap_or("");
+        let cmd_args = cmd_name_and_args.next().unwrap_or("");
 
-    handle_reaction(
-        state,
-        msg,
-        bot_command_reaction(state, msg, cmd_name, cmd_args),
-    )
+        bot_command_reaction(
+            state,
+            prefix.parse(),
+            MsgTarget(&target),
+            cmd_name,
+            cmd_args,
+        )
+    };
+
+    handle_reaction(state, prefix, target, msg, reaction)
 }
 
-    fn run_bot_command(state: &State, &PrivMsg {ref metadata, ..}: &PrivMsg, &BotCommand {
+    fn run_bot_command(state: &State, metadata: MsgMetadata, &BotCommand {
                  ref name,
                  ref provider,
                  ref auth_lvl,
@@ -213,6 +219,7 @@ where
         Err(e) => BotCmdResult::LibErr(e),
     };
 
+    // TODO: Filter `QUIT`s in `irc_send` instead, and check `Reaction::RawMsg`s as well.
     match result {
         BotCmdResult::Ok(Reaction::Quit(ref s)) if *auth_lvl != BotCmdAuthLvl::Admin => {
             BotCmdResult::BotErrMsg(
@@ -233,7 +240,15 @@ where
     }
 }
 
-fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: &str) -> Reaction {
+fn bot_command_reaction(
+    state: &Arc<State>,
+    prefix: MsgPrefix,
+    target: MsgTarget,
+    cmd_name: &str,
+    cmd_args: &str,
+) -> Reaction {
+    let metadata = MsgMetadata { prefix, target };
+
     let cmd = match state.commands.get(cmd_name) {
         Some(c) => c,
         None => {
@@ -247,7 +262,7 @@ fn bot_command_reaction(state: &State, msg: &PrivMsg, cmd_name: &str, cmd_args: 
         ..
     } = cmd;
 
-    let cmd_result = match run_bot_command(state, msg, cmd, cmd_args) {
+    let cmd_result = match run_bot_command(state, metadata, cmd, cmd_args) {
         BotCmdResult::Ok(r) => Ok(r),
         BotCmdResult::Unauthorized => {
             Err(format!(
@@ -310,44 +325,98 @@ pub fn quit<'a>(state: &State, msg: Option<Cow<'a, str>>) -> LibReaction<Message
     LibReaction::RawMsg(quit)
 }
 
-pub fn handle_msg(state: &State, input_msg: Message) -> Result<LibReaction<Message>> {
+pub(super) fn handle_msg<'xbs, 'xbsr>(
+    state: &Arc<State>,
+    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
+    server_id: ServerId,
+    outbox: &irc_send::OutboxPort,
+    input_msg: Message,
+) -> Result<LibReaction<Message>>
+where
+    'xbs: 'xbsr,
+{
     trace!(
-        "Received {:?}",
+        "[{}] Received {:?}",
+        state.server_socket_addr_string(server_id),
         input_msg.to_string().trim_right_matches("\r\n")
     );
 
-    if let Some(msg) = parse_privmsg(&input_msg) {
-        handle_privmsg(state, &msg)
-    } else if let aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..) = input_msg.command {
-        handle_004(state)
-    } else {
-        Ok(LibReaction::None)
+    match input_msg {
+        Message {
+            command: aatxe::Command::PRIVMSG(target, msg),
+            prefix,
+            ..
+        } => {
+            handle_privmsg(
+                state,
+                crossbeam_scope,
+                server_id,
+                outbox,
+                OwningMsgPrefix::from_string(prefix.unwrap_or_default()),
+                target,
+                msg,
+            )
+        }
+        Message { command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..), .. } => {
+            handle_004(state)
+        }
+        _ => Ok(LibReaction::None),
     }
 }
 
-fn handle_privmsg(state: &State, msg: &PrivMsg) -> Result<LibReaction<Message>> {
-    trace!("Handling PRIVMSG: {:?}", msg);
+fn handle_privmsg<'xbs, 'xbsr>(
+    state: &Arc<State>,
+    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
+    server_id: ServerId,
+    outbox: &irc_send::OutboxPort,
+    prefix: OwningMsgPrefix,
+    target: String,
+    msg: String,
+) -> Result<LibReaction<Message>>
+where
+    'xbs: 'xbsr,
+{
+    trace!(
+        "[{}] Handling PRIVMSG: {:?}",
+        state.server_socket_addr_string(server_id),
+        msg
+    );
 
-    let &PrivMsg {
-        metadata: MsgMetadata {
-            ref target,
-            ref prefix,
-        },
-        text,
-    } = msg;
+    if !is_msg_to_nick(MsgTarget(&target), &msg, &state.nick()?) {
+        return Ok(LibReaction::None);
+    }
 
-    let msg_for_bot = match parse_msg_to_nick(state, msg, &state.nick()?) {
-        Some(m) => m,
-        None => return Ok(LibReaction::None),
-    };
-
-    // TODO: Catch panics.
-    if msg_for_bot.is_empty() {
-        handle_reaction(state, msg, Reaction::Reply("Yes?".into()))
-    } else if prefix.nick == Some(target.0) && text == UPDATE_MSG_PREFIX_STR {
-        update_prefix_info(state, prefix)
+    if parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
+        .unwrap()
+        .is_empty()
+    {
+        // TODO: Use a trigger for this.
+        handle_reaction(state, prefix, target, msg, Reaction::Reply("Yes?".into()))
+    } else if prefix.parse().nick == Some(&target) && msg.trim() == UPDATE_MSG_PREFIX_STR {
+        update_prefix_info(state, &prefix.parse())
     } else {
-        handle_bot_command(state, msg, msg_for_bot)
+        // This could take a while or panic, so do it in a new thread.
+
+        // TODO: Add a command that specifically panics, to test panic catching.
+
+        // These are cheap to clone, supposedly.
+        let state = state.clone();
+        let outbox = outbox.clone();
+
+        let thread_spawn_result = crossbeam_scope.builder().spawn(move || {
+            let lib_reaction = match handle_bot_command(&state, prefix, target, msg) {
+                Ok(r) => r,
+                Err(e) => {
+                    // TODO: Inform the user invoking the command of the error.
+                    error!("Error in command handling: {:?}", e);
+                    return;
+                }
+            };
+
+            irc_send::push_to_outbox(&outbox, server_id, lib_reaction);
+        });
+
+        Ok(LibReaction::None)
     }
 }
 

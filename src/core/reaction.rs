@@ -10,7 +10,6 @@ pub enum Reaction {
     Reply(Cow<'static, str>),
     Replies(Cow<'static, [Cow<'static, str>]>),
     RawMsg(Cow<'static, str>),
-    BotCmd(Cow<'static, str>),
     Quit(Option<Cow<'static, str>>),
 }
 

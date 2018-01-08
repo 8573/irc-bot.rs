@@ -54,13 +54,16 @@ mod modl_sys;
 mod reaction;
 mod state;
 
+const THREAD_NAME_FAIL: &str = "This thread is unnamed?! We specifically gave it a name; what \
+                                happened?!";
+
 pub struct State {
     config: config::inner::Config,
     servers: BTreeMap<ServerId, RwLock<Server>>,
     addressee_suffix: Cow<'static, str>,
-    chars_indicating_msg_is_addressed_to_nick: Vec<char>,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
+    // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
     error_handler: Arc<Fn(&Error) -> ErrorReaction + Send + Sync>,
 }
@@ -97,7 +100,6 @@ impl State {
             config: config,
             servers: Default::default(),
             addressee_suffix: ": ".into(),
-            chars_indicating_msg_is_addressed_to_nick: vec![':', ','],
             modules: Default::default(),
             commands: Default::default(),
             msg_prefix,
@@ -111,10 +113,7 @@ impl State {
     {
         let desc = desc.borrow();
 
-        let reaction = match err {
-            &Error(ErrorKind::ModuleRequestedQuit(ref msg), _) => ErrorReaction::Quit(msg.clone()),
-            e => (self.error_handler)(e),
-        };
+        let reaction = (self.error_handler)(err);
 
         match reaction {
             ErrorReaction::Proceed => {
@@ -259,33 +258,82 @@ where
     state.servers = servers;
 
     let state = Arc::new(state);
+    let state = &state;
 
-    run_server_threads(&state, |state, server_id, aatxe_server, label, outbox| {
-        match aatxe_server.identify() {
-            Ok(()) => debug!("{}: Sent identification sequence to server.", label),
-            Err(err) => {
-                error!(
-                    "{}: Failed to send identification sequence to server.",
-                    label
-                )
-            }
+    crossbeam::scope(|crossbeam_scope| {
+        let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
+
+        spawn_thread(
+            crossbeam_scope,
+            state,
+            "*".into(),
+            "send",
+            |_| "sending thread".into(),
+            || irc_send::send_main(state.clone(), outbox_receiver),
+        );
+
+        for (&server_id, server) in &state.servers {
+
+            let (aatxe_server, addr) = {
+                let s = server.read();
+                (s.inner.clone(), s.socket_addr_string.clone())
+            };
+
+            let outbox_sender_clone = outbox_sender.clone();
+
+            let recv_fn = move || {
+                let current_thread = thread::current();
+                let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
+
+                match aatxe_server.identify() {
+                    Ok(()) => debug!("{}: Sent identification sequence to server.", thread_label),
+                    Err(err) => {
+                        error!(
+                            "{}: Failed to send identification sequence to server.",
+                            thread_label
+                        )
+                    }
+                }
+
+                crossbeam::scope(|crossbeam_scope| {
+                    aatxe_server
+                        .for_each_incoming(|msg| {
+                            handle_msg(
+                                state,
+                                crossbeam_scope,
+                                server_id,
+                                &outbox_sender_clone,
+                                Ok(msg),
+                            )
+                        })
+                        .map_err(Into::into)
+                })
+            };
+
+            spawn_thread(
+                crossbeam_scope,
+                state,
+                addr,
+                "recv",
+                |addr| format!("receiving thread for server {addr:?}", addr = addr),
+                recv_fn,
+            );
         }
-
-        aatxe_server
-            .for_each_incoming(|msg| handle_msg(&state, server_id, &outbox, Ok(msg)))
-            .map_err(Into::into)
-    });
+    })
 }
 
-fn handle_msg(
-    state: &State,
+fn handle_msg<'xbs, 'xbsr>(
+    state: &Arc<State>,
+    crossbeam_scope: &'xbsr crossbeam::Scope<'xbs>,
     server_id: ServerId,
     outbox: &irc_send::OutboxPort,
     input: Result<Message>,
-) {
+) where
+    'xbs: 'xbsr,
+{
     let reaction = match input {
         Ok(ref msg) => {
-            match irc_comm::handle_msg(&state, msg.clone()) {
+            match irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg.clone()) {
                 Ok(r) => r,
                 Err(e) => state.handle_err_generic(&e),
             }
@@ -293,91 +341,39 @@ fn handle_msg(
         Err(ref e) => state.handle_err_generic(e),
     };
 
-    push_to_outbox(outbox, server_id, input, reaction);
+    // Only the "Yes?" and UPDATE_MSG_PREFIX_STR messages will ever be sent via this path;
+    // everything else will be sent via other `push_to_outbox` calls (in other threads).
+    //
+    // TODO: Eliminate this path of message sending.
+    push_to_outbox(outbox, server_id, reaction);
 }
 
-fn run_server_threads<RF>(state: &Arc<State>, recv_fn: RF)
-where
-    RF: Fn(Arc<State>,
-       ServerId,
-       aatxe::IrcServer,
-       &str,
-       crossbeam_channel::Sender<OutboxRecord>)
-       -> Result<()>
-        + Send
-        + Sync,
-{
-    crossbeam::scope(|scope| {
-        let mut join_handles = Vec::<crossbeam::ScopedJoinHandle<()>>::new();
-
-        let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
-
-        spawn_thread(
-            scope,
-            &mut join_handles,
-            state,
-            "*".into(),
-            "send",
-            |_| "sending thread".into(),
-            |thread_label| irc_send::send_main(state.clone(), thread_label, outbox_receiver)
-        );
-
-        for (_server_id, server) in &state.servers {
-
-            let (aatxe_server, server_id, addr) = {
-                let s = server.read();
-                (s.inner.clone(), s.id, s.socket_addr_string.clone())
-            };
-
-            let outbox_sender_clone = outbox_sender.clone();
-
-            let f = &recv_fn;
-
-            spawn_thread(
-                scope,
-                &mut join_handles,
-                state,
-                addr,
-                "recv",
-                |addr| format!("receiving thread for server {addr:?}", addr = addr),
-                move |thread_label| (f)(
-                    state.clone(), server_id, aatxe_server, thread_label, outbox_sender_clone
-                )
-            );
-        }
-    })
-}
-
-fn spawn_thread<'s, F, PurposeF>(
-    scope: &crossbeam::Scope<'s>,
-    join_handles: &mut Vec<crossbeam::ScopedJoinHandle<()>>,
+fn spawn_thread<'xbs, F, PurposeF>(
+    crossbeam_scope: &crossbeam::Scope<'xbs>,
     state: &Arc<State>,
     addr: String,
     purpose_desc_abbr: &str,
     purpose_desc_full: PurposeF,
     business: F,
 ) where
-    F: FnOnce(&str) -> Result<()> + Send + 's,
+    F: FnOnce() -> Result<()> + Send + 'xbs,
     PurposeF: FnOnce(&str) -> String,
 {
     let state_handle = state.clone();
     let label = format!("{}[{}]", purpose_desc_abbr, addr);
 
-    let thread_build_result = scope.builder().name(label).spawn(move || {
+    let thread_build_result = crossbeam_scope.builder().name(label).spawn(move || {
         let current_thread = thread::current();
-        let label = current_thread.name().expect(
-            "This thread is unnamed?! We specifically gave it a \
-             name; what happened?!",
-        );
+        let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
 
-        match business(label) {
-            Ok(()) => debug!("{}: Thread exited successfully.", label),
-            Err(err) => error!("{}: Thread exited with error: {:?}", label, err),
+        match business() {
+            Ok(()) => debug!("{}: Thread exited successfully.", thread_label),
+            Err(err) => error!("{}: Thread exited with error: {:?}", thread_label, err),
         }
     });
 
     match thread_build_result {
-        Ok(join_handle) => join_handles.push(join_handle),
+        Ok(_join_handle) => {}
         Err(err) => {
             match (state.error_handler)(&err.into()) {
                 ErrorReaction::Proceed => {
