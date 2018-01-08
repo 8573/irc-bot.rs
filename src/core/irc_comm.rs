@@ -437,6 +437,7 @@ fn handle_004(state: &State) -> Result<LibReaction<Message>> {
     send_msg_prefix_update_request(state)
 }
 
+// TODO: Run `send_msg_prefix_update_request` periodically.
 fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>> {
     Ok(LibReaction::RawMsg(
         aatxe::Command::PRIVMSG(

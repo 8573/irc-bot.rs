@@ -37,6 +37,7 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(ping),
         )
+        // TODO: Expand into `bot-info` command with source, docs, etc. URLs.
         .command(
             "source",
             "",
