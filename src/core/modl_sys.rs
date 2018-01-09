@@ -1,3 +1,4 @@
+use super::BotCmdAttr;
 use super::BotCmdAuthLvl;
 use super::BotCmdHandler;
 use super::BotCommand;
@@ -58,18 +59,20 @@ where
 }
 
 impl ModuleBuilder {
-    pub fn command<S1, S2, S3>(
+    pub fn command<'attr, Attrs, S1, S2, S3>(
         mut self,
         name: S1,
         syntax: S2,
         help_msg: S3,
         auth_lvl: BotCmdAuthLvl,
         handler: Box<BotCmdHandler>,
+        attrs: Attrs,
     ) -> Self
     where
         S1: Into<Cow<'static, str>>,
         S2: Into<Cow<'static, str>>,
         S3: Into<Cow<'static, str>>,
+        Attrs: IntoIterator<Item = &'attr BotCmdAttr>,
     {
         let name = name.into();
 
@@ -94,6 +97,12 @@ impl ModuleBuilder {
             auth_lvl: auth_lvl,
             handler: handler.into(),
         };
+
+        for attr in attrs {
+            match *attr {
+                // ...
+            }
+        }
 
         self.features.push(cmd);
 

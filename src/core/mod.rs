@@ -1,3 +1,4 @@
+pub use self::bot_cmd::BotCmdAttr;
 pub use self::bot_cmd::BotCmdAuthLvl;
 pub use self::bot_cmd::BotCmdResult;
 pub use self::bot_cmd::BotCommand;

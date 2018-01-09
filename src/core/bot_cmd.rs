@@ -20,6 +20,9 @@ pub struct BotCommand {
 }
 
 #[derive(Debug)]
+pub enum BotCmdAttr {}
+
+#[derive(Debug)]
 pub enum BotCmdResult {
     /// The command was processed successfully. Pass through a `Reaction`.
     Ok(Reaction),

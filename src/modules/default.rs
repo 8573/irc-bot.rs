@@ -14,6 +14,7 @@ pub fn mk() -> Module {
              \"#channel\".",
             Auth::Admin,
             Box::new(join),
+            &[],
         )
         .command(
             "part",
@@ -22,6 +23,7 @@ pub fn mk() -> Module {
              optional part message.",
             Auth::Admin,
             Box::new(part),
+            &[],
         )
         .command(
             "quit",
@@ -29,6 +31,7 @@ pub fn mk() -> Module {
             "Have the bot quit.",
             Auth::Admin,
             Box::new(quit),
+            &[],
         )
         .command(
             "ping",
@@ -36,6 +39,7 @@ pub fn mk() -> Module {
             "Request a short message from the bot, typically for testing purposes.",
             Auth::Public,
             Box::new(ping),
+            &[],
         )
         .command(
             "framework-info",
@@ -44,6 +48,7 @@ pub fn mk() -> Module {
              of a Web page about it.",
             Auth::Public,
             Box::new(bot_fw_info),
+            &[],
         )
         .command(
             "help",
@@ -51,6 +56,7 @@ pub fn mk() -> Module {
             "Request help with the bot's features, such as commands.",
             Auth::Public,
             Box::new(help),
+            &[],
         )
         .end()
 }

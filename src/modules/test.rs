@@ -10,6 +10,7 @@ pub fn mk() -> Module {
             "Request a long message from the bot, to test its line-wrapping function.",
             Auth::Admin,
             Box::new(test_line_wrap),
+            &[],
         )
         .command(
             "test-error-handling",
@@ -18,6 +19,7 @@ pub fn mk() -> Module {
              error-handling mechanism(s).",
             Auth::Admin,
             Box::new(test_error_handling),
+            &[],
         )
         .command(
             "test-panic-catching",
@@ -26,6 +28,7 @@ pub fn mk() -> Module {
              mechanism.",
             Auth::Admin,
             Box::new(test_panic_catching),
+            &[],
         )
         .end()
 }
