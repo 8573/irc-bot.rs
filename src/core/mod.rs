@@ -30,14 +30,15 @@ use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::panic::RefUnwindSafe;
+use std::panic::UnwindSafe;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::thread;
 use uuid::Uuid;
 
@@ -57,6 +58,10 @@ mod state;
 const THREAD_NAME_FAIL: &str = "This thread is unnamed?! We specifically gave it a name; what \
                                 happened?!";
 
+const LOCK_EARLY_POISON_FAIL: &str =
+    "A lock was poisoned?! Already?! We really oughtn't have panicked yet, so let's panic some \
+     more....";
+
 pub struct State {
     config: config::inner::Config,
     servers: BTreeMap<ServerId, RwLock<Server>>,
@@ -65,7 +70,29 @@ pub struct State {
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
-    error_handler: Arc<Fn(&Error) -> ErrorReaction + Send + Sync>,
+    error_handler: Arc<ErrorHandler>,
+}
+
+pub trait ErrorHandler: Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
+    /// Handles an error.
+    ///
+    /// The handler is given ownership of the error so that the handler can easily store the error
+    /// somewhere if desired.
+    fn run(&self, Error) -> ErrorReaction;
+}
+
+impl<T> ErrorHandler for T
+where
+    T: Fn(Error) -> ErrorReaction
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe
+        + 'static,
+{
+    fn run(&self, err: Error) -> ErrorReaction {
+        self(err)
+    }
 }
 
 // TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
@@ -90,7 +117,7 @@ impl ServerId {
 impl State {
     fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State
     where
-        ErrF: 'static + Fn(&Error) -> ErrorReaction + Send + Sync,
+        ErrF: ErrorHandler,
     {
         let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
             format!("{}!{}@", config.nickname, config.username),
@@ -107,13 +134,13 @@ impl State {
         }
     }
 
-    fn handle_err<S>(&self, err: &Error, desc: S) -> Option<LibReaction<Message>>
+    fn handle_err<S>(&self, err: Error, desc: S) -> Option<LibReaction<Message>>
     where
         S: Borrow<str>,
     {
         let desc = desc.borrow();
 
-        let reaction = (self.error_handler)(err);
+        let reaction = self.error_handler.run(err);
 
         match reaction {
             ErrorReaction::Proceed => {
@@ -137,7 +164,7 @@ impl State {
         }
     }
 
-    fn handle_err_generic(&self, err: &Error) -> Option<LibReaction<Message>> {
+    fn handle_err_generic(&self, err: Error) -> Option<LibReaction<Message>> {
         self.handle_err(err, "")
     }
 }
@@ -145,7 +172,7 @@ impl State {
 pub fn run<Cfg, ErrF, ModlCtor, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
 where
     Cfg: IntoConfig,
-    ErrF: 'static + Fn(&Error) -> ErrorReaction + Send + Sync,
+    ErrF: ErrorHandler,
     Modls: IntoIterator<Item = ModlCtor>,
     ModlCtor: Fn() -> Module,
 {
@@ -155,7 +182,7 @@ where
             c.inner
         }
         Err(e) => {
-            error_handler(&e);
+            error_handler.run(e);
             error!("Terminal error: Failed to load configuration.");
             return;
         }
@@ -169,7 +196,7 @@ where
         }
         Err(errs) => {
             for err in errs {
-                match (state.error_handler)(&err) {
+                match state.error_handler.run(err) {
                     ErrorReaction::Proceed => {}
                     ErrorReaction::Quit(msg) => {
                         error!(
@@ -211,7 +238,7 @@ where
                 s
             }
             Err(err) => {
-                match (state.error_handler)(&err.into()) {
+                match state.error_handler.run(err.into()) {
                     ErrorReaction::Proceed => {
                         error!(
                             "Failed to connect to server {:?}; ignoring.",
@@ -275,7 +302,7 @@ where
         for (&server_id, server) in &state.servers {
 
             let (aatxe_server, addr) = {
-                let s = server.read();
+                let s = server.read().expect(LOCK_EARLY_POISON_FAIL);
                 (s.inner.clone(), s.socket_addr_string.clone())
             };
 
@@ -335,7 +362,7 @@ fn handle_msg<'xbs, 'xbsr>(
         irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg)
     }) {
         Ok(()) => {}
-        Err(e) => push_to_outbox(outbox, server_id, state.handle_err_generic(&e)),
+        Err(e) => push_to_outbox(outbox, server_id, state.handle_err_generic(e)),
     }
 }
 
@@ -366,7 +393,7 @@ fn spawn_thread<'xbs, F, PurposeF>(
     match thread_build_result {
         Ok(_join_handle) => {}
         Err(err) => {
-            match (state.error_handler)(&err.into()) {
+            match state.error_handler.run(err.into()) {
                 ErrorReaction::Proceed => {
                     error!(
                         "Failed to create {purpose}; ignoring.",

@@ -5,7 +5,6 @@ extern crate crossbeam_channel;
 extern crate crossbeam_utils;
 extern crate irc;
 extern crate itertools;
-extern crate parking_lot;
 extern crate serde;
 extern crate serde_yaml;
 extern crate smallvec;

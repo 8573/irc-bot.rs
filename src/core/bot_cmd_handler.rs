@@ -1,16 +1,18 @@
 use super::BotCmdResult;
 use super::MsgMetadata;
 use super::State;
+use std::panic::RefUnwindSafe;
+use std::panic::UnwindSafe;
 use yaml_rust::Yaml;
 
-pub trait BotCmdHandler: Send + Sync {
+pub trait BotCmdHandler: Send + Sync + UnwindSafe + RefUnwindSafe {
     fn run(&self, &State, &MsgMetadata, &Yaml) -> BotCmdResult;
 }
 
 macro_rules! impl_fn {
     (($($param_id:ident: $param_ty:ty),*) => ($state_pat:pat, $msg_md_pat:pat, $arg_pat: pat)) => {
         impl<F, R> BotCmdHandler for F
-            where F: Fn($($param_ty),*) -> R + Send + Sync,
+            where F: Fn($($param_ty),*) -> R + Send + Sync + UnwindSafe + RefUnwindSafe,
                   R: Into<BotCmdResult>
         {
             fn run(&self, $state_pat: &State, $msg_md_pat: &MsgMetadata, $arg_pat: &Yaml)

@@ -10,8 +10,8 @@ use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::thread;
 
 pub(super) const OUTBOX_SIZE: usize = 1024;
@@ -66,12 +66,23 @@ pub(super) fn send_main(
                 None => continue,
             };
 
-        let aatxe_server = match state.servers.get(&server_id) {
-            Some(s) => s.read().inner.clone(),
+        let server_uuid = server_id.uuid.hyphenated();
+
+        let aatxe_server = match state.servers.get(&server_id).map(RwLock::read) {
+            Some(Ok(s)) => s.inner.clone(),
+            Some(Err(_)) => {
+                warn!(
+                    "Declining to send to server {uuid} because its lock has been poisoned by \
+                     thread panic! Discarding {output:?}.",
+                    uuid = server_uuid,
+                    output = output
+                );
+                continue;
+            }
             None => {
                 warn!(
                     "Can't send to unknown server {uuid}. Discarding {output:?}.",
-                    uuid = server_id.uuid.hyphenated(),
+                    uuid = server_uuid,
                     output = output
                 );
                 continue;
@@ -111,7 +122,7 @@ fn send_reaction(
     reaction: LibReaction<Message>,
 ) {
     send_reaction_with_err_cb(state, server, thread_label, reaction, |err| {
-        let err_reaction = match state.handle_err_generic(&err) {
+        let err_reaction = match state.handle_err_generic(err) {
             Some(r) => r,
             None => return,
         };

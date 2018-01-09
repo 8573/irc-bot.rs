@@ -3,15 +3,17 @@ use super::ErrorKind;
 use super::ModuleFeatureKind;
 use super::MsgPrefix;
 use super::Result;
+use super::Server;
 use super::ServerId;
 use super::State;
 use super::config;
+use super::irc_msgs::OwningMsgPrefix;
 use std::borrow::Cow;
+use std::sync::RwLockReadGuard;
 
 impl State {
     pub fn nick(&self) -> Result<String> {
-        self.msg_prefix
-            .read()
+        self.read_msg_prefix()?
             .parse()
             .nick
             .ok_or(ErrorKind::NicknameUnknown.into())
@@ -45,14 +47,42 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         }))
     }
 
+    pub(super) fn read_msg_prefix(&self) -> Result<RwLockReadGuard<OwningMsgPrefix>> {
+        self.msg_prefix.read().map_err(|_| {
+            ErrorKind::LockPoisoned("stored message prefix".into()).into()
+        })
+    }
+
+    pub(super) fn read_server(
+        &self,
+        server_id: ServerId,
+    ) -> Result<Option<RwLockReadGuard<Server>>> {
+        match self.servers.get(&server_id) {
+            Some(lock) => {
+                match lock.read() {
+                    Ok(guard) => Ok(Some(guard)),
+                    Err(_) => Err(
+                        ErrorKind::LockPoisoned(
+                            format!("server {}", server_id.uuid.hyphenated()).into(),
+                        ).into(),
+                    ),
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Returns a string identifying the server for debug purposes.
+    ///
     /// TODO: This should return something less allocate-y.
-    pub(super) fn server_socket_addr_string(&self, server_id: ServerId) -> String {
-        self.servers
-            .get(&server_id)
-            .map(|s| s.read().socket_addr_string.clone())
-            .unwrap_or_else(|| {
-                format!("<unknown server {}>", server_id.uuid.hyphenated())
-            })
+    pub(super) fn server_socket_addr_dbg_string(&self, server_id: ServerId) -> String {
+        let uuid = server_id.uuid.hyphenated();
+
+        match self.read_server(server_id) {
+            Ok(Some(s)) => s.socket_addr_string.clone(),
+            Ok(None) => format!("<unknown server {} (not found)>", uuid),
+            Err(e) => format!("<unknown server {} ({})>", uuid, e),
+        }
     }
 }
 

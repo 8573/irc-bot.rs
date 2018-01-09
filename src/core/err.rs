@@ -22,24 +22,40 @@ error_chain! {
 
     errors {
         IdentificationFailure(io_err: io::Error)
+
         ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo)
+
         ModuleFeatureRegistryClash(old: ModuleFeatureInfo, new: ModuleFeatureInfo)
+
         Config(key: String, problem: String) {
             description("configuration error")
             display("Configuration error: Key {:?} {}.", key, problem)
         }
-        HandlerPanic(handler_purpose: Cow<'static, str>, payload: Box<Any + Send + 'static>) {
+
+        HandlerPanic(
+            feature_kind: Cow<'static, str>,
+            feature_name: Cow<'static, str>,
+            payload: Box<Any + Send + 'static>
+        ) {
             description("panic in module feature handler function")
-            display("A panic occurred in a module feature handler function (while handling: {}): \
-                     {}",
-                     handler_purpose,
-                     util::fmt::FmtAny(payload.as_ref()))
+            display("The handler function for {} {:?} panicked with the following message: {}",
+                    feature_kind,
+                    feature_name,
+                    util::fmt::FmtAny(payload.as_ref()))
         }
+
         MsgPrefixUpdateRequestedButPrefixMissing
+
         NicknameUnknown {
             description("nickname retrieval error")
             display("Puzzlingly, the bot seems to have forgotten its own nickname.")
         }
+
+        LockPoisoned(lock_contents_desc: Cow<'static, str>) {
+            description("lock poisoned")
+            display("A thread panicked, poisoning a lock around {}.", lock_contents_desc)
+        }
+
         Unit {
             description("unknown error")
             display("An error seems to have occurred, but unfortunately the error type provided \

@@ -12,6 +12,14 @@ pub fn mk() -> Module {
             Box::new(test_line_wrap),
         )
         .command(
+            "test-error-handling",
+            "",
+            "This command's handler function returns an error, to test the bot framework's \
+             error-handling mechanism(s).",
+            Auth::Admin,
+            Box::new(test_error_handling),
+        )
+        .command(
             "test-panic-catching",
             "",
             "This command's handler function panics, to test the bot framework's panic-catching \
@@ -38,6 +46,10 @@ const LOREM_IPSUM_TEXT: &'static str =
 
 fn test_line_wrap(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into()))
+}
+
+fn test_error_handling(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+    BotCmdResult::BotErrMsg("An error for testing purposes.".into())
 }
 
 fn test_panic_catching(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {

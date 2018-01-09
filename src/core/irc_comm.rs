@@ -31,6 +31,7 @@ use std::cmp;
 use std::fmt::Display;
 use std::iter;
 use std::sync::Arc;
+use util;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -103,7 +104,7 @@ impl State {
     }
 
     fn prefix_len(&self) -> Result<usize> {
-        Ok(self.msg_prefix.read().len())
+        Ok(self.read_msg_prefix()?.len())
     }
 }
 
@@ -169,14 +170,14 @@ where
 fn handle_reaction(
     state: &Arc<State>,
     prefix: OwningMsgPrefix,
-    target: String,
+    target: &str,
     msg: String,
     reaction: Reaction,
 ) -> Result<Option<LibReaction<Message>>> {
     let (reply_target, reply_addressee) = if target == state.nick()? {
         (MsgTarget(prefix.parse().nick.unwrap()), "")
     } else {
-        (MsgTarget(&target), prefix.parse().nick.unwrap_or(""))
+        (MsgTarget(target), prefix.parse().nick.unwrap_or(""))
     };
 
     match reaction {
@@ -195,8 +196,8 @@ fn handle_bot_command(
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
-) -> Result<Option<LibReaction<Message>>> {
-    let reaction = {
+) -> Option<LibReaction<Message>> {
+    let reaction = (|| {
         let cmd_ln = parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
             .expect("`handle_bot_command` shouldn't have been called!");
 
@@ -206,16 +207,29 @@ fn handle_bot_command(
         let cmd_name = cmd_name_and_args.next().unwrap_or("");
         let cmd_args = cmd_name_and_args.next().unwrap_or("");
 
-        bot_command_reaction(
+        Ok(bot_command_reaction(
             state,
             prefix.parse(),
             MsgTarget(&target),
             cmd_name,
             cmd_args,
-        )
-    };
+        ))
+    })();
 
-    handle_reaction(state, prefix, target, msg, reaction)
+    match reaction.and_then(|reaction| {
+        handle_reaction(state, prefix, &target, msg, reaction)
+    }) {
+        Ok(r) => r,
+        Err(e) => Some(LibReaction::RawMsg(
+            aatxe::Command::PRIVMSG(
+                target,
+                format!(
+                    "Encountered error while trying to handle command: {}",
+                    e
+                ),
+            ).into(),
+        )),
+    }
 }
 
 fn run_bot_command(
@@ -246,7 +260,14 @@ fn run_bot_command(
     let result = match user_authorized {
         Ok(true) => {
             debug!("Running bot command {:?} with arg: {:?}", name, arg);
-            handler.run(state, &metadata, &arg)
+            match util::run_handler(
+                "command",
+                name.clone(),
+                || handler.run(state, &metadata, &arg),
+            ) {
+                Ok(r) => r,
+                Err(e) => BotCmdResult::LibErr(e),
+            }
         }
         Ok(false) => BotCmdResult::Unauthorized,
         Err(e) => BotCmdResult::LibErr(e),
@@ -361,7 +382,7 @@ where
 {
     trace!(
         "[{}] Received {:?}",
-        state.server_socket_addr_string(server_id),
+        state.server_socket_addr_dbg_string(server_id),
         input_msg.to_string().trim_right_matches("\r\n")
     );
 
@@ -403,7 +424,7 @@ where
 {
     trace!(
         "[{}] Handling PRIVMSG: {:?}",
-        state.server_socket_addr_string(server_id),
+        state.server_socket_addr_dbg_string(server_id),
         msg
     );
 
@@ -419,7 +440,7 @@ where
         push_to_outbox(
             &outbox,
             server_id,
-            handle_reaction(state, prefix, target, msg, Reaction::Reply("Yes?".into()))?,
+            handle_reaction(state, prefix, &target, msg, Reaction::Reply("Yes?".into()))?,
         );
 
         Ok(())
@@ -433,14 +454,7 @@ where
         let outbox = outbox.clone();
 
         let thread_spawn_result = crossbeam_scope.builder().spawn(move || {
-            let lib_reaction = match handle_bot_command(&state, prefix, target, msg) {
-                Ok(r) => r,
-                Err(e) => {
-                    // TODO: Inform the user invoking the command of the error.
-                    error!("Error in command handling: {:?}", e);
-                    return;
-                }
-            };
+            let lib_reaction = handle_bot_command(&state, prefix, target, msg);
 
             push_to_outbox(&outbox, server_id, lib_reaction);
         });
@@ -455,7 +469,18 @@ fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
         prefix
     );
 
-    state.msg_prefix.write().update_from(prefix);
+    match state.msg_prefix.write() {
+        Ok(guard) => guard,
+        Err(poisoned_guard) => {
+            // The lock was poisoned, you say? That's strange, unfortunate, and unlikely to be a
+            // problem here, because we're just going to overwrite the contents anyway.
+            warn!(
+                "Stored message prefix was poisoned by thread panic! Discarding it, replacing it, \
+                 and moving on."
+            );
+            poisoned_guard.into_inner()
+        }
+    }.update_from(prefix);
 
     Ok(())
 }
