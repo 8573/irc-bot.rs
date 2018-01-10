@@ -62,15 +62,17 @@ impl State {
 
         let mut wrapped_msg = SmallVec::<[_; 1]>::new();
 
-        wrap_msg(self, target, &final_msg, |line| {
-            wrapped_msg.push(LibReaction::RawMsg(
-                aatxe::Command::PRIVMSG(
-                    target.0.to_owned(),
-                    line.to_owned(),
-                ).into(),
-            ));
-            Ok(())
-        })?;
+        for input_line in final_msg.lines() {
+            wrap_msg(self, target, input_line, |output_line| {
+                wrapped_msg.push(LibReaction::RawMsg(
+                    aatxe::Command::PRIVMSG(
+                        target.0.to_owned(),
+                        output_line.to_owned(),
+                    ).into(),
+                ));
+                Ok(())
+            })?;
+        }
 
         match wrapped_msg.len() {
             0 => Ok(None),
