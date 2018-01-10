@@ -57,8 +57,11 @@ impl State {
             },
             msg,
         );
+
         info!("Sending message to {:?}: {:?}", target, final_msg);
+
         let mut wrapped_msg = SmallVec::<[_; 1]>::new();
+
         wrap_msg(self, target, &final_msg, |line| {
             wrapped_msg.push(LibReaction::RawMsg(
                 aatxe::Command::PRIVMSG(
@@ -68,6 +71,7 @@ impl State {
             ));
             Ok(())
         })?;
+
         match wrapped_msg.len() {
             0 => Ok(None),
             1 => Ok(Some(wrapped_msg.remove(0))),
