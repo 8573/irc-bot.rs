@@ -46,7 +46,7 @@ pub(super) fn is_msg_to_nick(MsgTarget(target): MsgTarget, msg: &str, nick: &str
         (msg.starts_with(nick) && (msg.find(|c: char| [':', ','].contains(&c)) == Some(nick.len())))
 }
 
-pub fn parse_msg_to_nick<'msg>(
+pub(super) fn parse_msg_to_nick<'msg>(
     text: &'msg str,
     target: MsgTarget,
     nick: &str,
@@ -62,7 +62,7 @@ pub fn parse_msg_to_nick<'msg>(
     }
 }
 
-pub fn parse_prefix(prefix: &str) -> MsgPrefix {
+pub(super) fn parse_prefix(prefix: &str) -> MsgPrefix {
     let mut iter = prefix.rsplitn(2, '@');
     let host = iter.next();
     let mut iter = iter.next().unwrap_or("").splitn(2, '!');
@@ -111,7 +111,7 @@ impl OwningMsgPrefix {
 
     /// Write each non-`None` field of the given message prefix over the corresponding field in
     /// `self`.
-    pub fn update_from(&mut self, new: &MsgPrefix) {
+    pub(super) fn update_from(&mut self, new: &MsgPrefix) {
         fn updated<'old, 'new>(old: Option<&'old str>, new: Option<&'new str>) -> &'old str
         where
             'new: 'old,
