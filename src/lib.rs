@@ -1,5 +1,8 @@
 #![recursion_limit="128"]
 
+// TODO: Determine why `error-chain` triggers the `unused_doc_comment` warning.
+#![allow(unused_doc_comment)]
+
 extern crate clap;
 extern crate crossbeam_channel;
 extern crate crossbeam_utils;
