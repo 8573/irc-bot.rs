@@ -5,8 +5,6 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
 use std::path::Path;
 
 pub(crate) mod inner {
@@ -94,14 +92,6 @@ impl Config {
 }
 
 impl Server {
-    pub fn resolve(&self) -> SocketAddr {
-        (self.host.as_ref(), self.port)
-            .to_socket_addrs()
-            .unwrap()
-            .next()
-            .unwrap()
-    }
-
     pub fn socket_addr_string(&self) -> String {
         format!("{}:{}", self.host, self.port)
     }

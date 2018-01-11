@@ -5,9 +5,7 @@ use super::Reaction;
 use std;
 use std::borrow::Cow;
 use std::sync::Arc;
-use util;
 use yaml_rust::Yaml;
-use yaml_rust::yaml;
 
 pub struct BotCommand {
     pub name: Cow<'static, str>,

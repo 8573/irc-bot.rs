@@ -1,12 +1,10 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
-use super::OutboxRecord;
 use irc;
 use serde_yaml;
 use std::any::Any;
 use std::borrow::Cow;
 use std::io;
-use std::sync::mpsc;
 use util;
 
 error_chain! {
@@ -30,6 +28,11 @@ error_chain! {
         Config(key: String, problem: String) {
             description("configuration error")
             display("Configuration error: Key {:?} {}.", key, problem)
+        }
+
+        ThreadSpawnFailure(io_err: io::Error) {
+            description("failed to spawn thread")
+            display("Failed to spawn thread: {}", io_err)
         }
 
         HandlerPanic(

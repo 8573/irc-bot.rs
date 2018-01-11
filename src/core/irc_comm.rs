@@ -11,17 +11,13 @@ use super::ServerId;
 use super::State;
 use super::bot_cmd;
 use super::irc_msgs::OwningMsgPrefix;
-use super::irc_msgs::PrivMsg;
 use super::irc_msgs::is_msg_to_nick;
-use super::irc_msgs::parse_prefix;
-use super::irc_msgs::parse_privmsg;
 use super::irc_send::OutboxPort;
 use super::irc_send::push_to_outbox;
 use super::parse_msg_to_nick;
 use super::reaction::LibReaction;
 use crossbeam_utils;
 use irc::client::prelude as aatxe;
-use irc::client::prelude::Server as AatxeServer;
 use irc::proto::Message;
 use itertools::Itertools;
 use smallvec::SmallVec;
@@ -29,7 +25,6 @@ use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
-use std::iter;
 use std::sync::Arc;
 use util;
 
@@ -138,7 +133,7 @@ where
     let mut split_end_idx = 0;
 
     let lines = msg.match_indices(char::is_whitespace).peekable().batching(
-        |mut iter| {
+        |iter| {
             debug_assert!(msg.len() >= msg_len_limit);
 
             let split_start_idx = split_end_idx;
@@ -177,7 +172,6 @@ fn handle_reaction(
     state: &Arc<State>,
     prefix: OwningMsgPrefix,
     target: &str,
-    msg: String,
     reaction: Reaction,
 ) -> Result<Option<LibReaction<Message>>> {
     let (reply_target, reply_addressee) = if target == state.nick()? {
@@ -222,9 +216,7 @@ fn handle_bot_command(
         ))
     })();
 
-    match reaction.and_then(|reaction| {
-        handle_reaction(state, prefix, &target, msg, reaction)
-    }) {
+    match reaction.and_then(|reaction| handle_reaction(state, prefix, &target, reaction)) {
         Ok(r) => r,
         Err(e) => Some(LibReaction::RawMsg(
             aatxe::Command::PRIVMSG(
@@ -446,7 +438,7 @@ where
         push_to_outbox(
             &outbox,
             server_id,
-            handle_reaction(state, prefix, &target, msg, Reaction::Reply("Yes?".into()))?,
+            handle_reaction(state, prefix, &target, Reaction::Reply("Yes?".into()))?,
         );
 
         Ok(())
@@ -465,7 +457,10 @@ where
             push_to_outbox(&outbox, server_id, lib_reaction);
         });
 
-        Ok(())
+        match thread_spawn_result {
+            Ok(crossbeam_utils::scoped::ScopedJoinHandle { .. }) => Ok(()),
+            Err(e) => Err(ErrorKind::ThreadSpawnFailure(e).into()),
+        }
     }
 }
 
@@ -505,16 +500,4 @@ fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>>
             UPDATE_MSG_PREFIX_STR.to_owned(),
         ).into(),
     ))
-}
-
-fn connection_sequence(state: &State) -> Result<Vec<Message>> {
-    Ok(vec![
-        aatxe::Command::NICK(state.config.nickname.to_owned())
-            .into(),
-        aatxe::Command::USER(
-            state.config.username.to_owned(),
-            "8".to_owned(),
-            state.config.realname.to_owned()
-        ).into(),
-    ])
 }

@@ -13,7 +13,6 @@ pub use self::irc_msgs::MsgPrefix;
 pub use self::irc_msgs::MsgTarget;
 use self::irc_msgs::OwningMsgPrefix;
 use self::irc_msgs::parse_msg_to_nick;
-use self::irc_send::OutboxRecord;
 use self::irc_send::push_to_outbox;
 use self::misc_traits::GetDebugInfo;
 pub use self::modl_sys::Module;
@@ -34,8 +33,6 @@ use irc::proto::Message;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt;
-use std::marker::PhantomData;
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use std::sync::Arc;
@@ -315,10 +312,11 @@ where
 
                 match aatxe_server.identify() {
                     Ok(()) => debug!("{}: Sent identification sequence to server.", thread_label),
-                    Err(err) => {
+                    Err(e) => {
                         error!(
-                            "{}: Failed to send identification sequence to server.",
-                            thread_label
+                            "{}: Failed to send identification sequence to server: {}",
+                            thread_label,
+                            e
                         )
                     }
                 }
@@ -378,7 +376,6 @@ fn spawn_thread<'xbs, F, PurposeF>(
     F: FnOnce() -> Result<()> + Send + 'xbs,
     PurposeF: FnOnce(&str) -> String,
 {
-    let state_handle = state.clone();
     let label = format!("{}[{}]", purpose_desc_abbr, addr);
 
     let thread_build_result = crossbeam_scope.builder().name(label).spawn(move || {

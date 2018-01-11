@@ -1,7 +1,3 @@
-use super::State;
-use irc::client::prelude as aatxe;
-use irc::proto::Message;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MsgTarget<'a>(pub &'a str);
 
@@ -16,12 +12,6 @@ pub struct MsgPrefix<'a> {
 pub struct MsgMetadata<'a> {
     pub target: MsgTarget<'a>,
     pub prefix: MsgPrefix<'a>,
-}
-
-#[derive(Debug)]
-pub struct PrivMsg<'a> {
-    pub metadata: MsgMetadata<'a>,
-    pub text: &'a str,
 }
 
 #[derive(Debug)]
@@ -48,20 +38,6 @@ fn prefix_from_pircolate<'a>(
                 host: None,
             }
         }
-    }
-}
-
-pub fn parse_privmsg(input: &Message) -> Option<PrivMsg> {
-    if let aatxe::Command::PRIVMSG(ref target, ref msg) = input.command {
-        Some(PrivMsg {
-            metadata: MsgMetadata {
-                target: MsgTarget(target),
-                prefix: parse_prefix(input.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
-            },
-            text: msg,
-        })
-    } else {
-        None
     }
 }
 
@@ -101,7 +77,7 @@ pub fn parse_prefix(prefix: &str) -> MsgPrefix {
 
 impl<'a> MsgPrefix<'a> {
     /// Returns an upper bound on the length of the message prefix, accurate to within a few bytes.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         fn component_len(component: Option<&str>) -> usize {
             component.map(|s| s.len()).unwrap_or(0)
         }
@@ -109,7 +85,7 @@ impl<'a> MsgPrefix<'a> {
         component_len(self.nick) + component_len(self.user) + component_len(self.host) + 2
     }
 
-    fn to_owning(&self) -> OwningMsgPrefix {
+    pub fn to_owning(&self) -> OwningMsgPrefix {
         OwningMsgPrefix::from_string(format!(
             "{}!{}@{}",
             self.nick.unwrap_or(""),

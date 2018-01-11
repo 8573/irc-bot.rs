@@ -12,7 +12,6 @@ categories = ["network-programming"]
 license = "Apache-2.0"
 
 [dependencies]
-bitflags = "1.0.1"
 clap = "2.29.0"
 crossbeam-channel = "0.1.2"
 crossbeam-utils = "0.2.1"

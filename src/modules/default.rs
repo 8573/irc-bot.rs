@@ -125,7 +125,7 @@ fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
     Reaction::Quit(comment)
 }
 
-fn ping(_: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
+fn ping(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     Reaction::Reply("pong".into()).into()
 }
 

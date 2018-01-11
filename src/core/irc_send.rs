@@ -3,12 +3,10 @@ use super::ServerId;
 use super::THREAD_NAME_FAIL;
 use core::Error;
 use core::Result;
-use core::Server;
 use core::State;
 use crossbeam_channel;
 use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
-use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -99,7 +97,7 @@ pub(super) fn send_main(
 /// may prevent a message from being sent by returning `None`.
 pub(super) fn process_outgoing_msg(
     _state: &State,
-    thread_label: &str,
+    _thread_label: &str,
     OutboxRecord { server_id, output }: OutboxRecord,
 ) -> Option<OutboxRecord> {
     // TODO: Deny sending a message if too many identical messages have been sent too recently in

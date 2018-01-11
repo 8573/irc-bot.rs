@@ -10,7 +10,6 @@ use super::State;
 use itertools::Itertools;
 use std;
 use std::borrow::Cow;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use util;
 use uuid::Uuid;

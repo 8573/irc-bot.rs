@@ -1,8 +1,6 @@
 use core;
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::Cell;
-use std::error;
 use std::fmt;
 
 pub(crate) struct FmtAny<'a>(pub(crate) &'a Any);
