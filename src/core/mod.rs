@@ -44,6 +44,7 @@ use std::thread;
 use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
+pub(crate) mod sandbox;
 
 mod bot_cmd_handler;
 mod config;
@@ -188,6 +189,23 @@ where
             return;
         }
     };
+
+    // TODO: Pass data dir path.
+    match sandbox::activate::<String>(None) {
+        Ok(()) => trace!("Successfully activated sandbox."),
+        Err(e) => {
+            match error_handler.run(e) {
+                ErrorReaction::Proceed => {}
+                ErrorReaction::Quit(msg) => {
+                    error!(
+                        "Terminal error while activating sandbox: {}",
+                        msg.unwrap_or_default()
+                    );
+                    return;
+                }
+            }
+        }
+    }
 
     let mut state = State::new(config, error_handler);
 

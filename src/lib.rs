@@ -3,6 +3,7 @@
 extern crate clap;
 extern crate crossbeam_channel;
 extern crate crossbeam_utils;
+extern crate gaol;
 extern crate irc;
 extern crate itertools;
 extern crate serde;

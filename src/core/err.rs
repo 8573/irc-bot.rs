@@ -56,6 +56,18 @@ error_chain! {
             display("A thread panicked, poisoning a lock around {}.", lock_contents_desc)
         }
 
+        SandboxFailed {
+            description("sandboxing failed")
+            display("The bot framework failed to sandbox the process, even though the framework \
+                     should support sandboxing on this platform.")
+        }
+
+        SandboxUnsupported {
+            description("sandboxing unsupported")
+            display("The bot framework could not sandbox the process, because the framework does \
+                     not support sandboxing on this platform.")
+        }
+
         Unit {
             description("unknown error")
             display("An error seems to have occurred, but unfortunately the error type provided \

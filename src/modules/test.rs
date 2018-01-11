@@ -1,5 +1,6 @@
 use core::*;
 use core::BotCmdAuthLvl as Auth;
+use std::fs::File;
 use yaml_rust::Yaml;
 
 pub fn mk() -> Module {
@@ -30,6 +31,15 @@ pub fn mk() -> Module {
             Box::new(test_panic_catching),
             &[],
         )
+        .command(
+            "test-fs-sandbox",
+            "",
+            "Ask the bot whether it can read a file that it should be unable to read if the bot \
+             framework's sandboxing mechanism is working.",
+            Auth::Admin,
+            Box::new(test_fs_sandbox),
+            &[],
+        )
         .end()
 }
 
@@ -57,4 +67,38 @@ fn test_error_handling(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
 
 fn test_panic_catching(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     panic!("Panicking for testing purposes....")
+}
+
+fn test_fs_sandbox(_: &State, _: &MsgMetadata, _: &Yaml) -> Reaction {
+    if !sandbox::PLATFORM_HAS_SANDBOX {
+        return Reaction::Msg("Sandboxing not supported.".into());
+    }
+
+    let path = if cfg!(any(target_os = "linux", target_os = "macos")) {
+        // I suspect there are better choices — especially, files that could better be depended
+        // upon to be present — but this is the classic one.
+        "/etc/passwd"
+    } else if cfg!(target_os = "android") {
+        unimplemented!("I don't know an appropriate path at which to look.")
+    } else {
+        unreachable!(
+            "Apparently, `irc_bot::core::sandbox` and `irc_bot::modules::test` disagree on which \
+             platforms have sandboxing support."
+        )
+    };
+
+    match File::open(path) {
+        Ok(_) => Reaction::Msg(
+            "Alarmingly, I have succeeded in opening a file (for reading) to which I ought \
+             have been denied access."
+                .into(),
+        ),
+        Err(e) => Reaction::Msg(
+            format!(
+                "As hoped, I have failed to open a file (for reading) to which I ought be \
+                 denied access, receiving the following error: {}",
+                e
+            ).into(),
+        ),
+    }
 }
