@@ -85,6 +85,10 @@ impl<'a> MsgPrefix<'a> {
         component_len(self.nick) + component_len(self.user) + component_len(self.host) + 2
     }
 
+    /// Converts the `MsgPrefix` into an `OwningMsgPrefix`.
+    ///
+    /// This can't be a `ToOwned` implementation because that would conflict with `MsgPrefix`'s
+    /// `Clone` implementation.
     pub fn to_owning(&self) -> OwningMsgPrefix {
         OwningMsgPrefix::from_string(format!(
             "{}!{}@{}",
