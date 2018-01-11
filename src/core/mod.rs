@@ -2,12 +2,12 @@ pub use self::bot_cmd::BotCmdAttr;
 pub use self::bot_cmd::BotCmdAuthLvl;
 pub use self::bot_cmd::BotCmdResult;
 pub use self::bot_cmd::BotCommand;
-pub use self::bot_cmd_handler::BotCmdHandler;
 pub use self::config::Config;
 pub use self::config::IntoConfig;
 pub use self::err::Error;
 pub use self::err::ErrorKind;
 pub use self::err::Result;
+pub use self::handler::BotCmdHandler;
 pub use self::irc_msgs::MsgMetadata;
 pub use self::irc_msgs::MsgPrefix;
 pub use self::irc_msgs::MsgTarget;
@@ -42,9 +42,9 @@ use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
 
-mod bot_cmd_handler;
 mod config;
 mod err;
+mod handler;
 mod irc_comm;
 mod irc_msgs;
 mod irc_send;
