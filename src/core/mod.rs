@@ -8,6 +8,7 @@ pub use self::err::Error;
 pub use self::err::ErrorKind;
 pub use self::err::Result;
 pub use self::handler::BotCmdHandler;
+pub use self::handler::ErrorHandler;
 pub use self::irc_msgs::MsgMetadata;
 pub use self::irc_msgs::MsgPrefix;
 pub use self::irc_msgs::MsgTarget;
@@ -69,28 +70,6 @@ pub struct State {
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
     error_handler: Arc<ErrorHandler>,
-}
-
-pub trait ErrorHandler: Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
-    /// Handles an error.
-    ///
-    /// The handler is given ownership of the error so that the handler can easily store the error
-    /// somewhere if desired.
-    fn run(&self, Error) -> ErrorReaction;
-}
-
-impl<T> ErrorHandler for T
-where
-    T: Fn(Error) -> ErrorReaction
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe
-        + 'static,
-{
-    fn run(&self, err: Error) -> ErrorReaction {
-        self(err)
-    }
 }
 
 // TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
