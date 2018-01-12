@@ -8,7 +8,9 @@ use super::ServerId;
 use super::State;
 use super::config;
 use super::irc_msgs::OwningMsgPrefix;
+use rand::StdRng;
 use std::borrow::Cow;
+use std::sync::MutexGuard;
 use std::sync::RwLockReadGuard;
 
 impl State {
@@ -70,6 +72,14 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
             }
             None => Ok(None),
         }
+    }
+
+    /// Allows access to a random number generator that's stored centrally, to avoid the cost of
+    /// repeatedly initializing one.
+    pub fn rng(&self) -> Result<MutexGuard<StdRng>> {
+        self.rng.lock().map_err(|_| {
+            ErrorKind::LockPoisoned("the central random number generator".into()).into()
+        })
     }
 
     /// Returns a string identifying the server for debug purposes.

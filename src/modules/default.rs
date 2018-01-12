@@ -1,5 +1,6 @@
 use core::*;
 use core::BotCmdAuthLvl as Auth;
+use regex::Captures;
 use std::borrow::Cow;
 use util;
 use yaml_rust::Yaml;
@@ -56,6 +57,14 @@ pub fn mk() -> Module {
             "Request help with the bot's features, such as commands.",
             Auth::Public,
             Box::new(help),
+            &[],
+        )
+        .trigger(
+            "yes?",
+            "^$",
+            "Say \"Yes?\" in response to otherwise empty messages addressed to the bot.",
+            TriggerPriority::Minimum,
+            Box::new(empty_msg_trigger),
             &[],
         )
         .end()
@@ -213,4 +222,8 @@ fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
             ].into(),
         ).into()
     }
+}
+
+fn empty_msg_trigger(_: &State, _: &MsgMetadata, _: Captures) -> Reaction {
+    Reaction::Msg("Yes?".into())
 }

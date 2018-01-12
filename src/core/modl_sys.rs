@@ -7,10 +7,16 @@ use super::ErrorKind;
 use super::GetDebugInfo;
 use super::Result;
 use super::State;
+use super::Trigger;
+use super::TriggerAttr;
+use super::TriggerHandler;
+use super::trigger::TriggerPriority;
 use itertools::Itertools;
+use regex::Regex;
 use std;
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::RwLock;
 use util;
 use uuid::Uuid;
 use yaml_rust::Yaml;
@@ -18,7 +24,7 @@ use yaml_rust::Yaml;
 pub struct Module {
     pub name: Cow<'static, str>,
     uuid: Uuid,
-    pub(super) features: Vec<ModuleFeature>,
+    features: Vec<ModuleFeature>,
 }
 
 impl PartialEq for Module {
@@ -108,6 +114,44 @@ impl ModuleBuilder {
         self
     }
 
+    pub fn trigger<'attr, Attrs, Rx1, S1, S2>(
+        mut self,
+        name: S1,
+        regex_str: Rx1,
+        help_msg: S2,
+        priority: TriggerPriority,
+        handler: Box<TriggerHandler>,
+        attrs: Attrs,
+    ) -> Self
+    where
+        Rx1: util::regex::IntoRegexCI,
+        S1: Into<Cow<'static, str>>,
+        S2: Into<Cow<'static, str>>,
+        Attrs: IntoIterator<Item = &'attr TriggerAttr>,
+    {
+        for attr in attrs {
+            match attr {
+                &TriggerAttr::AlwaysWatching => unimplemented!(),
+            }
+        }
+
+        let trigger = ModuleFeature::Trigger {
+            name: name.into(),
+            regex: Arc::new(RwLock::new(regex_str.into_regex_ci().expect(
+                "Your regex was erroneous, it \
+                 seems.",
+            ))),
+            help_msg: help_msg.into(),
+            handler: handler.into(),
+            priority,
+            uuid: Uuid::new_v4(),
+        };
+
+        self.features.push(trigger);
+
+        self
+    }
+
     pub fn end(self) -> Module {
         let ModuleBuilder { name, mut features } = self;
 
@@ -127,7 +171,7 @@ pub struct ModuleInfo {
     name: String,
 }
 
-pub enum ModuleFeature {
+enum ModuleFeature {
     Command {
         name: Cow<'static, str>,
         usage_str: Cow<'static, str>,
@@ -136,7 +180,14 @@ pub enum ModuleFeature {
         auth_lvl: BotCmdAuthLvl,
         handler: Arc<BotCmdHandler>,
     },
-    Trigger,
+    Trigger {
+        name: Cow<'static, str>,
+        help_msg: Cow<'static, str>,
+        regex: Arc<RwLock<Regex>>,
+        handler: Arc<TriggerHandler>,
+        priority: TriggerPriority,
+        uuid: Uuid,
+    },
 }
 
 impl GetDebugInfo for ModuleFeature {
@@ -147,7 +198,7 @@ impl GetDebugInfo for ModuleFeature {
             name: self.name().to_string(),
             kind: match self {
                 &ModuleFeature::Command { .. } => ModuleFeatureKind::Command,
-                &ModuleFeature::Trigger => ModuleFeatureKind::Trigger,
+                &ModuleFeature::Trigger { .. } => ModuleFeatureKind::Trigger,
             },
         }
     }
@@ -171,7 +222,7 @@ impl ModuleFeature {
     pub fn name(&self) -> &str {
         match self {
             &ModuleFeature::Command { ref name, .. } => name.as_ref(),
-            &ModuleFeature::Trigger => unimplemented!(),
+            &ModuleFeature::Trigger { ref name, .. } => name.as_ref(),
         }
     }
 
@@ -190,6 +241,17 @@ impl GetDebugInfo for BotCommand {
         ModuleFeatureInfo {
             name: self.name.to_string(),
             kind: ModuleFeatureKind::Command,
+        }
+    }
+}
+
+impl GetDebugInfo for Trigger {
+    type Output = ModuleFeatureInfo;
+
+    fn dbg_info(&self) -> ModuleFeatureInfo {
+        ModuleFeatureInfo {
+            name: self.name.to_string(),
+            kind: ModuleFeatureKind::Trigger,
         }
     }
 }
@@ -299,7 +361,7 @@ impl State {
                         (ModuleLoadMode::Add, Some(old)) => Some(old.dbg_info()),
                     }
                 }
-                &ModuleFeature::Trigger => unimplemented!(),
+                &ModuleFeature::Trigger { .. } => None,
             }
         {
             bail!(ErrorKind::ModuleFeatureRegistryClash(
@@ -340,9 +402,29 @@ impl State {
                         usage_yaml: usage_yaml.clone(),
                         help_msg: help_msg.clone(),
                     },
-                )
+                );
             }
-            &ModuleFeature::Trigger => unimplemented!(),
+            &ModuleFeature::Trigger {
+                ref name,
+                ref regex,
+                ref handler,
+                ref help_msg,
+                priority,
+                uuid,
+            } => {
+                self.triggers
+                    .entry(priority)
+                    .or_insert_with(Default::default)
+                    .push(Trigger {
+                        provider,
+                        name: name.clone(),
+                        regex: regex.clone(),
+                        handler: handler.clone(),
+                        priority,
+                        help_msg: help_msg.clone(),
+                        uuid,
+                    });
+            }
         };
     }
 }

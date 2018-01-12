@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::panic;
 
 pub(crate) mod fmt;
+pub mod regex;
 pub mod yaml;
 
 pub(crate) fn run_handler<S1, S2, F, R>(

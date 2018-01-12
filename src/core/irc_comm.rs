@@ -16,6 +16,7 @@ use super::irc_send::OutboxPort;
 use super::irc_send::push_to_outbox;
 use super::parse_msg_to_nick;
 use super::reaction::LibReaction;
+use super::trigger;
 use crossbeam_utils;
 use irc::client::prelude as aatxe;
 use irc::proto::Message;
@@ -191,29 +192,34 @@ fn handle_reaction(
     }
 }
 
-fn handle_bot_command(
+fn handle_bot_command_or_trigger(
     state: &Arc<State>,
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
 ) -> Option<LibReaction<Message>> {
     let reaction = (|| {
-        let cmd_ln = parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
-            .expect("`handle_bot_command` shouldn't have been called!");
+        let metadata = MsgMetadata {
+            prefix: prefix.parse(),
+            target: MsgTarget(&target),
+        };
 
-        debug_assert!(!cmd_ln.trim().is_empty());
+        let cmd_ln = parse_msg_to_nick(&msg, metadata.target, &state.nick()?).unwrap_or("");
 
         let mut cmd_name_and_args = cmd_ln.splitn(2, char::is_whitespace);
         let cmd_name = cmd_name_and_args.next().unwrap_or("");
-        let cmd_args = cmd_name_and_args.next().unwrap_or("");
+        let cmd_args = cmd_name_and_args.next().unwrap_or("").trim();
 
-        Ok(bot_command_reaction(
-            state,
-            prefix.parse(),
-            MsgTarget(&target),
-            cmd_name,
-            cmd_args,
-        ))
+        if let Some(cmd) = state.commands.get(cmd_name) {
+            Ok(bot_command_reaction(
+                cmd_name,
+                run_bot_command(state, metadata, cmd, cmd_args),
+            ))
+        } else if let Some(r) = trigger::run_any_matching(state, cmd_ln, &metadata)? {
+            Ok(bot_command_reaction("<trigger>", r))
+        } else {
+            Ok(Reaction::None)
+        }
     })();
 
     match reaction.and_then(|reaction| handle_reaction(state, prefix, &target, reaction)) {
@@ -222,7 +228,7 @@ fn handle_bot_command(
             aatxe::Command::PRIVMSG(
                 target,
                 format!(
-                    "Encountered error while trying to handle command: {}",
+                    "Encountered error while trying to handle message: {}",
                     e
                 ),
             ).into(),
@@ -292,63 +298,47 @@ fn run_bot_command(
     }
 }
 
-fn bot_command_reaction(
-    state: &Arc<State>,
-    prefix: MsgPrefix,
-    target: MsgTarget,
-    cmd_name: &str,
-    cmd_args: &str,
-) -> Reaction {
-    let metadata = MsgMetadata { prefix, target };
-
-    let cmd = match state.commands.get(cmd_name) {
-        Some(c) => c,
-        None => {
-            return Reaction::Reply(format!("Unknown command {:?}; apologies.", cmd_name).into())
-        }
-    };
-
-    let &BotCommand {
-        ref name,
-        ref usage_str,
-        ..
-    } = cmd;
-
-    let cmd_result = match run_bot_command(state, metadata, cmd, cmd_args) {
+fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
+    let cmd_result = match result {
         BotCmdResult::Ok(r) => Ok(r),
         BotCmdResult::Unauthorized => {
-            Err(format!(
-                "My apologies, but you do not appear to have sufficient \
-                 authority to use my {:?} command.",
-                name
-            ))
+            Err(
+                format!(
+                    "My apologies, but you do not appear to have sufficient authority to use my \
+                     {:?} command.",
+                    cmd_name
+                ).into(),
+            )
         }
-        BotCmdResult::SyntaxErr => Err(format!("Syntax: {} {}", name, usage_str)),
+        BotCmdResult::SyntaxErr => Err("Syntax error. Try my `help` command.".into()),
         BotCmdResult::ArgMissing(arg_name) => {
-            Err(format!(
-                "Syntax error: For command {:?}, the argument {:?} is \
-                 required, but it was not given.",
-                name,
-                arg_name
-            ))
+            Err(
+                format!(
+                    "Syntax error: For command {:?}, the argument {:?} is required, but it was not \
+                     given.",
+                    cmd_name,
+                    arg_name
+                ).into(),
+            )
         }
         BotCmdResult::ArgMissing1To1(arg_name) => {
-            Err(format!(
-                "Syntax error: When command {:?} is used outside of a \
-                 channel, the argument {:?} is required, but it was not \
-                 given.",
-                name,
-                arg_name
-            ))
+            Err(
+                format!(
+                    "Syntax error: When command {:?} is used outside of a channel, the argument \
+                     {:?} is required, but it was not given.",
+                    cmd_name,
+                    arg_name
+                ).into(),
+            )
         }
-        BotCmdResult::LibErr(e) => Err(format!("Error: {}", e)),
-        BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s)),
-        BotCmdResult::BotErrMsg(s) => Err(format!("Internal error: {}", s)),
+        BotCmdResult::LibErr(e) => Err(format!("Error: {}", e).into()),
+        BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s).into()),
+        BotCmdResult::BotErrMsg(s) => Err(format!("Internal error: {}", s).into()),
     };
 
     match cmd_result {
         Ok(r) => r,
-        Err(s) => Reaction::Reply(s.into()),
+        Err(s) => Reaction::Msg(s),
     }
 }
 
@@ -430,19 +420,7 @@ where
         return Ok(());
     }
 
-    if parse_msg_to_nick(&msg, MsgTarget(&target), &state.nick()?)
-        .unwrap()
-        .is_empty()
-    {
-        // TODO: Use a trigger for this.
-        push_to_outbox(
-            &outbox,
-            server_id,
-            handle_reaction(state, prefix, &target, Reaction::Reply("Yes?".into()))?,
-        );
-
-        Ok(())
-    } else if prefix.parse().nick == Some(&target) && msg.trim() == UPDATE_MSG_PREFIX_STR {
+    if prefix.parse().nick == Some(&target) && msg.trim() == UPDATE_MSG_PREFIX_STR {
         update_prefix_info(state, &prefix.parse())
     } else {
         // This could take a while or panic, so do it in a new thread.
@@ -452,7 +430,7 @@ where
         let outbox = outbox.clone();
 
         let thread_spawn_result = crossbeam_scope.builder().spawn(move || {
-            let lib_reaction = handle_bot_command(&state, prefix, target, msg);
+            let lib_reaction = handle_bot_command_or_trigger(&state, prefix, target, msg);
 
             push_to_outbox(&outbox, server_id, lib_reaction);
         });

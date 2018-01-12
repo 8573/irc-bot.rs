@@ -9,6 +9,7 @@ pub use self::err::ErrorKind;
 pub use self::err::Result;
 pub use self::handler::BotCmdHandler;
 pub use self::handler::ErrorHandler;
+pub use self::handler::TriggerHandler;
 pub use self::irc_msgs::MsgMetadata;
 pub use self::irc_msgs::MsgPrefix;
 pub use self::irc_msgs::MsgTarget;
@@ -25,18 +26,21 @@ pub use self::modl_sys::mk_module;
 pub use self::reaction::ErrorReaction;
 use self::reaction::LibReaction;
 pub use self::reaction::Reaction;
+pub use self::trigger::Trigger;
+pub use self::trigger::TriggerAttr;
+pub use self::trigger::TriggerPriority;
 use crossbeam_channel;
 use crossbeam_utils;
 use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
+use rand::StdRng;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::panic::RefUnwindSafe;
-use std::panic::UnwindSafe;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
 use uuid::Uuid;
@@ -53,6 +57,7 @@ mod misc_traits;
 mod modl_sys;
 mod reaction;
 mod state;
+mod trigger;
 
 const THREAD_NAME_FAIL: &str = "This thread is unnamed?! We specifically gave it a name; what \
                                 happened?!";
@@ -67,8 +72,10 @@ pub struct State {
     addressee_suffix: Cow<'static, str>,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
+    triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
+    rng: Mutex<StdRng>,
     error_handler: Arc<ErrorHandler>,
 }
 
@@ -92,7 +99,7 @@ impl ServerId {
 }
 
 impl State {
-    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> State
+    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> Result<State>
     where
         ErrF: ErrorHandler,
     {
@@ -100,15 +107,17 @@ impl State {
             format!("{}!{}@", config.nickname, config.username),
         ));
 
-        State {
+        Ok(State {
             config: config,
             servers: Default::default(),
             addressee_suffix: ": ".into(),
             modules: Default::default(),
             commands: Default::default(),
+            triggers: Default::default(),
             msg_prefix,
+            rng: Mutex::new(StdRng::new()?),
             error_handler: Arc::new(error_handler),
-        }
+        })
     }
 
     fn handle_err<S>(&self, err: Error, desc: S) -> Option<LibReaction<Message>>
@@ -165,7 +174,16 @@ where
         }
     };
 
-    let mut state = State::new(config, error_handler);
+    let mut state = match State::new(config, error_handler) {
+        Ok(s) => {
+            trace!("Assembled bot state.");
+            s
+        }
+        Err(e) => {
+            error!("Terminal error while assembling bot state: {}", e);
+            return;
+        }
+    };
 
     match state.load_modules(modules.into_iter().map(|f| f()), ModuleLoadMode::Add) {
         Ok(()) => {
