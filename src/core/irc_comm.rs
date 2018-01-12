@@ -1,6 +1,4 @@
-use super::BotCmdAuthLvl;
 use super::BotCmdResult;
-use super::BotCommand;
 use super::ErrorKind;
 use super::MsgMetadata;
 use super::MsgPrefix;
@@ -27,7 +25,6 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
 use std::sync::Arc;
-use util;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -210,11 +207,8 @@ fn handle_bot_command_or_trigger(
         let cmd_name = cmd_name_and_args.next().unwrap_or("");
         let cmd_args = cmd_name_and_args.next().unwrap_or("").trim();
 
-        if let Some(cmd) = state.commands.get(cmd_name) {
-            Ok(bot_command_reaction(
-                cmd_name,
-                run_bot_command(state, metadata, cmd, cmd_args),
-            ))
+        if let Some(r) = bot_cmd::run(state, cmd_name, cmd_args, &metadata)? {
+            Ok(bot_command_reaction(cmd_name, r))
         } else if let Some(r) = trigger::run_any_matching(state, cmd_ln, &metadata)? {
             Ok(bot_command_reaction("<trigger>", r))
         } else {
@@ -233,68 +227,6 @@ fn handle_bot_command_or_trigger(
                 ),
             ).into(),
         )),
-    }
-}
-
-fn run_bot_command(
-    state: &State,
-    metadata: MsgMetadata,
-    &BotCommand {
-        ref name,
-        ref provider,
-        ref auth_lvl,
-        ref handler,
-        ref usage_yaml,
-        usage_str: _,
-        help_msg: _,
-    }: &BotCommand,
-    cmd_args: &str
-) -> BotCmdResult
-{
-    let user_authorized = match auth_lvl {
-        &BotCmdAuthLvl::Public => Ok(true),
-        &BotCmdAuthLvl::Admin => state.have_admin(metadata.prefix),
-    };
-
-    let arg = match bot_cmd::parse_arg(usage_yaml, cmd_args) {
-        Ok(arg) => arg,
-        Err(res) => return res,
-    };
-
-    let result = match user_authorized {
-        Ok(true) => {
-            debug!("Running bot command {:?} with arg: {:?}", name, arg);
-            match util::run_handler(
-                "command",
-                name.clone(),
-                || handler.run(state, &metadata, &arg),
-            ) {
-                Ok(r) => r,
-                Err(e) => BotCmdResult::LibErr(e),
-            }
-        }
-        Ok(false) => BotCmdResult::Unauthorized,
-        Err(e) => BotCmdResult::LibErr(e),
-    };
-
-    // TODO: Filter `QUIT`s in `irc_send` instead, and check `Reaction::RawMsg`s as well.
-    match result {
-        BotCmdResult::Ok(Reaction::Quit(ref s)) if *auth_lvl != BotCmdAuthLvl::Admin => {
-            BotCmdResult::BotErrMsg(
-                format!(
-                    "Only commands at authorization level {auth_lvl_owner:?} may tell the bot to \
-                     quit, but the command {cmd_name:?} from module {provider_name:?}, at \
-                     authorization level {cmd_auth_lvl:?}, has told the bot to quit with quit \
-                     message {quit_msg:?}.",
-                    auth_lvl_owner = BotCmdAuthLvl::Admin,
-                    cmd_name = name,
-                    provider_name = provider.name,
-                    cmd_auth_lvl = auth_lvl,
-                    quit_msg = s
-                ).into(),
-            )
-        }
-        r => r,
     }
 }
 
