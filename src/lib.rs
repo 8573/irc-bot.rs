@@ -29,10 +29,9 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
-pub use self::core::Config;
-pub use self::core::ErrorReaction;
-pub use self::core::run;
+pub use self::core::*;
 
-pub mod core;
 pub mod modules;
 pub mod util;
+
+mod core;
