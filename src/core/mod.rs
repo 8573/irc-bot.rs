@@ -71,17 +71,17 @@ const LOCK_EARLY_POISON_FAIL: &str =
      more....";
 
 pub struct State {
-    config: config::inner::Config,
-    module_data: Box<ModuleDataProvider>,
-    servers: BTreeMap<ServerId, RwLock<Server>>,
     addressee_suffix: Cow<'static, str>,
-    modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
-    triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
+    config: config::inner::Config,
+    error_handler: Arc<ErrorHandler>,
+    module_data: Box<ModuleDataProvider>,
+    modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
     rng: Mutex<StdRng>,
-    error_handler: Arc<ErrorHandler>,
+    servers: BTreeMap<ServerId, RwLock<Server>>,
+    triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
 }
 
 // TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
@@ -118,16 +118,16 @@ impl State {
         ));
 
         Ok(State {
-            config: config,
-            module_data: Box::new(module_data),
-            servers: Default::default(),
             addressee_suffix: ": ".into(),
-            modules: Default::default(),
             commands: Default::default(),
-            triggers: Default::default(),
+            config: config,
+            error_handler: Arc::new(error_handler),
+            module_data: Box::new(module_data),
+            modules: Default::default(),
             msg_prefix,
             rng: Mutex::new(StdRng::new()?),
-            error_handler: Arc::new(error_handler),
+            servers: Default::default(),
+            triggers: Default::default(),
         })
     }
 
