@@ -35,13 +35,6 @@ impl State {
         Ok(self.commands.keys().cloned().collect())
     }
 
-    pub fn have_module_feature(&self, kind: ModuleFeatureKind, name: &str) -> Result<bool> {
-        match kind {
-            ModuleFeatureKind::Command => Ok(self.commands.contains_key(name)),
-            ModuleFeatureKind::Trigger => unimplemented!(),
-        }
-    }
-
     pub fn have_admin(&self,
 MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<bool>{
         Ok(self.config.admins.iter().any(|&config::Admin {
