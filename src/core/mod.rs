@@ -17,6 +17,9 @@ use self::irc_msgs::OwningMsgPrefix;
 use self::irc_msgs::parse_msg_to_nick;
 use self::irc_send::push_to_outbox;
 use self::misc_traits::GetDebugInfo;
+pub use self::modl_data::ModuleDataDir;
+pub use self::modl_data::ModuleDataProvider;
+pub use self::modl_data::NullModuleDataProvider;
 pub use self::modl_sys::Module;
 use self::modl_sys::ModuleFeatureInfo;
 use self::modl_sys::ModuleFeatureKind;
@@ -54,6 +57,7 @@ mod irc_comm;
 mod irc_msgs;
 mod irc_send;
 mod misc_traits;
+mod modl_data;
 mod modl_sys;
 mod reaction;
 mod state;
@@ -68,6 +72,7 @@ const LOCK_EARLY_POISON_FAIL: &str =
 
 pub struct State {
     config: config::inner::Config,
+    module_data: Box<ModuleDataProvider>,
     servers: BTreeMap<ServerId, RwLock<Server>>,
     addressee_suffix: Cow<'static, str>,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
@@ -99,8 +104,13 @@ impl ServerId {
 }
 
 impl State {
-    fn new<ErrF>(config: config::inner::Config, error_handler: ErrF) -> Result<State>
+    fn new<ModlData, ErrF>(
+        config: config::inner::Config,
+        module_data: ModlData,
+        error_handler: ErrF,
+    ) -> Result<State>
     where
+        ModlData: ModuleDataProvider,
         ErrF: ErrorHandler,
     {
         let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
@@ -109,6 +119,7 @@ impl State {
 
         Ok(State {
             config: config,
+            module_data: Box::new(module_data),
             servers: Default::default(),
             addressee_suffix: ": ".into(),
             modules: Default::default(),
@@ -155,9 +166,14 @@ impl State {
     }
 }
 
-pub fn run<Cfg, ErrF, ModlCtor, Modls>(config: Cfg, error_handler: ErrF, modules: Modls)
-where
+pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
+    config: Cfg,
+    module_data: ModlData,
+    error_handler: ErrF,
+    modules: Modls,
+) where
     Cfg: IntoConfig,
+    ModlData: ModuleDataProvider,
     ErrF: ErrorHandler,
     Modls: IntoIterator<Item = ModlCtor>,
     ModlCtor: Fn() -> Module,
@@ -174,7 +190,7 @@ where
         }
     };
 
-    let mut state = match State::new(config, error_handler) {
+    let mut state = match State::new(config, module_data, error_handler) {
         Ok(s) => {
             trace!("Assembled bot state.");
             s

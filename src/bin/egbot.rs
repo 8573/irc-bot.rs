@@ -18,6 +18,12 @@ fn main() {
                 .default_value("config.yaml"),
         )
         .arg(
+            clap::Arg::with_name("data-dir")
+                .long("data-dir")
+                .short("d")
+                .default_value("data"),
+        )
+        .arg(
             clap::Arg::with_name("error-verbosity")
                 .long("error-verbosity")
                 .possible_values(&ErrorVerbosity::variants())
@@ -33,6 +39,7 @@ fn main() {
 
     irc_bot::run(
         irc_bot::Config::try_from_path(args.value_of("config-file").expect("default missing?")),
+        irc_bot::core::ModuleDataDir::from(args.value_of("data-dir").expect("default missing?")),
         move |err| {
             match error_verbosity {
                 ErrorVerbosity::Display => error!("{}", err),
