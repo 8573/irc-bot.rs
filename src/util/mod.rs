@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::panic;
 
 pub(crate) mod fmt;
+pub(crate) mod lock;
 pub mod regex;
 pub mod yaml;
 
