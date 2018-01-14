@@ -66,21 +66,14 @@ pub(super) fn send_main(
 
         let server_uuid = server_id.uuid.hyphenated();
 
-        let aatxe_server = match state.servers.get(&server_id).map(RwLock::read) {
-            Some(Ok(s)) => s.inner.clone(),
-            Some(Err(_)) => {
+        let aatxe_server = match state.read_server(server_id) {
+            Ok(s) => s.inner.clone(),
+            Err(e) => {
                 warn!(
-                    "Declining to send to server {uuid} because its lock has been poisoned by \
-                     thread panic! Discarding {output:?}.",
+                    "Discarding {output:?}, which can't be sent to server {uuid} because of error: \
+                     {err}",
                     uuid = server_uuid,
-                    output = output
-                );
-                continue;
-            }
-            None => {
-                warn!(
-                    "Can't send to unknown server {uuid}. Discarding {output:?}.",
-                    uuid = server_uuid,
+                    err = e,
                     output = output
                 );
                 continue;

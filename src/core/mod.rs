@@ -73,10 +73,9 @@ pub struct State {
     error_handler: Arc<ErrorHandler>,
     module_data_path: PathBuf,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
-    // TODO: This is server-specific.
-    msg_prefix: RwLock<OwningMsgPrefix>,
+    msg_prefixes: RwLock<BTreeMap<ServerId, RwLock<OwningMsgPrefix>>>,
     rng: Mutex<StdRng>,
-    servers: BTreeMap<ServerId, RwLock<Server>>,
+    servers: RwLock<BTreeMap<ServerId, RwLock<Server>>>,
     triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
 }
 
@@ -108,10 +107,6 @@ impl State {
     where
         ErrF: ErrorHandler,
     {
-        let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
-            format!("{}!{}@", config.nickname, config.username),
-        ));
-
         Ok(State {
             addressee_suffix: ": ".into(),
             commands: Default::default(),
@@ -119,7 +114,7 @@ impl State {
             error_handler: Arc::new(error_handler),
             module_data_path,
             modules: Default::default(),
-            msg_prefix,
+            msg_prefixes: Default::default(),
             rng: Mutex::new(StdRng::new()?),
             servers: Default::default(),
             triggers: Default::default(),
@@ -225,8 +220,6 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
         state.commands.keys().collect::<Vec<_>>()
     );
 
-    let mut servers = BTreeMap::new();
-
     for server_config in &state.config.servers {
         let aatxe_config = aatxe::Config {
             nickname: Some(state.config.nickname.to_owned()),
@@ -273,22 +266,14 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             socket_addr_string: server_config.socket_addr_string(),
         };
 
-        match servers.insert(server_id, RwLock::new(server)) {
-            None => {}
-            Some(_other_server) => {
-                // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
-                // `IrcServer` implementing `Debug`, add the other server to this message.
-                error!(
-                    "This shouldn't happen, but there was already a server registered with UUID \
-                     {uuid}!",
-                    uuid = server_id.uuid.hyphenated(),
-                );
+        match state.register_server(server) {
+            Ok(()) => {}
+            Err(e) => {
+                error!("Terminal error while registering server: {}", e);
                 return;
             }
         }
     }
-
-    state.servers = servers;
 
     let state = Arc::new(state);
     let state = &state;
@@ -305,7 +290,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             || irc_send::send_main(state.clone(), outbox_receiver),
         );
 
-        for (&server_id, server) in &state.servers {
+        for (&server_id, server) in state.read_servers().expect(LOCK_EARLY_POISON_FAIL).iter() {
 
             let (aatxe_server, addr) = {
                 let s = server.read().expect(LOCK_EARLY_POISON_FAIL);

@@ -396,13 +396,17 @@ where
     }
 }
 
-fn update_prefix_info(state: &State, _server_id: ServerId, prefix: &MsgPrefix) -> Result<()> {
+fn update_prefix_info(state: &State, server_id: ServerId, prefix: &MsgPrefix) -> Result<()> {
     debug!(
         "Updating stored message prefix information from received {:?}",
         prefix
     );
 
-    match state.msg_prefix.write() {
+    match state
+        .read_msg_prefixes()?
+        .get(&server_id)
+        .ok_or(ErrorKind::UnknownServer(server_id))?
+        .write() {
         Ok(guard) => guard,
         Err(poisoned_guard) => {
             // The lock was poisoned, you say? That's strange, unfortunate, and unlikely to be a

@@ -1,4 +1,5 @@
 use super::BotCommand;
+use super::Error;
 use super::ErrorKind;
 use super::MsgPrefix;
 use super::Result;
@@ -9,9 +10,13 @@ use super::config;
 use super::irc_msgs::OwningMsgPrefix;
 use rand::StdRng;
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::MutexGuard;
+use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
+use std::sync::RwLockWriteGuard;
+use util::lock::RwLockExt;
 
 impl State {
     pub fn nick(&self, server_id: ServerId) -> Result<String> {
@@ -46,24 +51,32 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         }))
     }
 
-    // TODO: This is server-specific.
-    pub(super) fn read_msg_prefix(
-        &self,
-        _server_id: ServerId,
-    ) -> Result<RwLockReadGuard<OwningMsgPrefix>> {
-        self.msg_prefix.read().map_err(|_| {
-            ErrorKind::LockPoisoned("stored message prefix".into()).into()
-        })
+    pub(super) fn read_msg_prefix<'a>(
+        &'a self,
+        server_id: ServerId,
+    ) -> Result<RwLockReadGuard<'a, OwningMsgPrefix>> {
+        self.read_msg_prefixes()?
+            .get(&server_id)
+            .ok_or(Error::from(ErrorKind::UnknownServer(server_id)))?
+            .read_clean("a stored message prefix")
     }
 
-    pub(super) fn read_server(
-        &self,
+    pub(super) fn read_msg_prefixes<'a>(
+        &'a self,
+    ) -> Result<RwLockReadGuard<'a, BTreeMap<ServerId, RwLock<OwningMsgPrefix>>>> {
+        self.msg_prefixes.read_clean(
+            "the associative array of the bot's per-server message prefixes",
+        )
+    }
+
+    pub(super) fn read_server<'a>(
+        &'a self,
         server_id: ServerId,
-    ) -> Result<Option<RwLockReadGuard<Server>>> {
-        match self.servers.get(&server_id) {
+    ) -> Result<RwLockReadGuard<'a, Server>> {
+        match self.read_servers()?.get(&server_id) {
             Some(lock) => {
                 match lock.read() {
-                    Ok(guard) => Ok(Some(guard)),
+                    Ok(guard) => Ok(guard),
                     Err(_) => Err(
                         ErrorKind::LockPoisoned(
                             format!("server {}", server_id.uuid.hyphenated()).into(),
@@ -71,8 +84,63 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
                     ),
                 }
             }
-            None => Ok(None),
+            None => Err(ErrorKind::UnknownServer(server_id).into()),
         }
+    }
+
+    pub(super) fn read_servers<'a>(
+        &'a self,
+    ) -> Result<RwLockReadGuard<'a, BTreeMap<ServerId, RwLock<Server>>>> {
+        self.servers.read_clean("the server list")
+    }
+
+    pub(super) fn register_server(&self, server: Server) -> Result<()> {
+        let server_id = server.id;
+        let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(format!(
+            "{}!{}@",
+            self.config.nickname,
+            self.config.username
+        )));
+
+        let (mut servers, mut msg_prefixes) = self.server_write_locks()?;
+
+        if servers.contains_key(&server_id) {
+            return Err(ErrorKind::ServerRegistryClash(server_id).into());
+        }
+
+        servers.insert(server_id, RwLock::new(server));
+        msg_prefixes.insert(server_id, msg_prefix);
+
+        Ok(())
+    }
+
+    /// Clears information about the server with the given ID out of the `State`.
+    ///
+    /// It is not considered an error if the given ID is invalid.
+    pub(super) fn deregister_server(&self, server_id: ServerId) -> Result<()> {
+        let (mut servers, mut msg_prefixes) = self.server_write_locks()?;
+
+        servers.remove(&server_id);
+        msg_prefixes.remove(&server_id);
+
+        Ok(())
+    }
+
+    /// Acquires all the write locks for the per-server associative arrays at once, so that no-one
+    /// sees them while they're only partially updated.
+    fn server_write_locks(
+        &self,
+    ) -> Result<
+        (RwLockWriteGuard<BTreeMap<ServerId, RwLock<Server>>>,
+         RwLockWriteGuard<BTreeMap<ServerId, RwLock<OwningMsgPrefix>>>),
+    > {
+        Ok((
+            self.servers.write_clean("the server list")?,
+            self.msg_prefixes.write_clean(
+                "the associative array of the bot's \
+                 per-server message prefixes",
+            )?,
+        ))
     }
 
     /// Allows access to a random number generator that's stored centrally, to avoid the cost of
@@ -90,8 +158,7 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         let uuid = server_id.uuid.hyphenated();
 
         match self.read_server(server_id) {
-            Ok(Some(s)) => s.socket_addr_string.clone(),
-            Ok(None) => format!("<unknown server {} (not found)>", uuid),
+            Ok(s) => s.socket_addr_string.clone(),
             Err(e) => format!("<unknown server {} ({})>", uuid, e),
         }
     }
