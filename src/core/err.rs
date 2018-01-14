@@ -1,5 +1,6 @@
 use super::ModuleFeatureInfo;
 use super::ModuleInfo;
+use super::ServerId;
 use irc;
 use serde_yaml;
 use std::any::Any;
@@ -35,6 +36,13 @@ error_chain! {
                     new)
         }
 
+        ServerRegistryClash(server_id: ServerId) {
+            description("server registry UUID clash")
+            display("Failed to register a server because an existing server had the same UUID: \
+                     {uuid}",
+                    uuid = server_id.uuid.hyphenated())
+        }
+
         Config(key: String, problem: String) {
             description("configuration error")
             display("Configuration error: Key {:?} {}.", key, problem)
@@ -60,6 +68,14 @@ error_chain! {
         NicknameUnknown {
             description("nickname retrieval error")
             display("Puzzlingly, the bot seems to have forgotten its own nickname.")
+        }
+
+        UnknownServer(server_id: ServerId) {
+            description("server ID not recognized")
+            display("An attempt to look up a server connection or metadatum thereof failed, \
+                     because the given server identification token (UUID {id}) was not a valid \
+                     key in the relevant associative array.",
+                    id = server_id.uuid.hyphenated())
         }
 
         LockPoisoned(lock_contents_desc: Cow<'static, str>) {
