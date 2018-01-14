@@ -69,5 +69,8 @@ error_chain! {
             display("An error seems to have occurred, but unfortunately the error type provided \
                      was the unit type, containing no information about the error.")
         }
+
+        #[doc(hidden)]
+        __Nonexhaustive
     }
 }
