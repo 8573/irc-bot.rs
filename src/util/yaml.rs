@@ -66,12 +66,14 @@ pub mod str {
         pub static ref YAML_STR_CMD: Yaml = mk_str("cmd");
         pub static ref YAML_STR_ELLIPSIS: Yaml = mk_str("...");
         pub static ref YAML_STR_ELLIPSIS_IN_SQUARE_BRACKETS: Yaml = mk_str("[...]");
+        pub static ref YAML_STR_ID: Yaml = mk_str("id");
         pub static ref YAML_STR_LIST: Yaml = mk_str("list");
         pub static ref YAML_STR_MSG: Yaml = mk_str("msg");
         pub static ref YAML_STR_R: Yaml = mk_str("r");
         pub static ref YAML_STR_REGEX: Yaml = mk_str("regex");
         pub static ref YAML_STR_S: Yaml = mk_str("s");
         pub static ref YAML_STR_STRING: Yaml = mk_str("string");
+        pub static ref YAML_STR_TAG: Yaml = mk_str("tag");
     }
 }
 

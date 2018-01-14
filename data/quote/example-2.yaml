@@ -1,0 +1,5 @@
+channels: '#c74d'
+quotations:
+  - format: plain
+    text: >
+      This quotation is from file 'example-2'.
