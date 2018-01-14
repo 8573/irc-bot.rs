@@ -1,0 +1,24 @@
+channels: '.*'
+quotations:
+  - text: |
+      <foo> foo bar
+  - text: |
+      <bar> foo baz
+  - text: |
+      <baz> bar baz
+      <foo> frob qux
+  - text: |
+      2018-08-07 02:29 <c74d> Why do you find statics harder than dynamics?
+      2018-08-07 02:30 <c74d> Er, allow me to rephrase: Why do you find statics more difficult than dynamics?
+  - format: plain
+    text: >
+      “I recognize that I am only making an assertion and
+      furnishing no proof; I am sorry, but this is a habit of
+      mine; sorry also that I am not alone in it; everybody
+      seems to have this disease.” — Mark Twain
+  - format: plain
+    # Based on the following suggestion from WindowsBunny:
+    # > 2018-08-11 06:31:56 <+WindowsBunny> c74d: your face is a quote
+    text: >
+      c74d's face
+    tags: [WindowsBunny]

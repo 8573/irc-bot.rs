@@ -62,12 +62,14 @@ pub mod str {
     lazy_static! {
         pub static ref YAML_STR_CHAN: Yaml = Yaml::String("chan".into());
         pub static ref YAML_STR_CMD: Yaml = Yaml::String("cmd".into());
+        pub static ref YAML_STR_ID: Yaml = Yaml::String("id".into());
         pub static ref YAML_STR_LIST: Yaml = Yaml::String("list".into());
         pub static ref YAML_STR_MSG: Yaml = Yaml::String("msg".into());
         pub static ref YAML_STR_R: Yaml = Yaml::String("r".into());
         pub static ref YAML_STR_REGEX: Yaml = Yaml::String("regex".into());
         pub static ref YAML_STR_S: Yaml = Yaml::String("s".into());
         pub static ref YAML_STR_STRING: Yaml = Yaml::String("string".into());
+        pub static ref YAML_STR_TAG: Yaml = Yaml::String("tag".into());
     }
 }
 

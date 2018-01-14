@@ -1,0 +1,885 @@
+// TODO: remove this
+#![allow(unused)]
+
+use clockpro_cache::ClockProCache;
+use core::BotCmdAuthLvl as Auth;
+use core::*;
+use itertools::Itertools;
+use rando::Rando;
+use ref_slice::ref_slice;
+use regex::Regex;
+use serde_yaml;
+use smallbitvec::SmallBitVec;
+use smallvec::SmallVec;
+use std;
+use std::borrow::Cow;
+use std::cell::Cell;
+use std::fmt;
+use std::fs::File;
+use std::io::BufReader;
+use std::iter;
+use std::mem;
+use std::num::ParseIntError;
+use std::ops::Deref;
+use std::str;
+use std::sync::Mutex;
+use std::sync::RwLock;
+use std::sync::RwLockReadGuard;
+use string_cache::DefaultAtom;
+use try_map::FlipResultExt;
+use url::Url;
+use url_serde::SerdeUrl;
+use util;
+use util::regex::IntoRegexCI;
+use util::yaml::get_arg_by_short_or_long_key;
+use util::yaml::iter_as_seq;
+use util::yaml::scalar_to_str;
+use util::yaml::str::YAML_STR_CMD;
+use util::yaml::str::YAML_STR_ID;
+use util::yaml::str::YAML_STR_R;
+use util::yaml::str::YAML_STR_REGEX;
+use util::yaml::str::YAML_STR_S;
+use util::yaml::str::YAML_STR_STRING;
+use util::yaml::str::YAML_STR_TAG;
+use util::yaml::FW_SYNTAX_CHECK_FAIL;
+use walkdir::WalkDir;
+use yaml_rust;
+use yaml_rust::Yaml;
+
+/// This module provides functionality for retrieving quotations from a database thereof.
+///
+///
+/// # The `quote` command
+///
+/// An IRC user is to interact with this module primarily via the bot command `quote`, which
+/// requests a (pseudo-)random quotation from the bot's database of quotations.
+///
+/// ## Output
+///
+/// When a quotation is displayed, it will be prefaced with its **hexadecimal _identifier_ (_ID_)**
+/// in square brackets. Quotation IDs _may_ simply be successive non-negative integers assigned in
+/// the order in which the quotations were loaded, but this should not be relied upon. Quotation
+/// IDs _may_ remain the same if the quotation database is reloaded (including when the bot is
+/// restarted), but this too should not be relied upon.
+///
+/// If a quotation has been **abridged**, the abridgement will be indicated by the addition of an
+/// asterisk after the quotation ID.
+///
+/// ## Input
+///
+/// The `quote` command takes as argument a YAML mapping, which may contain the following key-value
+/// pairs (hereinafter termed _parameters_), listed by their keys:
+///
+/// - `regex` — The value of this parameter may be a string or a sequence of strings. If a string,
+/// it will be parsed as a regular expression using the Rust [`regex`] library and [its particular
+/// syntax][`regex` syntax]; if a sequence of strings, each string it contains will be parsed in
+/// that manner. A quotation will be displayed only if it contains at least one match of each
+/// regular expression so provided. These regular expressions will be matched case-insensitively by
+/// default; however, this can be controlled with the [`regex` flag] `i`. This parameter is
+/// optional. This parameter's key may be abbreviated as `r`.
+///
+/// - `string` — The value of this parameter may be a string or a sequence of strings. A quotation
+/// will be displayed only if it contains at least one occurrence of each string so provided. These
+/// strings will be matched case-sensitively. This parameter is optional. This parameter's key may
+/// be abbreviated as `s`.
+///
+/// - `tag` — The value of this parameter may be a string or a sequence of strings. Each string so
+/// provided will be interpreted as a quotation _tag_ (see below). A quotation will be displayed
+/// only if it has all tags so provided. These tags will be matched case-sensitively. This
+/// parameter is optional.
+///
+/// - `id` — The value of this parameter should be a string. This parameter requests the quotation
+/// whose ID, when displayed as described in the section "Output" above, is the value of this
+/// parameter. Note that any asterisk suffixed to a quotation ID is not part of the quotation ID.
+/// This parameter is optional.
+///
+/// ## Examples
+///
+/// ### `quote`
+///
+/// Request a pseudo-random quotation.
+///
+/// ### `quote s: rabbit`
+///
+/// Request a pseudo-random quotation that contains the text "rabbit".
+///
+/// ### `quote r: 'blue ?berr(y|ies)'`
+///
+/// Request a pseudo-random quotation that contains at least one of the following sequences of
+/// text (without regard to letter case):
+///
+/// - "blueberry"
+/// - "blue berry"
+/// - "blueberries"
+/// - "blue berries"
+///
+///
+/// # Other commands
+///
+/// Other commands provided by this module include the following:
+///
+/// - `quote-database-info`
+///
+///
+/// # Quotation files
+///
+/// The database of quotations from which the bot is to quote should be provided as a directory
+/// named `quote` inside the bot's module data directory. This `quote` directory should contain
+/// zero or more [YAML] files, termed _quotation files_, whose filenames do not start with the full
+/// stop character (`.`). Each quotation file should be a mapping with the following key-value
+/// pairs (hereinafter termed _fields_):
+///
+/// - `channels` — The value of this field should be a string, which will be parsed as a regular
+/// expression using the Rust [`regex`] library and [its particular syntax][`regex` syntax].
+/// Quotations from this file will be shown only in channels whose names (including any leading
+/// `#`) match this regular expression, unless an administrator of the bot chooses to override this
+/// restriction. This regular expression will be prefixed with the anchor meta-character `^` and
+/// suffixed with the anchor meta-character `$`, such that the regular expression must match the
+/// whole of a channel name rather than only part of it. This field is **required**.
+///
+/// - `quotations` — The value of this field should be a sequence of _quotation records_. This
+/// field is optional and defaults to an empty sequence.
+///
+/// Each _quotation record_ should be a mapping with the following fields:
+///
+/// - `format` — The value of this field should be a string indicating the manner in which the text
+/// of the quotation is formatted. This field is optional and **defaults to `chat`**. For the
+/// allowed values, see the list of _quotation formats_ below.
+///
+/// - `text` — The value of this field should be the text of the quotation. This field is
+/// **required**.
+///
+/// - `url` — The value of this field should be a string whose text forms a valid Uniform Resource
+/// Locator (URL) that can be parsed as such by the Rust [`url`] library. If such a URL is
+/// provided, it will be taken as a reference to a copy of the text of the quotation, such as in a
+/// "pastebin" website, that may be offered rather than the quotation's text itself if that text is
+/// too long to send in an IRC `PRIVMSG` in the relevant channel. This field is optional.
+///
+/// - `tags` — The value of this field should be a sequence of strings. These strings, termed
+/// _tags_, count as part of the quotation for the purposes of the `quote` command's query
+/// parameters, such as `regex` and `string`, but are not displayed with the quotation by default
+/// (however, if an alternate display mode, such as posting quotations to "pastebin" websites, is
+/// implemented, tags may be shown in that mode). E.g., if, in a quotation from IRC, someone is
+/// using a different IRC nickname than usual, one could add the person's usual nickname to the
+/// quotation as a tag, so that the quotation still can be returned when one searches the quotation
+/// database for the person's usual nickname. This field is optional and defaults to an empty
+/// sequence.
+///
+/// ## Quotation formats
+///
+/// The following are the supported _quotation formats_:
+///
+/// - `chat` — This format is based on a stereotypical plain-text Internet Relay Chat log format.
+/// In this format, a quotation is expected to be given as lines of text each representing a
+/// message sent by a specific user (or bot, or service), with the name of the user in angle
+/// brackets (`<` and `>`) before the text of the message. Anything before the opening angle
+/// bracket in each line, such as a timestamp, will be treated as metadata and not quoted by
+/// default. An example of such a quotation's `text` field follows:
+///
+///   ```yaml
+///   text: |
+///     2018-08-07 02:29 <c74d> Why do you find statics harder than dynamics?
+///     2018-08-07 02:30 <c74d> Er, allow me to rephrase: Why do you find statics more difficult than dynamics?
+///   ```
+///
+/// - `plain` — In this format, a quotation is treated as a plain, indivisible lump of text, not to
+/// be parsed in any way, but only to be quoted whole. An example of such a quotation's `text`
+/// field follows:
+///
+///   ```yaml
+///   text: >
+///     “I recognize that I am only making an assertion and
+///     furnishing no proof; I am sorry, but this is a habit of
+///     mine; sorry also that I am not alone in it; everybody
+///     seems to have this disease.” — Mark Twain
+///   ```
+///
+///
+/// [`regex`]: <https://docs.rs/regex/*/regex/>
+/// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
+/// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
+/// [`url`]: <https://docs.rs/url/*/url/>
+/// [YAML]: <http://yaml.org>
+pub fn mk() -> Module {
+    mk_module("quote")
+        .on_load(Box::new(on_load))
+        .command(
+            "quote",
+            "{id: '[ID]'}",
+            "Request a quotation from the bot's database of quotations. For usage instructions, \
+             see the full documentation: \
+             <https://docs.rs/irc-bot/*/irc_bot/modules/fn.quote.html>.",
+            Auth::Public,
+            Box::new(quote),
+            &[],
+        )
+        .command(
+            "quote-database-info",
+            "",
+            "Request information about the bot's database of quotations, such as the number of \
+             quotations in the database.",
+            Auth::Public,
+            Box::new(show_qdb_info),
+            &[],
+        )
+        .command(
+            "quote-database-reload",
+            "",
+            "Tell the bot to reload its quotation database.",
+            Auth::Admin,
+            Box::new(reload_qdb),
+            &[],
+        )
+        .end()
+}
+
+lazy_static! {
+    static ref QDB: RwLock<QuotationDatabase> = RwLock::new(QuotationDatabase::new());
+}
+
+#[derive(Debug)]
+struct QuotationDatabase {
+    files: SmallVec<[QuotationFileMetadata; 8]>,
+
+    quotations: Vec<Quotation>,
+
+    file_permissions_cache: Mutex<ClockProCache>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
+struct QuotationFileIR {
+    channels: String,
+
+    #[serde(default)]
+    quotations: Vec<Quotation>,
+}
+
+#[derive(Debug)]
+struct QuotationFileMetadata {
+    file_id: QuotationFileId,
+
+    channels_regex: Regex,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
+struct Quotation {
+    #[serde(skip)]
+    id: QuotationId,
+
+    #[serde(skip)]
+    file_id: QuotationFileId,
+
+    #[serde(default = "default_quotation_format_for_serde")]
+    format: QuotationFormat,
+
+    text: String,
+
+    #[serde(default)]
+    tags: SmallVec<[DefaultAtom; 2]>,
+
+    #[serde(default)]
+    url: Option<SerdeUrl>,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
+enum QuotationFormat {
+    Chat,
+    Plain,
+}
+
+fn default_quotation_format_for_serde() -> QuotationFormat {
+    QuotationFormat::Chat
+}
+
+#[derive(Debug)]
+enum QuotationChoice<'q> {
+    /// Reply with the text of the quotation.
+    Text {
+        quotation: &'q Quotation,
+        // variant_id: usize,
+    },
+
+    /// Reply with the URL of the quotation.
+    Url {
+        quotation_id: QuotationId,
+        url: &'q Url,
+    },
+}
+
+// TODO: Maybe use something more space-efficient than `Option<usize>`.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+struct QuotationFileId(Option<usize>);
+
+// TODO: Maybe use something more space-efficient than `Option<usize>`.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+struct QuotationId(Option<usize>);
+
+// #[derive(Debug, Deserialize)]
+// #[serde(deny_unknown_fields)]
+// #[serde(rename_all = "kebab-case")]
+// struct QuotationLine {
+//     #[serde(rename = "-")]
+//     text: String,
+
+//     #[serde(rename = "+")]
+//     flags: QuotationLineFlags,
+// }
+
+impl QuotationDatabase {
+    fn new() -> Self {
+        QuotationDatabase {
+            files: Default::default(),
+            quotations: Default::default(),
+        }
+    }
+
+    fn get_file_metadata_by_id(&self, id: QuotationFileId) -> Option<&QuotationFileMetadata> {
+        id.array_index().and_then(|index| self.files.get(index))
+    }
+
+    fn get_quotation_by_id(&self, id: QuotationId) -> Option<&Quotation> {
+        id.array_index()
+            .and_then(|index| self.quotations.get(index))
+    }
+}
+
+fn quote(state: &State, request_metadata: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
+    let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
+    let qdb = match read_qdb() {
+        Ok(qdb) => qdb,
+        Err(err) => return err.into(),
+    };
+
+    match pick_quotation(state, request_metadata, arg, &qdb) {
+        Ok(QuotationChoice::Text { quotation }) => render_quotation(arg, quotation).into(),
+        Ok(QuotationChoice::Url { quotation_id, url }) => {
+            Reaction::Msg(format!("[{id}] <{url}>", id = quotation_id, url = url).into()).into()
+        }
+        Err(msg) => msg,
+    }
+}
+
+// TODO: Probabilities
+fn pick_quotation<'q>(
+    state: &State,
+    request_metadata: &MsgMetadata,
+    arg: &yaml_rust::yaml::Hash,
+    qdb: &'q QuotationDatabase,
+) -> std::result::Result<QuotationChoice<'q>, BotCmdResult> {
+    let reply_dest = state.guess_reply_dest(request_metadata)?;
+    let reply_content_max_len = state.privmsg_content_max_len(reply_dest)?;
+
+    let quotations = match arg.get(&YAML_STR_ID) {
+        Some(requested_quotation_id) => ref_slice(get_quotation_by_user_specified_id(
+            qdb,
+            requested_quotation_id,
+        )?),
+        None => &qdb.quotations,
+    };
+
+    let query_params = prepare_query_params(arg)?;
+
+    // TODO: Cache `file_permissions` (by `reply_dest`) in the `qdb`. Maybe wrap CLOCK-Pro in a
+    // Mutex in a new crate?
+    let file_permissions = check_file_permissions(qdb, reply_dest);
+
+    let mut rejected_a_quotation_for_length = false;
+
+    quotations
+        .rand_iter()
+        .filter_map(|quotation: &Quotation| -> Option<Result<QuotationChoice>> {
+            match (|quotation: &Quotation| -> Result<Option<QuotationChoice>> {
+                if !quotation_matches_query_params(arg, &query_params, quotation)? {
+                    return Ok(None);
+                }
+
+                if file_permissions.get(
+                    quotation
+                        .file_id
+                        .array_index()
+                        .expect("A quotation in the database has no associated quotation file!"),
+                ) != Some(true)
+                {
+                    return Ok(None);
+                }
+
+                // TODO: Pick a random variant that satisfies query parameters
+
+                // If the quotation is too long to post to this channel in a single `PRIVMSG`, post
+                // its URL if it has one, or try a different quotation otherwise.
+                //
+                // Now, it's possible that even the URL wouldn't fit in one `PRIVMSG`. Perhaps
+                // something should be done about that.
+                if rendered_quotation_byte_len(quotation) > reply_content_max_len {
+                    return match quotation.url {
+                        Some(ref url) => Ok(Some(QuotationChoice::Url {
+                            quotation_id: quotation.id,
+                            url,
+                        })),
+                        None => {
+                            rejected_a_quotation_for_length = true;
+                            Ok(None)
+                        }
+                    };
+                }
+
+                Ok(Some(QuotationChoice::Text { quotation }))
+            })(quotation)
+            {
+                Ok(Some(q)) => Some(Ok(q)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        })
+        .next()
+        .flip()?
+        .ok_or_else(|| {
+            Reaction::Reply(
+                if rejected_a_quotation_for_length {
+                    "I have found one or more quotations matching the given query parameters in \
+                     the files I am allowed to quote in this channel, but all such quotations \
+                     were too long to quote in this channel."
+                } else {
+                    "I have found no quotation matching the given query parameters in the files I \
+                     am allowed to quote in this channel."
+                }.into(),
+            ).into()
+        })
+}
+
+fn render_quotation(arg: &yaml_rust::yaml::Hash, quotation: &Quotation) -> Reaction {
+    let mut output_text = format!("[{id}] ", id = quotation.id);
+
+    output_text.reserve_exact(quotation_byte_len(quotation));
+
+    match quotation.format {
+        QuotationFormat::Chat => {
+            output_text.extend(chat_lines_stripped(quotation).intersperse(" "))
+        }
+        QuotationFormat::Plain => output_text += &quotation.text,
+    };
+
+    Reaction::Msg(output_text.into())
+}
+
+/// Returns an iterator over the lines of the given `chat`-format quotation, stripped of timestamps
+/// and anything else preceding the first (left *or right*) angle bracket.
+///
+/// # Panics
+///
+/// This function includes a debug assertion that the given quotation really is in the `chat`
+/// format.
+fn chat_lines_stripped(quotation: &Quotation) -> impl Iterator<Item = &str> {
+    debug_assert_eq!(quotation.format, QuotationFormat::Chat);
+    quotation
+        .text
+        .lines()
+        .map(|s| s.trim_left_matches(|c| c != '<' && c != '>'))
+}
+
+#[derive(Debug)]
+struct QueryParams<'a> {
+    // TODO: Use `RegexSet`.
+    regexes: SmallVec<[Regex; 8]>,
+    literals: SmallVec<[Cow<'a, str>; 8]>,
+    tags: SmallVec<[Cow<'a, str>; 4]>,
+}
+
+fn prepare_query_params(arg: &yaml_rust::yaml::Hash) -> Result<QueryParams> {
+    let regexes = iter_as_seq(get_arg_by_short_or_long_key(
+        arg,
+        &YAML_STR_R,
+        &YAML_STR_REGEX,
+    )?).map(|y| {
+        scalar_to_str(
+            y,
+            Cow::Borrowed,
+            "a search term given in the argument `regex`",
+        ).map_err(Into::into)
+    })
+        .map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
+        .collect::<Result<Result<_>>>()??;
+
+    let literals = iter_as_seq(get_arg_by_short_or_long_key(
+        arg,
+        &YAML_STR_S,
+        &YAML_STR_STRING,
+    )?).map(|y| {
+        scalar_to_str(
+            y,
+            Cow::Borrowed,
+            "a search term given in the argument `string`",
+        ).map_err(Into::into)
+    })
+        .collect::<Result<_>>()?;
+
+    let tags = iter_as_seq(arg.get(&YAML_STR_TAG))
+        .map(|y| {
+            scalar_to_str(
+                y,
+                Cow::Borrowed,
+                "a search term given in the argument `tag`",
+            ).map_err(Into::into)
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(QueryParams {
+        regexes,
+        literals,
+        tags,
+    })
+}
+
+fn quotation_matches_query_params(
+    arg: &yaml_rust::yaml::Hash,
+    QueryParams {
+        ref regexes,
+        ref literals,
+        ref tags,
+    }: &QueryParams,
+    quotation: &Quotation,
+) -> Result<bool> {
+    #[derive(Debug, Eq, PartialEq)]
+    enum Status {
+        NotAllMatchesFound,
+        AllMatchesFound,
+    }
+
+    // Make sure that the quotation has all the requested tags.
+    if !tags.iter().all(|tag_wanted| {
+        quotation
+            .tags
+            .iter()
+            .any(|tag_found| tag_found == tag_wanted.as_ref())
+    }) {
+        return Ok(false);
+    }
+
+    // These bit vectors record whether a match for each search term has been found in the
+    // quotation's text.
+    let mut regexes_matched = SmallBitVec::from_elem(regexes.len(), false);
+    let mut literals_matched = SmallBitVec::from_elem(literals.len(), false);
+
+    // This function searches for the search terms (which do not include requested tags) in the
+    // given text, marks any it finds as matched, and returns whether all the search terms have
+    // been matched.
+    let mut check_all_search_terms = |haystack| {
+        check_search_terms(regexes, &mut regexes_matched, |regex| {
+            regex.is_match(haystack)
+        });
+        check_search_terms(literals, &mut literals_matched, |literal| {
+            haystack.contains(literal.as_ref())
+        });
+
+        if regexes_matched.all_true() && literals_matched.all_true() {
+            Status::AllMatchesFound
+        } else {
+            Status::NotAllMatchesFound
+        }
+    };
+
+    fn check_search_terms<T, I, F>(search_terms: I, matched: &mut SmallBitVec, predicate: F)
+    where
+        I: IntoIterator<Item = T>,
+        F: Fn(T) -> bool,
+    {
+        for (index, search_term) in search_terms.into_iter().enumerate() {
+            if matched.get(index) == Some(true) {
+                // Only check the search terms for which matches have not yet been found.
+                continue;
+            }
+            if predicate(search_term) {
+                matched.set(index, true);
+            }
+        }
+    }
+
+    // Search for the search terms in the quotation's text.
+    match quotation.format {
+        QuotationFormat::Chat => {
+            for line in chat_lines_stripped(quotation) {
+                if check_all_search_terms(line) == Status::AllMatchesFound {
+                    return Ok(true);
+                }
+            }
+        }
+        QuotationFormat::Plain => {
+            if check_all_search_terms(&quotation.text) == Status::AllMatchesFound {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Search for the search terms in the quotation's tags.
+    for tag in &quotation.tags {
+        if check_all_search_terms(tag) == Status::AllMatchesFound {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+fn quotation_byte_len(quotation: &Quotation) -> usize {
+    match quotation.format {
+        QuotationFormat::Chat => chat_lines_stripped(quotation)
+            .map(|s| {
+                s.len() + {
+                    // Account for the space that will be added between each line.
+                    1
+                }
+            })
+            .sum(),
+        QuotationFormat::Plain => quotation.text.len(),
+    }
+}
+
+fn rendered_quotation_byte_len(quotation: &Quotation) -> usize {
+    quotation_byte_len(quotation) + {
+        // Account for the ID prefix, which has the form "[N*] ", assuming the quotation is
+        // abridged (the case in which its ID prefix will be longest), with `N` being the
+        // quotation's ID's `Display` representation. Using the actual `Display` implementation of
+        // `QuotationId` (via `ToString`) seems, though inefficient, the safest method of
+        // determining the length of that representation, especially to defend against possible
+        // changes in the `Display` implementation of `QuotationId`.
+        4 + quotation.id.to_string().len()
+    }
+}
+
+/// Computes whether the given message destination is allowed to see the quotations in each of our
+/// quotation files.
+///
+/// This function's return value is such that, with `file: QuotationFileMetadata`,
+/// `check_file_permissions(qdb, msg_dest).get(file.array_index())` is `true` if the message
+/// destination `msg_dest` is allowed to see `file`'s quotations, and is `false` otherwise. In
+/// actual usage, this function's return value should be saved and not recomputed for each
+/// quotation file.
+///
+/// It is assumed that checking permissions for each file is more efficient than doing so for each
+/// candidate quotation, as there are expected to be few files and many quotations.
+fn check_file_permissions(
+    QuotationDatabase { files, .. }: &QuotationDatabase,
+    MsgDest { server_id, target }: MsgDest,
+) -> SmallBitVec {
+    // TODO: Account for the server as well as the channel. E.g., consider channels as
+    // `server/#channel` rather than just `#channel`.
+
+    let mut result = SmallBitVec::from_elem(files.len(), false);
+
+    for (index, file) in files.iter().enumerate() {
+        result.set(index, file.channels_regex.is_match(target));
+    }
+
+    result
+}
+
+fn get_quotation_by_user_specified_id<'q>(
+    qdb: &'q QuotationDatabase,
+    requested_quotation_id: &Yaml,
+) -> std::result::Result<&'q Quotation, BotCmdResult> {
+    let requested_quotation_id_str = util::yaml::scalar_to_str(
+        requested_quotation_id,
+        Cow::Borrowed,
+        "the value of the parameter `id`",
+    )?;
+
+    match requested_quotation_id_str
+        .parse()
+        .map(|quotation_id| qdb.get_quotation_by_id(quotation_id))
+    {
+        Ok(Some(quotation)) => Ok(quotation),
+        Ok(None) => Err(BotCmdResult::UserErrMsg(
+            format!(
+                "The given value of the parameter `id`, {input:?}, was not recognized as \
+                 the identifier of a quotation in my quotation database.",
+                input = requested_quotation_id_str,
+            ).into(),
+        )),
+        Err(parse_err) => Err(BotCmdResult::UserErrMsg(
+            format!(
+                "The given value of the parameter `id`, {input:?}, failed to parse as a \
+                 quotation identifier: {parse_err}",
+                input = requested_quotation_id_str,
+                parse_err = parse_err,
+            ).into(),
+        )),
+    }
+}
+
+fn show_qdb_info(_: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
+    let qdb = read_qdb()?;
+
+    Ok(Reaction::Msgs(
+        vec![
+            format!(
+                "I have {quotation_qty} total quotation(s) in {file_qty} file(s). \
+                 The files I may name in this channel, along with their quotation counts, are: \
+                 {file_list}.",
+                quotation_qty = qdb.quotations.len(),
+                file_qty = qdb.files.len(),
+                file_list = "", // TODO
+            ).into(),
+        ].into(),
+    ))
+}
+
+fn reload_qdb(state: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
+    on_load(state).map(|()| Reaction::Msg("I have reloaded my quotation database.".into()))
+}
+
+fn read_qdb() -> Result<impl Deref<Target = QuotationDatabase>> {
+    match QDB.read() {
+        Ok(guard) => Ok(guard),
+        Err(_guard) => Err(ErrorKind::LockPoisoned("quotation database".into()).into()),
+    }
+}
+
+fn on_load(state: &State) -> Result<()> {
+    let data_path = state.module_data_path()?.join("quote");
+
+    if !data_path.exists() {
+        debug!("No quotation database found; not loading quotation database.");
+        return Ok(());
+    }
+
+    let mut old_qdb = match QDB.write() {
+        Ok(guard) => guard,
+        Err(_guard) => return Err(ErrorKind::LockPoisoned("quotation database".into()).into()),
+    };
+    let mut new_qdb = QuotationDatabase::new();
+
+    // Reuse any memory already allocated for an old quotation database.
+    mem::swap(&mut old_qdb.files, &mut new_qdb.files);
+    mem::swap(&mut old_qdb.quotations, &mut new_qdb.quotations);
+    new_qdb.files.clear();
+    new_qdb.quotations.clear();
+
+    let mut next_quotation_id = 0;
+
+    for entry in WalkDir::new(data_path)
+        .follow_links(true)
+        .min_depth(1)
+        .max_depth(1)
+        .into_iter()
+        .filter_entry(|entry| {
+            entry.file_type().is_file() && !entry.file_name().to_string_lossy().starts_with(".")
+        }) {
+        let entry = entry?;
+        let path = entry.path();
+        debug!("Loading quotation file: {}", path.display());
+
+        let QuotationFileIR {
+            mut channels,
+            quotations,
+        } = serde_yaml::from_reader(BufReader::new(File::open(path)?))?;
+
+        let file_id = QuotationFileId(Some(new_qdb.files.len()));
+
+        let file_metadata = QuotationFileMetadata {
+            file_id,
+            channels_regex: {
+                channels.reserve_exact(2);
+                channels.insert(0, '^');
+                channels.push('$');
+                channels.into_regex_ci()?
+            },
+        };
+
+        new_qdb.files.push(file_metadata);
+
+        debug_assert_eq!(next_quotation_id, new_qdb.quotations.len());
+
+        // Make sure that loading this quotation file will not cause integer overflow in the number
+        // of quotations.
+        if next_quotation_id.checked_add(quotations.len()).is_none() {
+            return Err(ErrorKind::IntegerOverflow(
+                "Attempted to load a quotation database containing too many quotations.".into(),
+            ).into());
+        }
+
+        new_qdb
+            .quotations
+            .extend(quotations.into_iter().map(|deserialized_quotation| {
+                let mut quotation = Quotation {
+                    id: {
+                        let id = next_quotation_id;
+                        // We already have checked for possible overflow, above.
+                        next_quotation_id += 1;
+                        QuotationId(Some(id))
+                    },
+                    file_id,
+                    ..deserialized_quotation
+                };
+                quotation.tags.sort_unstable();
+                quotation
+            }));
+    }
+
+    *old_qdb = new_qdb;
+
+    debug!("Finished loading quotation database.");
+
+    Ok(())
+}
+
+impl QuotationFileId {
+    fn array_index(&self) -> Option<usize> {
+        let &QuotationFileId(inner) = self;
+        inner
+    }
+}
+
+impl QuotationId {
+    fn array_index(&self) -> Option<usize> {
+        let &QuotationId(inner) = self;
+        inner
+    }
+}
+
+impl fmt::Display for QuotationId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            QuotationId(Some(id_number)) => write!(f, "{id_number:X}", id_number = id_number),
+            QuotationId(None) => write!(f, "<unset quotation ID>"),
+        }
+    }
+}
+
+impl str::FromStr for QuotationId {
+    type Err = ParseIntError;
+    fn from_str(src: &str) -> std::result::Result<Self, ParseIntError> {
+        Ok(QuotationId(Some(usize::from_str_radix(src, 16)?)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::TestResult;
+
+    quickcheck! {
+        fn quotation_id_string_roundtrip_conv_1(id_number: usize) -> () {
+            let original = QuotationId(Some(id_number));
+            let stringified = original.to_string();
+            let reparsed = stringified.parse::<QuotationId>();
+            assert_eq!(Ok(original), reparsed);
+        }
+
+        fn quotation_id_string_roundtrip_conv_2(s: String) -> TestResult {
+            let parsed = match s.parse::<QuotationId>() {
+                Ok(qid) => qid,
+                Err(_) => return TestResult::discard(),
+            };
+            let restringified = parsed.to_string();
+            let reparsed = restringified.parse::<QuotationId>();
+            assert_eq!(Ok(parsed), reparsed);
+            TestResult::passed()
+        }
+    }
+}

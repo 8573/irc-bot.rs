@@ -109,6 +109,11 @@ error_chain! {
             display("A thread panicked, poisoning a lock around {}.", lock_contents_desc)
         }
 
+        IntegerOverflow(desc: Cow<'static, str>) {
+            description("integer overflow")
+            display("Integer overflow: {}", desc)
+        }
+
         Any(inner: Box<Any + Send + 'static>) {
             description("miscellaneous error")
             display("Error: {}", util::fmt::FmtAny(inner.as_ref()))
