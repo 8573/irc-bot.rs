@@ -19,8 +19,6 @@ error_chain! {
     }
 
     errors {
-        IdentificationFailure(io_err: io::Error)
-
         ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo)
 
         ModuleFeatureRegistryClash(old: ModuleFeatureInfo, new: ModuleFeatureInfo)
@@ -46,8 +44,6 @@ error_chain! {
                     feature_name,
                     util::fmt::FmtAny(payload.as_ref()))
         }
-
-        MsgPrefixUpdateRequestedButPrefixMissing
 
         NicknameUnknown {
             description("nickname retrieval error")
