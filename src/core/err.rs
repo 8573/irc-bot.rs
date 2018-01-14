@@ -19,9 +19,21 @@ error_chain! {
     }
 
     errors {
-        ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo)
+        ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo) {
+            description("module registry clash")
+            display("Failed to load a new module because it would have overwritten an old module. \
+                     Old: {:?}; new: {:?}.",
+                    old,
+                    new)
+        }
 
-        ModuleFeatureRegistryClash(old: ModuleFeatureInfo, new: ModuleFeatureInfo)
+        ModuleFeatureRegistryClash(old: ModuleFeatureInfo, new: ModuleFeatureInfo) {
+            description("module feature registry clash")
+            display("Failed to load a new module feature because it would have overwritten an old \
+                     module feature. Old: {:?}; new: {:?}.",
+                    old,
+                    new)
+        }
 
         Config(key: String, problem: String) {
             description("configuration error")
@@ -67,6 +79,10 @@ error_chain! {
         }
 
         #[doc(hidden)]
-        __Nonexhaustive
+        __Nonexhaustive {
+            description("<secret error>")
+            display("An error has occurred. In particular, someone used the error kind \
+                     `__Nonexhaustive`, which should never be used.")
+        }
     }
 }
