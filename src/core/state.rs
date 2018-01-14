@@ -1,6 +1,5 @@
 use super::BotCommand;
 use super::ErrorKind;
-use super::ModuleDataProvider;
 use super::ModuleFeatureKind;
 use super::MsgPrefix;
 use super::Result;
@@ -11,6 +10,7 @@ use super::config;
 use super::irc_msgs::OwningMsgPrefix;
 use rand::StdRng;
 use std::borrow::Cow;
+use std::path::Path;
 use std::sync::MutexGuard;
 use std::sync::RwLockReadGuard;
 
@@ -23,8 +23,8 @@ impl State {
             .map(ToOwned::to_owned)
     }
 
-    pub fn module_data(&self) -> &ModuleDataProvider {
-        self.module_data.as_ref()
+    pub fn module_data_path(&self) -> Result<&Path> {
+        Ok(self.module_data_path.as_ref())
     }
 
     pub fn command(&self, name: &str) -> Result<Option<&BotCommand>> {

@@ -17,9 +17,6 @@ use self::irc_msgs::OwningMsgPrefix;
 use self::irc_msgs::parse_msg_to_nick;
 use self::irc_send::push_to_outbox;
 use self::misc_traits::GetDebugInfo;
-pub use self::modl_data::ModuleDataDir;
-pub use self::modl_data::ModuleDataProvider;
-pub use self::modl_data::NullModuleDataProvider;
 pub use self::modl_sys::Module;
 use self::modl_sys::ModuleFeatureInfo;
 use self::modl_sys::ModuleFeatureKind;
@@ -42,6 +39,7 @@ use rand::StdRng;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -57,7 +55,6 @@ mod irc_comm;
 mod irc_msgs;
 mod irc_send;
 mod misc_traits;
-mod modl_data;
 mod modl_sys;
 mod reaction;
 mod state;
@@ -75,7 +72,7 @@ pub struct State {
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
     config: config::inner::Config,
     error_handler: Arc<ErrorHandler>,
-    module_data: Box<ModuleDataProvider>,
+    module_data_path: PathBuf,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
@@ -104,13 +101,12 @@ impl ServerId {
 }
 
 impl State {
-    fn new<ModlData, ErrF>(
+    fn new<ErrF>(
         config: config::inner::Config,
-        module_data: ModlData,
+        module_data_path: PathBuf,
         error_handler: ErrF,
     ) -> Result<State>
     where
-        ModlData: ModuleDataProvider,
         ErrF: ErrorHandler,
     {
         let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
@@ -122,7 +118,7 @@ impl State {
             commands: Default::default(),
             config: config,
             error_handler: Arc::new(error_handler),
-            module_data: Box::new(module_data),
+            module_data_path,
             modules: Default::default(),
             msg_prefix,
             rng: Mutex::new(StdRng::new()?),
@@ -168,12 +164,12 @@ impl State {
 
 pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     config: Cfg,
-    module_data: ModlData,
+    module_data_path: ModlData,
     error_handler: ErrF,
     modules: Modls,
 ) where
     Cfg: IntoConfig,
-    ModlData: ModuleDataProvider,
+    ModlData: Into<PathBuf>,
     ErrF: ErrorHandler,
     Modls: IntoIterator<Item = ModlCtor>,
     ModlCtor: Fn() -> Module,
@@ -190,7 +186,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
         }
     };
 
-    let mut state = match State::new(config, module_data, error_handler) {
+    let mut state = match State::new(config, module_data_path.into(), error_handler) {
         Ok(s) => {
             trace!("Assembled bot state.");
             s

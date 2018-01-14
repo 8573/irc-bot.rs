@@ -39,7 +39,7 @@ fn main() {
 
     irc_bot::run(
         irc_bot::Config::try_from_path(args.value_of("config-file").expect("default missing?")),
-        irc_bot::ModuleDataDir::from(args.value_of("data-dir").expect("default missing?")),
+        args.value_of("data-dir").expect("default missing?"),
         move |err| {
             match error_verbosity {
                 ErrorVerbosity::Display => error!("{}", err),
