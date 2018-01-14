@@ -1,8 +1,8 @@
 use super::BotCmdResult;
 use super::ErrorKind;
+use super::MsgDest;
 use super::MsgMetadata;
 use super::MsgPrefix;
-use super::MsgTarget;
 use super::Reaction;
 use super::Result;
 use super::ServerId;
@@ -31,7 +31,7 @@ const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 impl State {
     fn compose_msg<S1, S2>(
         &self,
-        target: MsgTarget,
+        dest: MsgDest,
         addressee: S1,
         msg: S2,
     ) -> Result<Option<LibReaction<Message>>>
@@ -51,15 +51,15 @@ impl State {
             msg,
         );
 
-        info!("Sending message to {:?}: {:?}", target, final_msg);
+        info!("Sending message to {:?}: {:?}", dest, final_msg);
 
         let mut wrapped_msg = SmallVec::<[_; 1]>::new();
 
         for input_line in final_msg.lines() {
-            wrap_msg(self, target, input_line, |output_line| {
+            wrap_msg(self, dest, input_line, |output_line| {
                 wrapped_msg.push(LibReaction::RawMsg(
                     aatxe::Command::PRIVMSG(
-                        target.0.to_owned(),
+                        dest.target.to_owned(),
                         output_line.to_owned(),
                     ).into(),
                 ));
@@ -76,7 +76,7 @@ impl State {
 
     fn compose_msgs<S1, S2, M>(
         &self,
-        target: MsgTarget,
+        dest: MsgDest,
         addressee: S1,
         msgs: M,
     ) -> Result<Option<LibReaction<Message>>>
@@ -89,7 +89,7 @@ impl State {
         let mut output = Vec::new();
 
         for msg in msgs {
-            match self.compose_msg(target, addressee.borrow(), msg)? {
+            match self.compose_msg(dest, addressee.borrow(), msg)? {
                 Some(m) => output.push(m),
                 None => {}
             }
@@ -102,12 +102,17 @@ impl State {
         }
     }
 
-    fn prefix_len(&self) -> Result<usize> {
-        Ok(self.read_msg_prefix()?.len())
+    fn prefix_len(&self, server_id: ServerId) -> Result<usize> {
+        Ok(self.read_msg_prefix(server_id)?.len())
     }
 }
 
-fn wrap_msg<F>(state: &State, MsgTarget(target): MsgTarget, msg: &str, mut f: F) -> Result<()>
+fn wrap_msg<F>(
+    state: &State,
+    MsgDest { server_id, target }: MsgDest,
+    msg: &str,
+    mut f: F,
+) -> Result<()>
 where
     F: FnMut(&str) -> Result<()>,
 {
@@ -121,7 +126,7 @@ where
         colons + spaces + line_terminator_len
     };
     let cmd_len = "PRIVMSG".len();
-    let metadata_len = state.prefix_len()? + cmd_len + target.len() + punctuation_len;
+    let metadata_len = state.prefix_len(server_id)? + cmd_len + target.len() + punctuation_len;
     let msg_len_limit = raw_len_limit - metadata_len;
 
     if msg.len() < msg_len_limit {
@@ -168,22 +173,29 @@ where
 
 fn handle_reaction(
     state: &Arc<State>,
+    server_id: ServerId,
     prefix: OwningMsgPrefix,
     target: &str,
     reaction: Reaction,
+    bot_nick: String,
 ) -> Result<Option<LibReaction<Message>>> {
-    let (reply_target, reply_addressee) = if target == state.nick()? {
-        (MsgTarget(prefix.parse().nick.unwrap()), "")
+    let (reply_target, reply_addressee) = if target == bot_nick {
+        (prefix.parse().nick.unwrap(), "")
     } else {
-        (MsgTarget(target), prefix.parse().nick.unwrap_or(""))
+        (target, prefix.parse().nick.unwrap_or(""))
+    };
+
+    let reply_dest = MsgDest {
+        server_id,
+        target: reply_target,
     };
 
     match reaction {
         Reaction::None => Ok(None),
-        Reaction::Msg(s) => state.compose_msg(reply_target, "", &s),
-        Reaction::Msgs(a) => state.compose_msgs(reply_target, "", a.iter()),
-        Reaction::Reply(s) => state.compose_msg(reply_target, reply_addressee, &s),
-        Reaction::Replies(a) => state.compose_msgs(reply_target, reply_addressee, a.iter()),
+        Reaction::Msg(s) => state.compose_msg(reply_dest, "", &s),
+        Reaction::Msgs(a) => state.compose_msgs(reply_dest, "", a.iter()),
+        Reaction::Reply(s) => state.compose_msg(reply_dest, reply_addressee, &s),
+        Reaction::Replies(a) => state.compose_msgs(reply_dest, reply_addressee, a.iter()),
         Reaction::RawMsg(s) => Ok(Some(LibReaction::RawMsg(s.parse()?))),
         Reaction::Quit(msg) => Ok(Some(mk_quit(msg))),
     }
@@ -191,17 +203,22 @@ fn handle_reaction(
 
 fn handle_bot_command_or_trigger(
     state: &Arc<State>,
+    server_id: ServerId,
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
+    bot_nick: String,
 ) -> Option<LibReaction<Message>> {
     let reaction = (|| {
         let metadata = MsgMetadata {
             prefix: prefix.parse(),
-            target: MsgTarget(&target),
+            dest: MsgDest {
+                server_id,
+                target: &target,
+            },
         };
 
-        let cmd_ln = parse_msg_to_nick(&msg, metadata.target, &state.nick()?).unwrap_or("");
+        let cmd_ln = parse_msg_to_nick(&msg, metadata.dest.target, &bot_nick).unwrap_or("");
 
         let mut cmd_name_and_args = cmd_ln.splitn(2, char::is_whitespace);
         let cmd_name = cmd_name_and_args.next().unwrap_or("");
@@ -216,7 +233,9 @@ fn handle_bot_command_or_trigger(
         }
     })();
 
-    match reaction.and_then(|reaction| handle_reaction(state, prefix, &target, reaction)) {
+    match reaction.and_then(|reaction| {
+        handle_reaction(state, server_id, prefix, &target, reaction, bot_nick)
+    }) {
         Ok(r) => r,
         Err(e) => Some(LibReaction::RawMsg(
             aatxe::Command::PRIVMSG(
@@ -323,7 +342,7 @@ where
             )
         }
         Message { command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..), .. } => {
-            push_to_outbox(outbox, server_id, handle_004(state)?);
+            push_to_outbox(outbox, server_id, handle_004(state, server_id)?);
             Ok(())
         }
         _ => Ok(()),
@@ -348,12 +367,14 @@ where
         msg
     );
 
-    if !is_msg_to_nick(MsgTarget(&target), &msg, &state.nick()?) {
+    let bot_nick = state.nick(server_id)?;
+
+    if !is_msg_to_nick(&target, &msg, &bot_nick) {
         return Ok(());
     }
 
     if prefix.parse().nick == Some(&target) && msg.trim() == UPDATE_MSG_PREFIX_STR {
-        update_prefix_info(state, &prefix.parse())
+        update_prefix_info(state, server_id, &prefix.parse())
     } else {
         // This could take a while or panic, so do it in a new thread.
 
@@ -362,7 +383,8 @@ where
         let outbox = outbox.clone();
 
         let thread_spawn_result = crossbeam_scope.builder().spawn(move || {
-            let lib_reaction = handle_bot_command_or_trigger(&state, prefix, target, msg);
+            let lib_reaction =
+                handle_bot_command_or_trigger(&state, server_id, prefix, target, msg, bot_nick);
 
             push_to_outbox(&outbox, server_id, lib_reaction);
         });
@@ -374,7 +396,7 @@ where
     }
 }
 
-fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
+fn update_prefix_info(state: &State, _server_id: ServerId, prefix: &MsgPrefix) -> Result<()> {
     debug!(
         "Updating stored message prefix information from received {:?}",
         prefix
@@ -396,17 +418,20 @@ fn update_prefix_info(state: &State, prefix: &MsgPrefix) -> Result<()> {
     Ok(())
 }
 
-fn handle_004(state: &State) -> Result<LibReaction<Message>> {
+fn handle_004(state: &State, server_id: ServerId) -> Result<LibReaction<Message>> {
     // The server has finished sending the protocol-mandated welcome messages.
 
-    send_msg_prefix_update_request(state)
+    send_msg_prefix_update_request(state, server_id)
 }
 
 // TODO: Run `send_msg_prefix_update_request` periodically.
-fn send_msg_prefix_update_request(state: &State) -> Result<LibReaction<Message>> {
+fn send_msg_prefix_update_request(
+    state: &State,
+    server_id: ServerId,
+) -> Result<LibReaction<Message>> {
     Ok(LibReaction::RawMsg(
         aatxe::Command::PRIVMSG(
-            state.nick()?.to_owned(),
+            state.nick(server_id)?.to_owned(),
             UPDATE_MSG_PREFIX_STR.to_owned(),
         ).into(),
     ))

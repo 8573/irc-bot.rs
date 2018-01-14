@@ -1,5 +1,10 @@
+use super::ServerId;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MsgTarget<'a>(pub &'a str);
+pub struct MsgDest<'a> {
+    pub server_id: ServerId,
+    pub target: &'a str,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MsgPrefix<'a> {
@@ -10,7 +15,7 @@ pub struct MsgPrefix<'a> {
 
 #[derive(Debug)]
 pub struct MsgMetadata<'a> {
-    pub target: MsgTarget<'a>,
+    pub dest: MsgDest<'a>,
     pub prefix: MsgPrefix<'a>,
 }
 
@@ -41,14 +46,14 @@ fn prefix_from_pircolate<'a>(
     }
 }
 
-pub(super) fn is_msg_to_nick(MsgTarget(target): MsgTarget, msg: &str, nick: &str) -> bool {
+pub(super) fn is_msg_to_nick(target: &str, msg: &str, nick: &str) -> bool {
     target == nick || msg == nick ||
         (msg.starts_with(nick) && (msg.find(|c: char| [':', ','].contains(&c)) == Some(nick.len())))
 }
 
 pub(super) fn parse_msg_to_nick<'msg>(
     text: &'msg str,
-    target: MsgTarget,
+    target: &str,
     nick: &str,
 ) -> Option<&'msg str> {
     if is_msg_to_nick(target, text, nick) {

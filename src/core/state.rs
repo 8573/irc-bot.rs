@@ -14,8 +14,8 @@ use std::sync::MutexGuard;
 use std::sync::RwLockReadGuard;
 
 impl State {
-    pub fn nick(&self) -> Result<String> {
-        self.read_msg_prefix()?
+    pub fn nick(&self, server_id: ServerId) -> Result<String> {
+        self.read_msg_prefix(server_id)?
             .parse()
             .nick
             .ok_or(ErrorKind::NicknameUnknown.into())
@@ -46,7 +46,11 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         }))
     }
 
-    pub(super) fn read_msg_prefix(&self) -> Result<RwLockReadGuard<OwningMsgPrefix>> {
+    // TODO: This is server-specific.
+    pub(super) fn read_msg_prefix(
+        &self,
+        _server_id: ServerId,
+    ) -> Result<RwLockReadGuard<OwningMsgPrefix>> {
         self.msg_prefix.read().map_err(|_| {
             ErrorKind::LockPoisoned("stored message prefix".into()).into()
         })

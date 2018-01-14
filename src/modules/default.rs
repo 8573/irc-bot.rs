@@ -92,7 +92,7 @@ fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
 
 fn part(
     state: &State,
-    &MsgMetadata { target: MsgTarget(msg_target), .. }: &MsgMetadata,
+    &MsgMetadata { dest: MsgDest { server_id, target }, .. }: &MsgMetadata,
     arg: &Yaml,
 ) -> BotCmdResult {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
@@ -101,9 +101,9 @@ fn part(
         util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
     });
 
-    let chan = match (chan, msg_target) {
+    let chan = match (chan, target) {
         (Some(c), _) => c,
-        (None, t) if t == state.nick().unwrap_or("".into()) => {
+        (None, t) if t == state.nick(server_id).unwrap_or("".into()) => {
             return BotCmdResult::ArgMissing1To1("channel".into())
         }
         (None, t) => t.into(),
