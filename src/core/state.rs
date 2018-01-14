@@ -1,6 +1,5 @@
 use super::BotCommand;
 use super::ErrorKind;
-use super::ModuleFeatureKind;
 use super::MsgPrefix;
 use super::Result;
 use super::Server;

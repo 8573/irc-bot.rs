@@ -19,7 +19,6 @@ use self::irc_send::push_to_outbox;
 use self::misc_traits::GetDebugInfo;
 pub use self::modl_sys::Module;
 use self::modl_sys::ModuleFeatureInfo;
-use self::modl_sys::ModuleFeatureKind;
 use self::modl_sys::ModuleInfo;
 use self::modl_sys::ModuleLoadMode;
 pub use self::modl_sys::mk_module;
