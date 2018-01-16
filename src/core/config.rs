@@ -1,5 +1,6 @@
 use super::ErrorKind;
 use super::Result;
+use super::pkg_info;
 use serde_yaml;
 use std::fmt;
 use std::fs::File;
@@ -233,11 +234,7 @@ fn fill_in_config_defaults(cfg: &mut inner::Config) -> Result<()> {
     }
 
     if cfg.realname.is_empty() {
-        cfg.realname = format!(
-            "Built with <{}> v{}",
-            env!("CARGO_PKG_HOMEPAGE"),
-            env!("CARGO_PKG_VERSION")
-        );
+        cfg.realname = pkg_info::BRIEF_CREDITS_STRING.clone();
     }
 
     Ok(())

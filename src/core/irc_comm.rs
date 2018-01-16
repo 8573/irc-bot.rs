@@ -13,6 +13,7 @@ use super::irc_msgs::is_msg_to_nick;
 use super::irc_send::OutboxPort;
 use super::irc_send::push_to_outbox;
 use super::parse_msg_to_nick;
+use super::pkg_info;
 use super::reaction::LibReaction;
 use super::trigger;
 use crossbeam_utils;
@@ -294,17 +295,9 @@ fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
 }
 
 pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
-    lazy_static! {
-        static ref DEFAULT_QUIT_MSG: String = format!(
-            "Built with <{}> v{}",
-            env!("CARGO_PKG_HOMEPAGE"),
-            env!("CARGO_PKG_VERSION")
-        );
-    }
-
-    let quit = aatxe::Command::QUIT(msg.map(Cow::into_owned).or_else(
-        || Some(DEFAULT_QUIT_MSG.clone()),
-    )).into();
+    let quit = aatxe::Command::QUIT(msg.map(Cow::into_owned).or_else(|| {
+        Some(pkg_info::BRIEF_CREDITS_STRING.clone())
+    })).into();
 
     LibReaction::RawMsg(quit)
 }

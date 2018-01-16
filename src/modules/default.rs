@@ -138,17 +138,13 @@ fn ping(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     Reaction::Reply("pong".into()).into()
 }
 
-fn bot_fw_info(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
-    fn d(l: &'static [&'static str]) -> &'static str {
-        l.iter().find(|s| !s.is_empty()).unwrap_or(&"unknown")
-    }
-
+fn bot_fw_info(state: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     Reaction::Reply(
         format!(
             "This bot was built with `{name}.rs`, version {ver}; see <{url}>.",
-            name = d(&[env!("CARGO_PKG_NAME")]),
-            ver = d(&[env!("IRC_BOT_RS_GIT_VERSION"), env!("CARGO_PKG_VERSION")]),
-            url = d(&[env!("CARGO_PKG_HOMEPAGE")])
+            name = state.framework_crate_name(),
+            ver = state.framework_version_str(),
+            url = state.framework_homepage_url_str(),
         ).into(),
     ).into()
 }
@@ -217,7 +213,7 @@ fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
                 format!(
                     "For this bot software's documentation, including an introduction to the \
                      command syntax, see <{homepage}>",
-                    homepage = env!("CARGO_PKG_HOMEPAGE")
+                    homepage = state.framework_homepage_url_str(),
                 ).into(),
             ].into(),
         ).into()

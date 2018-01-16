@@ -55,6 +55,7 @@ mod irc_msgs;
 mod irc_send;
 mod misc_traits;
 mod modl_sys;
+mod pkg_info;
 mod reaction;
 mod state;
 mod trigger;
