@@ -82,7 +82,7 @@ pub(super) fn run_any_matching(
 ) -> Result<Option<BotCmdResult>> {
     let mut trigger = None;
 
-    for (_priority, triggers) in &state.triggers {
+    for (_priority, triggers) in state.triggers.iter().rev() {
         if triggers.is_empty() {
             continue;
         }
