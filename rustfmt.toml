@@ -1,6 +1,0 @@
-# In general, I would prefer to stick to the default style, to which end I try
-# to persuade `rustfmt` to ignore the formatting of its input.
-force_format_strings = true
-reorder_imported_names = true
-reorder_imports = true
-take_source_hints = false
