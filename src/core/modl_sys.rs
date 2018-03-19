@@ -44,7 +44,9 @@ impl GetDebugInfo for Module {
     type Output = ModuleInfo;
 
     fn dbg_info(&self) -> ModuleInfo {
-        ModuleInfo { name: self.name.to_string() }
+        ModuleInfo {
+            name: self.name.to_string(),
+        }
     }
 }
 
@@ -88,11 +90,9 @@ impl ModuleBuilder {
         );
 
         let syntax = syntax.into();
-        let usage_yaml = util::yaml::parse_node(&syntax).unwrap().unwrap_or(
-            Yaml::Hash(
-                Default::default(),
-            ),
-        );
+        let usage_yaml = util::yaml::parse_node(&syntax)
+            .unwrap()
+            .unwrap_or(Yaml::Hash(Default::default()));
 
         let cmd = ModuleFeature::Command {
             name: name,
@@ -286,7 +286,11 @@ impl State {
             .flatten()
             .collect::<Vec<Error>>();
 
-        if errs.is_empty() { Ok(()) } else { Err(errs) }
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(errs)
+        }
     }
 
     pub fn load_module(
@@ -305,19 +309,13 @@ impl State {
                 .collect::<Vec<_>>()
         );
 
-        if let Some(existing_module) =
-            match (mode, self.modules.get(module.name.as_ref())) {
-                (_, None) |
-                (ModuleLoadMode::Replace, _) |
-                (ModuleLoadMode::Force, _) => None,
-                (ModuleLoadMode::Add, Some(old)) => Some(old),
-            }
-        {
+        if let Some(existing_module) = match (mode, self.modules.get(module.name.as_ref())) {
+            (_, None) | (ModuleLoadMode::Replace, _) | (ModuleLoadMode::Force, _) => None,
+            (ModuleLoadMode::Add, Some(old)) => Some(old),
+        } {
             return Err(vec![
-                ErrorKind::ModuleRegistryClash(
-                    existing_module.dbg_info(),
-                    module.dbg_info()
-                ).into(),
+                ErrorKind::ModuleRegistryClash(existing_module.dbg_info(), module.dbg_info())
+                    .into(),
             ]);
         }
 
@@ -328,17 +326,19 @@ impl State {
         let errs = module
             .features
             .iter()
-            .filter_map(|feature| match self.load_module_feature(
-                module.clone(),
-                feature,
-                mode,
-            ) {
-                Ok(()) => None,
-                Err(e) => Some(e),
-            })
+            .filter_map(
+                |feature| match self.load_module_feature(module.clone(), feature, mode) {
+                    Ok(()) => None,
+                    Err(e) => Some(e),
+                },
+            )
             .collect::<Vec<Error>>();
 
-        if errs.is_empty() { Ok(()) } else { Err(errs) }
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(errs)
+        }
     }
 
     fn load_module_feature<'modl>(
@@ -349,21 +349,15 @@ impl State {
     ) -> Result<()> {
         debug!("Loading module feature (f1): {:?}", feature.dbg_info());
 
-        if let Some(existing_feature) =
-            match feature {
-                &ModuleFeature::Command { .. } => {
-                    match (mode, self.commands.get(feature.name())) {
-                        (_, None) |
-                        (ModuleLoadMode::Force, _) => None,
-                        (ModuleLoadMode::Replace, Some(old))
-                            if old.provider.name == provider.name => None,
-                        (ModuleLoadMode::Replace, Some(old)) => Some(old.dbg_info()),
-                        (ModuleLoadMode::Add, Some(old)) => Some(old.dbg_info()),
-                    }
-                }
-                &ModuleFeature::Trigger { .. } => None,
-            }
-        {
+        if let Some(existing_feature) = match feature {
+            &ModuleFeature::Command { .. } => match (mode, self.commands.get(feature.name())) {
+                (_, None) | (ModuleLoadMode::Force, _) => None,
+                (ModuleLoadMode::Replace, Some(old)) if old.provider.name == provider.name => None,
+                (ModuleLoadMode::Replace, Some(old)) => Some(old.dbg_info()),
+                (ModuleLoadMode::Add, Some(old)) => Some(old.dbg_info()),
+            },
+            &ModuleFeature::Trigger { .. } => None,
+        } {
             bail!(ErrorKind::ModuleFeatureRegistryClash(
                 existing_feature,
                 feature.dbg_info(),

@@ -31,18 +31,16 @@ impl<T> RwLockExt<T> for RwLock<T> {
     where
         Desc: Into<Cow<'static, str>>,
     {
-        self.read().map_err(|PoisonError { .. }| {
-            ErrorKind::LockPoisoned(description.into().into()).into()
-        })
+        self.read()
+            .map_err(|PoisonError { .. }| ErrorKind::LockPoisoned(description.into().into()).into())
     }
 
     fn write_clean<Desc>(&self, description: Desc) -> Result<RwLockWriteGuard<T>>
     where
         Desc: Into<Cow<'static, str>>,
     {
-        self.write().map_err(|PoisonError { .. }| {
-            ErrorKind::LockPoisoned(description.into().into()).into()
-        })
+        self.write()
+            .map_err(|PoisonError { .. }| ErrorKind::LockPoisoned(description.into().into()).into())
     }
 }
 
@@ -61,8 +59,7 @@ impl<T> MutexExt<T> for Mutex<T> {
     where
         Desc: Into<Cow<'static, str>>,
     {
-        self.lock().map_err(|PoisonError { .. }| {
-            ErrorKind::LockPoisoned(description.into().into()).into()
-        })
+        self.lock()
+            .map_err(|PoisonError { .. }| ErrorKind::LockPoisoned(description.into().into()).into())
     }
 }

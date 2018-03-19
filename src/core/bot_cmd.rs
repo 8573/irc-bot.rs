@@ -106,11 +106,9 @@ pub(super) fn run(
     let result = match user_authorized {
         Ok(true) => {
             debug!("Running bot command {:?} with arg: {:?}", name, arg);
-            match util::run_handler(
-                "command",
-                name.clone(),
-                || handler.run(state, &metadata, &arg),
-            ) {
+            match util::run_handler("command", name.clone(), || {
+                handler.run(state, &metadata, &arg)
+            }) {
                 Ok(r) => r,
                 Err(e) => BotCmdResult::LibErr(e),
             }
@@ -144,12 +142,9 @@ pub(super) fn run(
 fn parse_arg<'s>(syntax: &'s Yaml, arg_str: &str) -> std::result::Result<Yaml, BotCmdResult> {
     use util::yaml as uy;
 
-    match uy::parse_and_check_node(
-        arg_str,
-        syntax,
-        "<argument>",
-        || Yaml::Hash(Default::default()),
-    ) {
+    match uy::parse_and_check_node(arg_str, syntax, "<argument>", || {
+        Yaml::Hash(Default::default())
+    }) {
         Ok(arg) => Ok(arg),
         Err(uy::Error(uy::ErrorKind::YamlScan(_), _)) => Err(BotCmdResult::SyntaxErr),
         Err(err) => Err(BotCmdResult::LibErr(err.into())),

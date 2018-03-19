@@ -29,26 +29,23 @@ fn prefix_from_pircolate<'a>(
     pirc_pfx: Option<(&'a str, Option<&'a str>, Option<&'a str>)>,
 ) -> MsgPrefix<'a> {
     match pirc_pfx {
-        Some((nick, user, host)) => {
-            MsgPrefix {
-                nick: Some(nick),
-                user: user,
-                host: host,
-            }
-        }
-        None => {
-            MsgPrefix {
-                nick: None,
-                user: None,
-                host: None,
-            }
-        }
+        Some((nick, user, host)) => MsgPrefix {
+            nick: Some(nick),
+            user: user,
+            host: host,
+        },
+        None => MsgPrefix {
+            nick: None,
+            user: None,
+            host: None,
+        },
     }
 }
 
 pub(super) fn is_msg_to_nick(target: &str, msg: &str, nick: &str) -> bool {
-    target == nick || msg == nick ||
-        (msg.starts_with(nick) && (msg.find(|c: char| [':', ','].contains(&c)) == Some(nick.len())))
+    target == nick || msg == nick || (msg.starts_with(nick) && (msg.find(|c: char| {
+        [':', ','].contains(&c)
+    }) == Some(nick.len())))
 }
 
 pub(super) fn parse_msg_to_nick<'msg>(

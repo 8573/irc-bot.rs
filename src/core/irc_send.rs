@@ -38,12 +38,10 @@ where
         Err(crossbeam_channel::TrySendError::Full(record)) => {
             error!("Outbox full!!! Could not send {record:?}", record = record)
         }
-        Err(crossbeam_channel::TrySendError::Disconnected(record)) => {
-            error!(
-                "Outbox receiver disconnected!!! Could not send {record:?}",
-                record = record
-            )
-        }
+        Err(crossbeam_channel::TrySendError::Disconnected(record)) => error!(
+            "Outbox receiver disconnected!!! Could not send {record:?}",
+            record = record
+        ),
     }
 }
 
@@ -58,11 +56,12 @@ pub(super) fn send_main(
     // will run until — and the sending thread will exit when — all receiving (and
     // command-handling, etc.) threads have exited. Not having to implement that myself is nice.
     for record in outbox_receiver {
-        let OutboxRecord { server_id, output, .. } =
-            match process_outgoing_msg(&state, thread_label, record) {
-                Some(a) => a,
-                None => continue,
-            };
+        let OutboxRecord {
+            server_id, output, ..
+        } = match process_outgoing_msg(&state, thread_label, record) {
+            Some(a) => a,
+            None => continue,
+        };
 
         let server_uuid = server_id.uuid.hyphenated();
 
@@ -145,16 +144,12 @@ fn send_reaction_with_err_cb<ErrCb>(
     ErrCb: Fn(Error) -> (),
 {
     match reaction {
-        LibReaction::RawMsg(msg) => {
-            match server.send(msg) {
-                Ok(()) => {}
-                Err(e) => err_cb(e.into()),
-            }
-        }
-        LibReaction::Multi(reactions) => {
-            for reaction in reactions {
-                send_reaction(state, server, thread_label, reaction)
-            }
-        }
+        LibReaction::RawMsg(msg) => match server.send(msg) {
+            Ok(()) => {}
+            Err(e) => err_cb(e.into()),
+        },
+        LibReaction::Multi(reactions) => for reaction in reactions {
+            send_reaction(state, server, thread_label, reaction)
+        },
     }
 }

@@ -50,8 +50,7 @@ pub enum Kind {
     Scalar,
     Sequence,
     Mapping,
-    #[doc(hidden)]
-    __Nonexhaustive,
+    #[doc(hidden)] __Nonexhaustive,
 }
 
 impl Kind {
@@ -80,11 +79,11 @@ pub(crate) enum AugmentedTy<'a> {
 impl<'a> AugmentedTy<'a> {
     pub(crate) fn of(node: &Yaml) -> AugmentedTy {
         match node {
-            &Yaml::Real(_) |
-            &Yaml::Integer(_) |
-            &Yaml::String(_) |
-            &Yaml::Boolean(_) |
-            &Yaml::Null => AugmentedTy::Scalar,
+            &Yaml::Real(_)
+            | &Yaml::Integer(_)
+            | &Yaml::String(_)
+            | &Yaml::Boolean(_)
+            | &Yaml::Null => AugmentedTy::Scalar,
             &Yaml::Array(_) => AugmentedTy::Sequence,
             &Yaml::Hash(ref data) => AugmentedTy::Mapping(data),
             &Yaml::Alias(_) | &Yaml::BadValue => AugmentedTy::Other,
@@ -101,9 +100,9 @@ pub fn any_to_str<'a, 'b, F>(node: &'a Yaml, lt_map: F) -> Cow<'b, str>
 where
     F: Fn(&'a str) -> Cow<'b, str>,
 {
-    node.as_str().map(lt_map).unwrap_or_else(|| {
-        Cow::Owned(format!("{:?}", node))
-    })
+    node.as_str()
+        .map(lt_map)
+        .unwrap_or_else(|| Cow::Owned(format!("{:?}", node)))
 }
 
 /// Converts a scalar YAML node to a string.
@@ -209,27 +208,23 @@ where
     let actual_ty = Ty::of(actual);
 
     match (&expected_ty, &actual_ty) {
-        (&Ty::Scalar, &Ty::Scalar) |
-        (&Ty::Sequence, &Ty::Sequence) => {
+        (&Ty::Scalar, &Ty::Scalar) | (&Ty::Sequence, &Ty::Sequence) => {
             // Types match trivially.
         }
         (&Ty::Mapping(expected_fields), &Ty::Mapping(actual_fields)) => {
             check_field_types(expected_fields, actual_fields, path_buf)?
         }
-        (&Ty::Scalar, &Ty::Sequence) |
-        (&Ty::Scalar, &Ty::Mapping(_)) |
-        (&Ty::Sequence, &Ty::Scalar) |
-        (&Ty::Sequence, &Ty::Mapping(_)) |
-        (&Ty::Mapping(_), &Ty::Scalar) |
-        (&Ty::Mapping(_), &Ty::Sequence) => {
-            bail!(ErrorKind::TypeMismatch(
-                path_buf.join("."),
-                Kind::from_aug_ty(&expected_ty),
-                Kind::from_aug_ty(&actual_ty),
-            ))
-        }
+        (&Ty::Scalar, &Ty::Sequence)
+        | (&Ty::Scalar, &Ty::Mapping(_))
+        | (&Ty::Sequence, &Ty::Scalar)
+        | (&Ty::Sequence, &Ty::Mapping(_))
+        | (&Ty::Mapping(_), &Ty::Scalar)
+        | (&Ty::Mapping(_), &Ty::Sequence) => bail!(ErrorKind::TypeMismatch(
+            path_buf.join("."),
+            Kind::from_aug_ty(&expected_ty),
+            Kind::from_aug_ty(&actual_ty),
+        )),
         (_, &Ty::Other) | (&Ty::Other, _) => bail!(ErrorKind::AliasesNotSupported),
-
     }
 
     path_buf.pop();
@@ -247,14 +242,12 @@ where
 {
     for (key, expected_value) in expected_fields {
         match (expected_value, actual_fields.get(key)) {
-            (_, Some(actual_value)) => {
-                check_type_inner(
-                    expected_value,
-                    actual_value,
-                    path_buf,
-                    any_to_str(key, Cow::Borrowed),
-                )?
-            }
+            (_, Some(actual_value)) => check_type_inner(
+                expected_value,
+                actual_value,
+                path_buf,
+                any_to_str(key, Cow::Borrowed),
+            )?,
             (&Yaml::String(ref s), None) if s.starts_with("[") && s.ends_with("]") => {
                 // This field is optional.
             }
@@ -270,12 +263,9 @@ where
                     any_to_str(key, Cow::Borrowed),
                 )?
             }
-            (_, None) => {
-                bail!(ErrorKind::RequiredFieldMissing(
-                    any_to_str(key, |s| s.to_owned().into()),
-                ))
-            }
-
+            (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(key, |s| {
+                s.to_owned().into()
+            }),)),
         }
     }
 

@@ -90,9 +90,7 @@ pub(super) fn run_any_matching(
         if let Some(t) = triggers
             .rand_iter()
             .with_rng(state.rng()?.deref_mut())
-            .filter(|t| {
-                t.read_regex().map(|rx| rx.is_match(text)).unwrap_or(false)
-            })
+            .filter(|t| t.read_regex().map(|rx| rx.is_match(text)).unwrap_or(false))
             .next()
         {
             trigger = Some(t);
@@ -110,9 +108,9 @@ pub(super) fn run_any_matching(
          trigger didn't match!",
     );
 
-    Ok(Some(
-        util::run_handler("trigger", trigger.name.clone(), || {
-            trigger.handler.run(state, msg_metadata, args)
-        })?,
-    ))
+    Ok(Some(util::run_handler(
+        "trigger",
+        trigger.name.clone(),
+        || trigger.handler.run(state, msg_metadata, args),
+    )?))
 }

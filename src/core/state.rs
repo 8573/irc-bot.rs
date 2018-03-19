@@ -34,16 +34,24 @@ impl State {
         Ok(self.commands.keys().cloned().collect())
     }
 
-    pub fn have_admin(&self,
-MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<bool>{
-        Ok(self.config.admins.iter().any(|&config::Admin {
-             nick: ref nick_2,
-             user: ref user_2,
-             host: ref host_2,
-         }| {
-            check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2) &&
-                check_admin_cred(host_1, host_2)
-        }))
+    pub fn have_admin(
+        &self,
+        MsgPrefix {
+            nick: nick_1,
+            user: user_1,
+            host: host_1,
+        }: MsgPrefix,
+    ) -> Result<bool> {
+        Ok(self.config.admins.iter().any(
+            |&config::Admin {
+                 nick: ref nick_2,
+                 user: ref user_2,
+                 host: ref host_2,
+             }| {
+                check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2)
+                    && check_admin_cred(host_1, host_2)
+            },
+        ))
     }
 
     // TODO: This is server-specific.
@@ -51,9 +59,9 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         &self,
         _server_id: ServerId,
     ) -> Result<RwLockReadGuard<OwningMsgPrefix>> {
-        self.msg_prefix.read().map_err(|_| {
-            ErrorKind::LockPoisoned("stored message prefix".into()).into()
-        })
+        self.msg_prefix
+            .read()
+            .map_err(|_| ErrorKind::LockPoisoned("stored message prefix".into()).into())
     }
 
     pub(super) fn read_server(
@@ -61,16 +69,12 @@ MsgPrefix { nick: nick_1, user: user_1, host: host_1 }: MsgPrefix) -> Result<boo
         server_id: ServerId,
     ) -> Result<Option<RwLockReadGuard<Server>>> {
         match self.servers.get(&server_id) {
-            Some(lock) => {
-                match lock.read() {
-                    Ok(guard) => Ok(Some(guard)),
-                    Err(_) => Err(
-                        ErrorKind::LockPoisoned(
-                            format!("server {}", server_id.uuid.hyphenated()).into(),
-                        ).into(),
-                    ),
-                }
-            }
+            Some(lock) => match lock.read() {
+                Ok(guard) => Ok(Some(guard)),
+                Err(_) => Err(ErrorKind::LockPoisoned(
+                    format!("server {}", server_id.uuid.hyphenated()).into(),
+                ).into()),
+            },
             None => Ok(None),
         }
     }

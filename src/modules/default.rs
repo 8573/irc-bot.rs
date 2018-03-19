@@ -92,14 +92,16 @@ fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
 
 fn part(
     state: &State,
-    &MsgMetadata { dest: MsgDest { server_id, target }, .. }: &MsgMetadata,
+    &MsgMetadata {
+        dest: MsgDest { server_id, target },
+        ..
+    }: &MsgMetadata,
     arg: &Yaml,
 ) -> BotCmdResult {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
 
-    let chan = arg.get(&YAML_STR_CHAN).map(|y| {
-        util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
-    });
+    let chan = arg.get(&YAML_STR_CHAN)
+        .map(|y| util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL));
 
     let chan = match (chan, target) {
         (Some(c), _) => c,
@@ -109,9 +111,8 @@ fn part(
         (None, t) => t.into(),
     };
 
-    let comment = arg.get(&YAML_STR_MSG).map(|y| {
-        util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
-    });
+    let comment = arg.get(&YAML_STR_MSG)
+        .map(|y| util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL));
 
     Reaction::RawMsg(
         format!(
@@ -187,9 +188,7 @@ fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
         let list_names = ["commands", "lists"];
 
         if list_name == "commands" {
-            Reaction::Msg(
-                format!("Available commands: {:?}", state.command_names()).into(),
-            ).into()
+            Reaction::Msg(format!("Available commands: {:?}", state.command_names()).into()).into()
         } else if list_name == "lists" {
             Reaction::Msg(format!("Available lists: {:?}", list_names).into()).into()
         } else {
@@ -200,8 +199,7 @@ fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
             Reaction::Msg(
                 format!(
                     "List {:?} not found. Available lists: {:?}",
-                    list_name,
-                    list_names
+                    list_name, list_names
                 ).into(),
             ).into()
         }

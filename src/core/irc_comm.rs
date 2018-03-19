@@ -40,8 +40,7 @@ impl State {
         S1: Borrow<str>,
         S2: Display,
     {
-        let final_msg =
-            format!(
+        let final_msg = format!(
             "{}{}{}",
             addressee.borrow(),
             if addressee.borrow().is_empty() {
@@ -59,10 +58,7 @@ impl State {
         for input_line in final_msg.lines() {
             wrap_msg(self, dest, input_line, |output_line| {
                 wrapped_msg.push(LibReaction::RawMsg(
-                    aatxe::Command::PRIVMSG(
-                        dest.target.to_owned(),
-                        output_line.to_owned(),
-                    ).into(),
+                    aatxe::Command::PRIVMSG(dest.target.to_owned(), output_line.to_owned()).into(),
                 ));
                 Ok(())
             })?;
@@ -136,8 +132,9 @@ where
 
     let mut split_end_idx = 0;
 
-    let lines = msg.match_indices(char::is_whitespace).peekable().batching(
-        |iter| {
+    let lines = msg.match_indices(char::is_whitespace)
+        .peekable()
+        .batching(|iter| {
             debug_assert!(msg.len() >= msg_len_limit);
 
             let split_start_idx = split_end_idx;
@@ -162,8 +159,7 @@ where
             }
 
             Some(msg[split_start_idx..split_end_idx].trim())
-        },
-    );
+        });
 
     for line in lines {
         f(line)?
@@ -234,17 +230,14 @@ fn handle_bot_command_or_trigger(
         }
     })();
 
-    match reaction.and_then(|reaction| {
-        handle_reaction(state, server_id, prefix, &target, reaction, bot_nick)
-    }) {
+    match reaction
+        .and_then(|reaction| handle_reaction(state, server_id, prefix, &target, reaction, bot_nick))
+    {
         Ok(r) => r,
         Err(e) => Some(LibReaction::RawMsg(
             aatxe::Command::PRIVMSG(
                 target,
-                format!(
-                    "Encountered error while trying to handle message: {}",
-                    e
-                ),
+                format!("Encountered error while trying to handle message: {}", e),
             ).into(),
         )),
     }
@@ -253,36 +246,23 @@ fn handle_bot_command_or_trigger(
 fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
     let cmd_result = match result {
         BotCmdResult::Ok(r) => Ok(r),
-        BotCmdResult::Unauthorized => {
-            Err(
-                format!(
-                    "My apologies, but you do not appear to have sufficient authority to use my \
-                     {:?} command.",
-                    cmd_name
-                ).into(),
-            )
-        }
+        BotCmdResult::Unauthorized => Err(format!(
+            "My apologies, but you do not appear to have sufficient \
+             authority to use my {:?} command.",
+            cmd_name
+        ).into()),
         BotCmdResult::SyntaxErr => Err("Syntax error. Try my `help` command.".into()),
-        BotCmdResult::ArgMissing(arg_name) => {
-            Err(
-                format!(
-                    "Syntax error: For command {:?}, the argument {:?} is required, but it was not \
-                     given.",
-                    cmd_name,
-                    arg_name
-                ).into(),
-            )
-        }
-        BotCmdResult::ArgMissing1To1(arg_name) => {
-            Err(
-                format!(
-                    "Syntax error: When command {:?} is used outside of a channel, the argument \
-                     {:?} is required, but it was not given.",
-                    cmd_name,
-                    arg_name
-                ).into(),
-            )
-        }
+        BotCmdResult::ArgMissing(arg_name) => Err(format!(
+            "Syntax error: For command {:?}, the argument {:?} \
+             is required, but it was not given.",
+            cmd_name, arg_name
+        ).into()),
+        BotCmdResult::ArgMissing1To1(arg_name) => Err(format!(
+            "Syntax error: When command {:?} is used \
+             outside of a channel, the argument {:?} is \
+             required, but it was not given.",
+            cmd_name, arg_name
+        ).into()),
         BotCmdResult::LibErr(e) => Err(format!("Error: {}", e).into()),
         BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s).into()),
         BotCmdResult::BotErrMsg(s) => Err(format!("Internal error: {}", s).into()),
@@ -295,9 +275,10 @@ fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
 }
 
 pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
-    let quit = aatxe::Command::QUIT(msg.map(Cow::into_owned).or_else(|| {
-        Some(pkg_info::BRIEF_CREDITS_STRING.clone())
-    })).into();
+    let quit = aatxe::Command::QUIT(
+        msg.map(Cow::into_owned)
+            .or_else(|| Some(pkg_info::BRIEF_CREDITS_STRING.clone())),
+    ).into();
 
     LibReaction::RawMsg(quit)
 }
@@ -323,18 +304,19 @@ where
             command: aatxe::Command::PRIVMSG(target, msg),
             prefix,
             ..
+        } => handle_privmsg(
+            state,
+            crossbeam_scope,
+            server_id,
+            outbox,
+            OwningMsgPrefix::from_string(prefix.unwrap_or_default()),
+            target,
+            msg,
+        ),
+        Message {
+            command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..),
+            ..
         } => {
-            handle_privmsg(
-                state,
-                crossbeam_scope,
-                server_id,
-                outbox,
-                OwningMsgPrefix::from_string(prefix.unwrap_or_default()),
-                target,
-                msg,
-            )
-        }
-        Message { command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..), .. } => {
             push_to_outbox(outbox, server_id, handle_004(state, server_id)?);
             Ok(())
         }

@@ -18,12 +18,7 @@ pub trait ErrorHandler: Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
 
 impl<T> ErrorHandler for T
 where
-    T: Fn(Error) -> ErrorReaction
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe
-        + 'static,
+    T: Fn(Error) -> ErrorReaction + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
 {
     fn run(&self, err: Error) -> ErrorReaction {
         self(err)
@@ -36,11 +31,7 @@ pub trait BotCmdHandler: Send + Sync + UnwindSafe + RefUnwindSafe {
 
 impl<F, R> BotCmdHandler for F
 where
-    F: Fn(&State, &MsgMetadata, &Yaml) -> R
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
+    F: Fn(&State, &MsgMetadata, &Yaml) -> R + Send + Sync + UnwindSafe + RefUnwindSafe,
     R: Into<BotCmdResult>,
 {
     fn run(&self, state: &State, msg_md: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
@@ -54,11 +45,7 @@ pub trait TriggerHandler: Send + Sync + UnwindSafe + RefUnwindSafe {
 
 impl<F, R> TriggerHandler for F
 where
-    F: Fn(&State, &MsgMetadata, Captures) -> R
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
+    F: Fn(&State, &MsgMetadata, Captures) -> R + Send + Sync + UnwindSafe + RefUnwindSafe,
     R: Into<BotCmdResult>,
 {
     fn run(&self, state: &State, msg_md: &MsgMetadata, args: Captures) -> BotCmdResult {

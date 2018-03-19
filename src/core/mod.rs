@@ -96,7 +96,9 @@ pub struct ServerId {
 
 impl ServerId {
     fn new() -> Self {
-        ServerId { uuid: Uuid::new_v4() }
+        ServerId {
+            uuid: Uuid::new_v4(),
+        }
     }
 }
 
@@ -109,9 +111,10 @@ impl State {
     where
         ErrF: ErrorHandler,
     {
-        let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(
-            format!("{}!{}@", config.nickname, config.username),
-        ));
+        let msg_prefix = RwLock::new(OwningMsgPrefix::from_string(format!(
+            "{}!{}@",
+            config.nickname, config.username
+        )));
 
         Ok(State {
             addressee_suffix: ": ".into(),
@@ -198,23 +201,19 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     };
 
     match state.load_modules(modules.into_iter().map(|f| f()), ModuleLoadMode::Add) {
-        Ok(()) => {
-            trace!("Loaded all requested modules without error.")
-        }
-        Err(errs) => {
-            for err in errs {
-                match state.error_handler.run(err) {
-                    ErrorReaction::Proceed => {}
-                    ErrorReaction::Quit(msg) => {
-                        error!(
-                            "Terminal error while loading modules: {:?}",
-                            msg.unwrap_or_default().as_ref()
-                        );
-                        return;
-                    }
+        Ok(()) => trace!("Loaded all requested modules without error."),
+        Err(errs) => for err in errs {
+            match state.error_handler.run(err) {
+                ErrorReaction::Proceed => {}
+                ErrorReaction::Quit(msg) => {
+                    error!(
+                        "Terminal error while loading modules: {:?}",
+                        msg.unwrap_or_default().as_ref()
+                    );
+                    return;
                 }
             }
-        }
+        },
     }
 
     info!(
@@ -244,25 +243,23 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
                 trace!("Connected to server {:?}.", server_config.host);
                 s
             }
-            Err(err) => {
-                match state.error_handler.run(err.into()) {
-                    ErrorReaction::Proceed => {
-                        error!(
-                            "Failed to connect to server {:?}; ignoring.",
-                            server_config.host
-                        );
-                        continue;
-                    }
-                    ErrorReaction::Quit(msg) => {
-                        error!(
-                            "Terminal error while connecting to server {:?}: {:?}",
-                            server_config.host,
-                            msg.unwrap_or_default().as_ref()
-                        );
-                        return;
-                    }
+            Err(err) => match state.error_handler.run(err.into()) {
+                ErrorReaction::Proceed => {
+                    error!(
+                        "Failed to connect to server {:?}; ignoring.",
+                        server_config.host
+                    );
+                    continue;
                 }
-            }
+                ErrorReaction::Quit(msg) => {
+                    error!(
+                        "Terminal error while connecting to server {:?}: {:?}",
+                        server_config.host,
+                        msg.unwrap_or_default().as_ref()
+                    );
+                    return;
+                }
+            },
         };
 
         let server_id = ServerId::new();
@@ -307,7 +304,6 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
         );
 
         for (&server_id, server) in &state.servers {
-
             let (aatxe_server, addr) = {
                 let s = server.read().expect(LOCK_EARLY_POISON_FAIL);
                 (s.inner.clone(), s.socket_addr_string.clone())
@@ -321,13 +317,10 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
                 match aatxe_server.identify() {
                     Ok(()) => debug!("{}: Sent identification sequence to server.", thread_label),
-                    Err(e) => {
-                        error!(
-                            "{}: Failed to send identification sequence to server: {}",
-                            thread_label,
-                            e
-                        )
-                    }
+                    Err(e) => error!(
+                        "{}: Failed to send identification sequence to server: {}",
+                        thread_label, e
+                    ),
                 }
 
                 crossbeam_utils::scoped::scope(|crossbeam_scope| {
@@ -366,9 +359,9 @@ fn handle_msg<'xbs, 'xbsr>(
 ) where
     'xbs: 'xbsr,
 {
-    match input.and_then(|msg| {
-        irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg)
-    }) {
+    match input
+        .and_then(|msg| irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg))
+    {
         Ok(()) => {}
         Err(e) => push_to_outbox(outbox, server_id, state.handle_err_generic(e)),
     }
@@ -399,22 +392,16 @@ fn spawn_thread<'xbs, F, PurposeF>(
 
     match thread_build_result {
         Ok(_join_handle) => {}
-        Err(err) => {
-            match state.error_handler.run(err.into()) {
-                ErrorReaction::Proceed => {
-                    error!(
-                        "Failed to create {purpose}; ignoring.",
-                        purpose = purpose_desc_full(&addr),
-                    )
-                }
-                ErrorReaction::Quit(msg) => {
-                    error!(
-                        "Terminal error: Failed to create {purpose}: {msg:?}",
-                        purpose = purpose_desc_full(&addr),
-                        msg = msg
-                    )
-                }
-            }
-        }
+        Err(err) => match state.error_handler.run(err.into()) {
+            ErrorReaction::Proceed => error!(
+                "Failed to create {purpose}; ignoring.",
+                purpose = purpose_desc_full(&addr),
+            ),
+            ErrorReaction::Quit(msg) => error!(
+                "Terminal error: Failed to create {purpose}: {msg:?}",
+                purpose = purpose_desc_full(&addr),
+                msg = msg
+            ),
+        },
     }
 }

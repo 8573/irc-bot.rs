@@ -34,8 +34,8 @@ fn main() {
 
     env_logger::init().expect("error: failed to initialize logging");
 
-    let error_verbosity = value_t!(args, "error-verbosity", ErrorVerbosity)
-        .unwrap_or_else(|err| err.exit());
+    let error_verbosity =
+        value_t!(args, "error-verbosity", ErrorVerbosity).unwrap_or_else(|err| err.exit());
 
     irc_bot::run(
         irc_bot::Config::try_from_path(args.value_of("config-file").expect("default missing?")),

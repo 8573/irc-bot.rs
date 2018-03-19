@@ -9,24 +9,23 @@ fn main() {
 
 fn set_git_ver_env_var() {
     let git_ver = Command::new("git")
-        .args(
-            &[
-                "describe",
-                "--tags",
-                "--first-parent",
-                "--always",
-                "--dirty",
-                "--broken",
-            ],
-        )
+        .args(&[
+            "describe",
+            "--tags",
+            "--first-parent",
+            "--always",
+            "--dirty",
+            "--broken",
+        ])
         .output();
 
     let git_ver = match git_ver {
         Ok(Output {
-               ref status,
-               ref stdout,
-               ..
-           }) if status.success() => {
+            ref status,
+            ref stdout,
+            ..
+        }) if status.success() =>
+        {
             let v = String::from_utf8_lossy(stdout);
             eprintln!("Detected version from Git repository: {}", v);
             v
