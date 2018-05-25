@@ -20,7 +20,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     (rustChannelOf {
-      channel = "1.24.1";
+      channel = "1.26.0";
     }).rust
     clang
     git
