@@ -50,7 +50,8 @@ pub enum Kind {
     Scalar,
     Sequence,
     Mapping,
-    #[doc(hidden)] __Nonexhaustive,
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl Kind {
@@ -263,9 +264,10 @@ where
                     any_to_str(key, Cow::Borrowed),
                 )?
             }
-            (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(key, |s| {
-                s.to_owned().into()
-            }),)),
+            (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(
+                key,
+                |s| s.to_owned().into()
+            ),)),
         }
     }
 

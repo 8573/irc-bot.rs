@@ -16,11 +16,14 @@ pub(crate) mod inner {
     pub(crate) struct Config {
         pub(crate) nickname: String,
 
-        #[serde(default)] pub(crate) username: String,
+        #[serde(default)]
+        pub(crate) username: String,
 
-        #[serde(default)] pub(crate) realname: String,
+        #[serde(default)]
+        pub(crate) realname: String,
 
-        #[serde(default)] pub(crate) admins: Vec<super::Admin>,
+        #[serde(default)]
+        pub(crate) admins: Vec<super::Admin>,
 
         pub(crate) servers: Vec<super::Server>,
     }
@@ -32,11 +35,14 @@ pub struct Config {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Admin {
-    #[serde(default)] pub nick: Option<String>,
+    #[serde(default)]
+    pub nick: Option<String>,
 
-    #[serde(default)] pub user: Option<String>,
+    #[serde(default)]
+    pub user: Option<String>,
 
-    #[serde(default)] pub host: Option<String>,
+    #[serde(default)]
+    pub host: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -45,7 +51,8 @@ pub struct Server {
 
     pub port: u16,
 
-    #[serde(default = "mk_true")] pub tls: bool,
+    #[serde(default = "mk_true")]
+    pub tls: bool,
 }
 
 #[derive(Debug)]
@@ -99,8 +106,9 @@ impl ConfigBuilder {
         let nickname = nickname.into();
 
         if nickname.is_empty() {
-            return ConfigBuilder(Err(ErrorKind::Config("nickname".into(), "is empty".into())
-                .into()));
+            return ConfigBuilder(
+                Err(ErrorKind::Config("nickname".into(), "is empty".into()).into()),
+            );
         }
 
         ConfigBuilder(self.0.map(|cfg| inner::Config { nickname, ..cfg }))

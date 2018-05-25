@@ -1,5 +1,5 @@
-use core::*;
 use core::BotCmdAuthLvl as Auth;
+use core::*;
 use yaml_rust::Yaml;
 
 pub fn mk() -> Module {

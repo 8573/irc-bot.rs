@@ -1,5 +1,5 @@
-use core::*;
 use core::BotCmdAuthLvl as Auth;
+use core::*;
 use regex::Captures;
 use std::borrow::Cow;
 use util;

@@ -7,19 +7,10 @@ fn choose(list: &'static [&'static str]) -> &'static str {
 }
 
 lazy_static! {
-    pub(super) static ref NAME_STR: &'static str = choose(&[
-        env!("CARGO_PKG_NAME"),
-    ]);
-
-    pub(super) static ref VERSION_STR: &'static str = choose(&[
-        env!("IRC_BOT_RS_GIT_VERSION"),
-        env!("CARGO_PKG_VERSION"),
-    ]);
-
-    pub(super) static ref HOMEPAGE_STR: &'static str = choose(&[
-        env!("CARGO_PKG_HOMEPAGE"),
-    ]);
-
+    pub(super) static ref NAME_STR: &'static str = choose(&[env!("CARGO_PKG_NAME")]);
+    pub(super) static ref VERSION_STR: &'static str =
+        choose(&[env!("IRC_BOT_RS_GIT_VERSION"), env!("CARGO_PKG_VERSION")]);
+    pub(super) static ref HOMEPAGE_STR: &'static str = choose(&[env!("CARGO_PKG_HOMEPAGE")]);
     pub(super) static ref BRIEF_CREDITS_STRING: String = format!(
         "Built with <{url}> {ver}",
         url = HOMEPAGE_STR.deref(),
