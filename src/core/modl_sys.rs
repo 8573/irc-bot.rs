@@ -11,7 +11,7 @@ use super::Trigger;
 use super::TriggerAttr;
 use super::TriggerHandler;
 use super::trigger::TriggerPriority;
-use itertools::Itertools;
+use itertools;
 use regex::Regex;
 use std;
 use std::borrow::Cow;
@@ -277,14 +277,12 @@ impl State {
     where
         Modls: IntoIterator<Item = Module>,
     {
-        let errs = modules
-            .into_iter()
-            .filter_map(|module| match self.load_module(module, mode) {
+        let errs = itertools::flatten(modules.into_iter().filter_map(|module| {
+            match self.load_module(module, mode) {
                 Ok(()) => None,
                 Err(e) => Some(e),
-            })
-            .flatten()
-            .collect::<Vec<Error>>();
+            }
+        })).collect::<Vec<Error>>();
 
         if errs.is_empty() {
             Ok(())
