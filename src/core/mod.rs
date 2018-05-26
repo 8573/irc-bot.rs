@@ -43,7 +43,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
-use std::time::Duration;
 use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
@@ -264,8 +263,18 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     let state = Arc::new(state);
     trace!("Stored bot state onto heap.");
 
+    let mut aatxe_reactor = match aatxe::IrcReactor::new() {
+        Ok(r) => {
+            trace!("Successfully initialized IRC reactor.");
+            r
+        }
+        Err(e) => {
+            error!("Terminal error: Failed to initialize IRC reactor: {}", e);
+            return;
+        }
+    };
+
     let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
-    let outbox_receiver_clone = outbox_receiver.clone();
 
     spawn_thread(
         &state,
@@ -276,101 +285,66 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     );
 
     for (&server_id, server) in &state.servers {
+        let server = server.read().expect(LOCK_EARLY_POISON_FAIL);
+
+        let state_alias = state.clone();
+
         let outbox_sender_clone = outbox_sender.clone();
 
-        let recv_fn = move |state: Arc<State>| -> Result<()> {
-            let mut aatxe_reactor = match aatxe::IrcReactor::new() {
-                Ok(r) => {
-                    trace!("Successfully initialized IRC reactor.");
-                    r
-                }
-                Err(e) => {
-                    error!("Terminal error: Failed to initialize IRC reactor: {}", e);
-                    return Err(e.into());
-                }
-            };
-
-            let aatxe_client = {
-                let server = state.servers[&server_id]
-                    .read()
-                    .expect(LOCK_EARLY_POISON_FAIL);
-
-                match aatxe_reactor.prepare_client_and_connect(&server.aatxe_config) {
-                    Ok(client) => {
-                        trace!("Connected to server {:?}.", server.socket_addr_string);
-                        client
-                    }
-                    Err(err) => {
-                        error!(
-                            "Failed to connect to server {:?}.",
-                            server.socket_addr_string
-                        );
-                        return Err(err.into());
-                    }
-                }
-            };
-
-            match state
-                .aatxe_clients
-                .write()
-                .expect(LOCK_EARLY_POISON_FAIL)
-                .insert(server_id, aatxe_client.clone())
-            {
-                None => {}
-                Some(_other_aatxe_client) => {
-                    // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
-                    // `IrcServer` implementing `Debug`, add the other server to this message.
-                    error!(
-                        "This shouldn't happen, but there was already a server registered \
-                         with UUID {uuid}!",
-                        uuid = server_id.uuid.hyphenated(),
-                    );
-                    return Err(ErrorKind::ServerRegistryClash(server_id).into());
-                }
+        let aatxe_client = match aatxe_reactor.prepare_client_and_connect(&server.aatxe_config) {
+            Ok(client) => {
+                trace!("Connected to server {:?}.", server.socket_addr_string);
+                client
             }
-
-            let addr = {
-                let s = state.servers[&server_id]
-                    .read()
-                    .expect(LOCK_EARLY_POISON_FAIL);
-                s.socket_addr_string.clone()
-            };
-
-            match aatxe_client.identify() {
-                Ok(()) => debug!("recv[{}]: Sent identification sequence to server.", addr),
-                Err(e) => error!(
-                    "recv[{}]: Failed to send identification sequence to server: {}",
-                    addr, e
-                ),
+            Err(err) => {
+                error!(
+                    "Failed to connect to server {:?}: {}",
+                    server.socket_addr_string, err,
+                );
+                continue;
             }
-
-            aatxe_reactor.register_client_with_handler(aatxe_client, move |_aatxe_client, msg| {
-                handle_msg(&state, server_id, &outbox_sender_clone, Ok(msg));
-
-                Ok(())
-            });
-
-            aatxe_reactor.run().map_err(Into::into)
         };
 
-        let addr = server
-            .read()
+        match state
+            .aatxe_clients
+            .write()
             .expect(LOCK_EARLY_POISON_FAIL)
-            .socket_addr_string
-            .clone();
+            .insert(server_id, aatxe_client.clone())
+        {
+            None => {}
+            Some(_other_aatxe_client) => {
+                // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
+                // `IrcServer` implementing `Debug`, add the other server to this message.
+                error!(
+                    "This shouldn't happen, but there was already a server registered \
+                     with UUID {uuid}!",
+                    uuid = server_id.uuid.hyphenated(),
+                );
+                return;
+            }
+        }
 
-        spawn_thread(
-            &state,
-            addr,
-            "recv",
-            |addr| format!("receiving thread for server {addr:?}", addr = addr),
-            recv_fn,
-        );
+        match aatxe_client.identify() {
+            Ok(()) => debug!(
+                "recv[{}]: Sent identification sequence to server.",
+                server.socket_addr_string
+            ),
+            Err(e) => error!(
+                "recv[{}]: Failed to send identification sequence to server: {}",
+                server.socket_addr_string, e
+            ),
+        }
+
+        aatxe_reactor.register_client_with_handler(aatxe_client, move |_aatxe_client, msg| {
+            handle_msg(&state_alias, server_id, &outbox_sender_clone, Ok(msg));
+
+            Ok(())
+        });
     }
 
-    while !outbox_receiver_clone.is_disconnected() {
-        // TODO: Use a Condvar to enable cleaner quitting.
-        thread::park_timeout(Duration::from_secs(60));
+    match aatxe_reactor.run() {
+        Ok(()) => trace!("IRC reactor shut down normally."),
+        Err(e) => error!("IRC reactor shut down abnormally: {}", e),
     }
 }
 
