@@ -4,6 +4,10 @@ use yaml_rust::Yaml;
 
 pub fn mk() -> Module {
     mk_module("test")
+        .on_load(Box::new(|_: &State| {
+            trace!("Hello from the `test` module's `on_load` function!");
+            Ok(())
+        }))
         .command(
             "test-line-wrap",
             "",

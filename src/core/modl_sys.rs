@@ -6,6 +6,7 @@ use super::BotCommand;
 use super::Error;
 use super::ErrorKind;
 use super::GetDebugInfo;
+use super::ModuleLoadHandler;
 use super::Result;
 use super::State;
 use super::Trigger;
@@ -13,6 +14,7 @@ use super::TriggerAttr;
 use super::TriggerHandler;
 use itertools;
 use regex::Regex;
+use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -25,6 +27,7 @@ pub struct Module {
     pub name: Cow<'static, str>,
     uuid: Uuid,
     features: Vec<ModuleFeature>,
+    on_load: SmallVec<[Box<ModuleLoadHandler>; 1]>,
 }
 
 impl PartialEq for Module {
@@ -53,6 +56,7 @@ impl GetDebugInfo for Module {
 pub struct ModuleBuilder {
     name: Cow<'static, str>,
     features: Vec<ModuleFeature>,
+    on_load: SmallVec<[Box<ModuleLoadHandler>; 1]>,
 }
 
 pub fn mk_module<'modl, S>(name: S) -> ModuleBuilder
@@ -62,6 +66,7 @@ where
     ModuleBuilder {
         name: name.into(),
         features: Default::default(),
+        on_load: Default::default(),
     }
 }
 
@@ -152,15 +157,35 @@ impl ModuleBuilder {
         self
     }
 
+    /// Sets a handler function for loading or reloading the module's configuration.
+    ///
+    /// The given `handler` function will be called when the module is first loaded, as well as if
+    /// module configurations are reloaded, which may happen at a bot administrator's request.
+    ///
+    /// Multiple such handler functions may be set, by calling this function multiple times, but it
+    /// generally likely would be better to set a single handler function that calls multiple
+    /// sub-handlers.
+    pub fn on_load(mut self, handler: Box<ModuleLoadHandler>) -> Self {
+        self.on_load.push(handler);
+
+        self
+    }
+
     pub fn end(self) -> Module {
-        let ModuleBuilder { name, mut features } = self;
+        let ModuleBuilder {
+            name,
+            mut features,
+            mut on_load,
+        } = self;
 
         features.shrink_to_fit();
+        on_load.shrink_to_fit();
 
         Module {
             name: name,
             uuid: Uuid::new_v4(),
             features: features,
+            on_load,
         }
     }
 }
@@ -332,11 +357,18 @@ impl State {
             )
             .collect::<Vec<Error>>();
 
-        if errs.is_empty() {
-            Ok(())
-        } else {
-            Err(errs)
+        if !errs.is_empty() {
+            return Err(errs);
         }
+
+        for handler in &module.on_load {
+            match handler.run(self) {
+                Ok(()) => {}
+                Err(err) => return Err(vec![err]),
+            }
+        }
+
+        Ok(())
     }
 
     fn load_module_feature<'modl>(

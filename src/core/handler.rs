@@ -2,6 +2,7 @@ use super::BotCmdResult;
 use super::Error;
 use super::ErrorReaction;
 use super::MsgMetadata;
+use super::Result;
 use super::State;
 use regex::Captures;
 use std::panic::RefUnwindSafe;
@@ -50,5 +51,19 @@ where
 {
     fn run(&self, state: &State, msg_md: &MsgMetadata, args: Captures) -> BotCmdResult {
         self(state, msg_md, args).into()
+    }
+}
+
+pub trait ModuleLoadHandler: Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
+    fn run(&self, &State) -> Result<()>;
+}
+
+impl<F, R> ModuleLoadHandler for F
+where
+    F: Fn(&State) -> R + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
+    R: Into<Result<()>>,
+{
+    fn run(&self, state: &State) -> Result<()> {
+        self(state).into()
     }
 }
