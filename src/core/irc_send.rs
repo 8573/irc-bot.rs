@@ -6,7 +6,7 @@ use core::Result;
 use core::State;
 use crossbeam_channel;
 use irc::client::prelude as aatxe;
-use irc::client::server::Server as AatxeServer;
+use irc::client::prelude::Client as AatxeClient;
 use irc::proto::Message;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -114,7 +114,7 @@ pub(super) fn process_outgoing_msg(
 
 fn send_reaction(
     state: &State,
-    server: &aatxe::IrcServer,
+    server: &aatxe::IrcClient,
     thread_label: &str,
     reaction: LibReaction<Message>,
 ) {
@@ -136,7 +136,7 @@ fn send_reaction(
 
 fn send_reaction_with_err_cb<ErrCb>(
     state: &State,
-    server: &aatxe::IrcServer,
+    server: &aatxe::IrcClient,
     thread_label: &str,
     reaction: LibReaction<Message>,
     err_cb: ErrCb,

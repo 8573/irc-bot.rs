@@ -12,16 +12,24 @@ use util;
 error_chain! {
     foreign_links {
         Io(io::Error);
+
         Rand(rand::Error);
+
         SerdeYaml(serde_yaml::Error);
     }
 
     links {
-        IrcCrate(irc::error::Error, irc::error::ErrorKind);
         YamlUtil(util::yaml::Error, util::yaml::ErrorKind);
     }
 
     errors {
+        // TODO: Once I switch from `error-chain` to `failure`, integrate with `irc`'s `failure`
+        // support.
+        IrcCrate(inner: irc::error::IrcError) {
+            description("IRC error")
+            display("IRC error: {}", inner)
+        }
+
         ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo) {
             description("module registry clash")
             display("Failed to load a new module because it would have overwritten an old module. \
@@ -102,5 +110,11 @@ error_chain! {
             display("An error has occurred. In particular, someone used the error kind \
                      `__Nonexhaustive`, which should never be used.")
         }
+    }
+}
+
+impl From<irc::error::IrcError> for Error {
+    fn from(orig: irc::error::IrcError) -> Self {
+        ErrorKind::IrcCrate(orig).into()
     }
 }

@@ -31,8 +31,8 @@ pub use self::trigger::TriggerPriority;
 use crossbeam_channel;
 use crossbeam_utils;
 use irc::client::prelude as aatxe;
-use irc::client::server::Server as AatxeServer;
-use irc::client::server::utils::ServerExt as AatxeServerExt;
+use irc::client::prelude::Client as AatxeClient;
+use irc::client::prelude::ClientExt as AatxeClientExt;
 use irc::proto::Message;
 use rand::EntropyRng;
 use rand::SeedableRng;
@@ -86,7 +86,7 @@ pub struct State {
 // TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
 struct Server {
     id: ServerId,
-    inner: aatxe::IrcServer,
+    inner: aatxe::IrcClient,
     config: config::Server,
     socket_addr_string: String,
 }
@@ -240,7 +240,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             ..Default::default()
         };
 
-        let aatxe_server = match aatxe::IrcServer::from_config(aatxe_config) {
+        let aatxe_client = match aatxe::IrcClient::from_config(aatxe_config) {
             Ok(s) => {
                 trace!("Connected to server {:?}.", server_config.host);
                 s
@@ -268,7 +268,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
         let server = Server {
             id: server_id,
-            inner: aatxe_server,
+            inner: aatxe_client,
             config: server_config.clone(),
             socket_addr_string: server_config.socket_addr_string(),
         };
@@ -306,7 +306,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
         );
 
         for (&server_id, server) in &state.servers {
-            let (aatxe_server, addr) = {
+            let (aatxe_client, addr) = {
                 let s = server.read().expect(LOCK_EARLY_POISON_FAIL);
                 (s.inner.clone(), s.socket_addr_string.clone())
             };
@@ -317,7 +317,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
                 let current_thread = thread::current();
                 let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
 
-                match aatxe_server.identify() {
+                match aatxe_client.identify() {
                     Ok(()) => debug!("{}: Sent identification sequence to server.", thread_label),
                     Err(e) => error!(
                         "{}: Failed to send identification sequence to server: {}",
@@ -326,7 +326,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
                 }
 
                 crossbeam_utils::scoped::scope(|crossbeam_scope| {
-                    aatxe_server
+                    aatxe_client
                         .for_each_incoming(|msg| {
                             handle_msg(
                                 state,
