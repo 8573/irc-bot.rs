@@ -2,6 +2,7 @@ use super::ModuleFeatureInfo;
 use super::ModuleInfo;
 use super::ServerId;
 use irc;
+use rand;
 use serde_yaml;
 use std::any::Any;
 use std::borrow::Cow;
@@ -11,6 +12,7 @@ use util;
 error_chain! {
     foreign_links {
         Io(io::Error);
+        Rand(rand::Error);
         SerdeYaml(serde_yaml::Error);
     }
 

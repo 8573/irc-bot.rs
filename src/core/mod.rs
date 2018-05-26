@@ -34,6 +34,8 @@ use irc::client::prelude as aatxe;
 use irc::client::server::Server as AatxeServer;
 use irc::client::server::utils::ServerExt as AatxeServerExt;
 use irc::proto::Message;
+use rand::EntropyRng;
+use rand::SeedableRng;
 use rand::StdRng;
 use std::borrow::Borrow;
 use std::borrow::Cow;
@@ -124,7 +126,7 @@ impl State {
             module_data_path,
             modules: Default::default(),
             msg_prefix,
-            rng: Mutex::new(StdRng::new()?),
+            rng: Mutex::new(StdRng::from_rng(EntropyRng::new())?),
             servers: Default::default(),
             triggers: Default::default(),
         })
