@@ -63,7 +63,14 @@ example only):
     # future point.
     servers:
       - host: irc.mozilla.org
-        port: 6667 # Sadly, TLS connections are not yet implemented.
+        port: 6697
+        # Whether to use Transport Layer Security. Defaults to `true`.
+        tls: true
+        # A list of channels that the bot should join after connecting. Note
+        # that each channel should be wrapped in quotation marks or otherwise
+        # escaped so that the '#' is not taken as the start of a comment.
+        channels:
+          - '#rust-irc'
 
     # A list of IRC users who will be authorized to direct the bot to run
     # certain priviledged commands. For each listed user, the fields `nick`,
@@ -81,11 +88,6 @@ example only):
       # To be authorized as an administrator of the bot, this user will only
       # need have the nickname "c74d":
       - nick: c74d
-
-There is currently no way to specify in the configuration file which channels
-the bot should join (this should be fixed), but one can send commands such as
-`join #botters-test` to the bot in one-to-one messaging (more commonly called
-"query").
 
 [YAML]: <https://en.wikipedia.org/wiki/YAML>
 ["Ferris"]: <http://www.rustacean.net>
