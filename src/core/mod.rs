@@ -29,9 +29,7 @@ pub use self::trigger::Trigger;
 pub use self::trigger::TriggerAttr;
 pub use self::trigger::TriggerPriority;
 use crossbeam_channel;
-use crossbeam_utils;
 use irc::client::prelude as aatxe;
-use irc::client::prelude::Client as AatxeClient;
 use irc::client::prelude::ClientExt as AatxeClientExt;
 use irc::proto::Message;
 use rand::EntropyRng;
@@ -45,6 +43,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
@@ -70,6 +69,7 @@ const LOCK_EARLY_POISON_FAIL: &str =
      more....";
 
 pub struct State {
+    aatxe_clients: RwLock<BTreeMap<ServerId, aatxe::IrcClient>>,
     addressee_suffix: Cow<'static, str>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
     config: config::inner::Config,
@@ -83,10 +83,9 @@ pub struct State {
     triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
 }
 
-// TODO: Split out `inner` struct-of-arrays-style, for the benefits to `irc_send`.
+#[derive(Debug)]
 struct Server {
     id: ServerId,
-    inner: aatxe::IrcClient,
     config: config::Server,
     socket_addr_string: String,
 }
@@ -119,6 +118,7 @@ impl State {
         )));
 
         Ok(State {
+            aatxe_clients: Default::default(),
             addressee_suffix: ": ".into(),
             commands: Default::default(),
             config: config,
@@ -230,58 +230,22 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     let mut servers = BTreeMap::new();
 
     for server_config in &state.config.servers {
-        let aatxe_config = aatxe::Config {
-            nickname: Some(state.config.nickname.to_owned()),
-            username: Some(state.config.username.to_owned()),
-            realname: Some(state.config.realname.to_owned()),
-            server: Some(server_config.host.clone()),
-            port: Some(server_config.port),
-            use_ssl: Some(server_config.tls),
-            ..Default::default()
-        };
-
-        let aatxe_client = match aatxe::IrcClient::from_config(aatxe_config) {
-            Ok(s) => {
-                trace!("Connected to server {:?}.", server_config.host);
-                s
-            }
-            Err(err) => match state.error_handler.run(err.into()) {
-                ErrorReaction::Proceed => {
-                    error!(
-                        "Failed to connect to server {:?}; ignoring.",
-                        server_config.host
-                    );
-                    continue;
-                }
-                ErrorReaction::Quit(msg) => {
-                    error!(
-                        "Terminal error while connecting to server {:?}: {:?}",
-                        server_config.host,
-                        msg.unwrap_or_default().as_ref()
-                    );
-                    return;
-                }
-            },
-        };
-
         let server_id = ServerId::new();
 
         let server = Server {
             id: server_id,
-            inner: aatxe_client,
             config: server_config.clone(),
             socket_addr_string: server_config.socket_addr_string(),
         };
 
         match servers.insert(server_id, RwLock::new(server)) {
             None => {}
-            Some(_other_server) => {
-                // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
-                // `IrcServer` implementing `Debug`, add the other server to this message.
+            Some(other_server) => {
                 error!(
                     "This shouldn't happen, but there was already a server registered with UUID \
-                     {uuid}!",
+                     {uuid}: {other_server:?}",
                     uuid = server_id.uuid.hyphenated(),
+                    other_server = other_server.read().expect(LOCK_EARLY_POISON_FAIL),
                 );
                 return;
             }
@@ -291,109 +255,170 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     state.servers = servers;
 
     let state = Arc::new(state);
-    let state = &state;
+    trace!("Stored bot state onto heap.");
 
-    crossbeam_utils::scoped::scope(|crossbeam_scope| {
-        let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
+    let (outbox_sender, outbox_receiver) = crossbeam_channel::bounded(irc_send::OUTBOX_SIZE);
+    let outbox_receiver_clone = outbox_receiver.clone();
+
+    spawn_thread(
+        &state,
+        "*".into(),
+        "send",
+        |_| "sending thread".into(),
+        |state| irc_send::send_main(state, outbox_receiver),
+    );
+
+    for (&server_id, server) in &state.servers {
+        let outbox_sender_clone = outbox_sender.clone();
+
+        let recv_fn = move |state: Arc<State>| -> Result<()> {
+            let mut aatxe_reactor = match aatxe::IrcReactor::new() {
+                Ok(r) => {
+                    trace!("Successfully initialized IRC reactor.");
+                    r
+                }
+                Err(e) => {
+                    error!("Terminal error: Failed to initialize IRC reactor: {}", e);
+                    return Err(e.into());
+                }
+            };
+
+            let aatxe_client = {
+                let server_config = &state.servers[&server_id]
+                    .read()
+                    .expect(LOCK_EARLY_POISON_FAIL)
+                    .config;
+
+                let aatxe_config = aatxe::Config {
+                    nickname: Some(state.config.nickname.to_owned()),
+                    username: Some(state.config.username.to_owned()),
+                    realname: Some(state.config.realname.to_owned()),
+                    server: Some(server_config.host.clone()),
+                    port: Some(server_config.port),
+                    use_ssl: Some(server_config.tls),
+                    ..Default::default()
+                };
+
+                match aatxe_reactor.prepare_client_and_connect(&aatxe_config) {
+                    Ok(client) => {
+                        trace!("Connected to server {:?}.", server_config.host);
+                        client
+                    }
+                    Err(err) => {
+                        error!("Failed to connect to server {:?}.", server_config.host);
+                        return Err(err.into());
+                    }
+                }
+            };
+
+            match state
+                .aatxe_clients
+                .write()
+                .expect(LOCK_EARLY_POISON_FAIL)
+                .insert(server_id, aatxe_client.clone())
+            {
+                None => {}
+                Some(_other_aatxe_client) => {
+                    // TODO: If <https://github.com/aatxe/irc/issues/104> is resolved in favor of
+                    // `IrcServer` implementing `Debug`, add the other server to this message.
+                    error!(
+                        "This shouldn't happen, but there was already a server registered \
+                         with UUID {uuid}!",
+                        uuid = server_id.uuid.hyphenated(),
+                    );
+                    return Err(ErrorKind::ServerRegistryClash(server_id).into());
+                }
+            }
+
+            let addr = {
+                let s = state.servers[&server_id]
+                    .read()
+                    .expect(LOCK_EARLY_POISON_FAIL);
+                s.socket_addr_string.clone()
+            };
+
+            match aatxe_client.identify() {
+                Ok(()) => debug!("recv[{}]: Sent identification sequence to server.", addr),
+                Err(e) => error!(
+                    "recv[{}]: Failed to send identification sequence to server: {}",
+                    addr, e
+                ),
+            }
+
+            aatxe_reactor.register_client_with_handler(aatxe_client, move |_aatxe_client, msg| {
+                handle_msg(&state, server_id, &outbox_sender_clone, Ok(msg));
+
+                Ok(())
+            });
+
+            aatxe_reactor.run().map_err(Into::into)
+        };
+
+        let addr = server
+            .read()
+            .expect(LOCK_EARLY_POISON_FAIL)
+            .socket_addr_string
+            .clone();
 
         spawn_thread(
-            crossbeam_scope,
-            state,
-            "*".into(),
-            "send",
-            |_| "sending thread".into(),
-            || irc_send::send_main(state.clone(), outbox_receiver),
+            &state,
+            addr,
+            "recv",
+            |addr| format!("receiving thread for server {addr:?}", addr = addr),
+            recv_fn,
         );
+    }
 
-        for (&server_id, server) in &state.servers {
-            let (aatxe_client, addr) = {
-                let s = server.read().expect(LOCK_EARLY_POISON_FAIL);
-                (s.inner.clone(), s.socket_addr_string.clone())
-            };
-
-            let outbox_sender_clone = outbox_sender.clone();
-
-            let recv_fn = move || {
-                let current_thread = thread::current();
-                let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
-
-                match aatxe_client.identify() {
-                    Ok(()) => debug!("{}: Sent identification sequence to server.", thread_label),
-                    Err(e) => error!(
-                        "{}: Failed to send identification sequence to server: {}",
-                        thread_label, e
-                    ),
-                }
-
-                crossbeam_utils::scoped::scope(|crossbeam_scope| {
-                    aatxe_client
-                        .for_each_incoming(|msg| {
-                            handle_msg(
-                                state,
-                                crossbeam_scope,
-                                server_id,
-                                &outbox_sender_clone,
-                                Ok(msg),
-                            )
-                        })
-                        .map_err(Into::into)
-                })
-            };
-
-            spawn_thread(
-                crossbeam_scope,
-                state,
-                addr,
-                "recv",
-                |addr| format!("receiving thread for server {addr:?}", addr = addr),
-                recv_fn,
-            );
-        }
-    })
+    while !outbox_receiver_clone.is_disconnected() {
+        // TODO: Use a Condvar to enable cleaner quitting.
+        thread::park_timeout(Duration::from_secs(60));
+    }
 }
 
-fn handle_msg<'xbs, 'xbsr>(
+fn handle_msg(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &irc_send::OutboxPort,
     input: Result<Message>,
-) where
-    'xbs: 'xbsr,
-{
-    match input
-        .and_then(|msg| irc_comm::handle_msg(&state, crossbeam_scope, server_id, outbox, msg))
-    {
+) {
+    match input.and_then(|msg| irc_comm::handle_msg(&state, server_id, outbox, msg)) {
         Ok(()) => {}
         Err(e) => push_to_outbox(outbox, server_id, state.handle_err_generic(e)),
     }
 }
 
-fn spawn_thread<'xbs, F, PurposeF>(
-    crossbeam_scope: &crossbeam_utils::scoped::Scope<'xbs>,
+fn spawn_thread<F, PurposeF>(
     state: &Arc<State>,
     addr: String,
     purpose_desc_abbr: &str,
     purpose_desc_full: PurposeF,
     business: F,
 ) where
-    F: FnOnce() -> Result<()> + Send + 'xbs,
+    F: FnOnce(Arc<State>) -> Result<()> + Send + 'static,
     PurposeF: FnOnce(&str) -> String,
 {
     let label = format!("{}[{}]", purpose_desc_abbr, addr);
 
-    let thread_build_result = crossbeam_scope.builder().name(label).spawn(move || {
+    let state_alias = state.clone();
+
+    let thread_build_result = thread::Builder::new().name(label).spawn(move || {
         let current_thread = thread::current();
         let thread_label = current_thread.name().expect(THREAD_NAME_FAIL);
 
-        match business() {
+        trace!("{}: Starting....", thread_label);
+
+        match business(state_alias) {
             Ok(()) => debug!("{}: Thread exited successfully.", thread_label),
+
+            // TODO: Call `state.error_handler`.
             Err(err) => error!("{}: Thread exited with error: {:?}", thread_label, err),
         }
     });
 
     match thread_build_result {
-        Ok(_join_handle) => {}
+        Ok(thread::JoinHandle { .. }) => {
+            trace!("Spawned {purpose}.", purpose = purpose_desc_full(&addr));
+        }
         Err(err) => match state.error_handler.run(err.into()) {
             ErrorReaction::Proceed => error!(
                 "Failed to create {purpose}; ignoring.",

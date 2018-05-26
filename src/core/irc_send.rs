@@ -1,3 +1,4 @@
+use super::ErrorKind;
 use super::LibReaction;
 use super::ServerId;
 use super::THREAD_NAME_FAIL;
@@ -9,7 +10,6 @@ use irc::client::prelude as aatxe;
 use irc::client::prelude::Client as AatxeClient;
 use irc::proto::Message;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::thread;
 
 pub(super) const OUTBOX_SIZE: usize = 1024;
@@ -55,7 +55,7 @@ pub(super) fn send_main(
     // [2018-01-08 - c74d] At least with `crossbeam_channel`'s MPSC queue implementation, this loop
     // will run until — and the sending thread will exit when — all receiving (and
     // command-handling, etc.) threads have exited. Not having to implement that myself is nice.
-    for record in outbox_receiver {
+    for record in outbox_receiver.iter() {
         let OutboxRecord {
             server_id, output, ..
         } = match process_outgoing_msg(&state, thread_label, record) {
@@ -65,17 +65,20 @@ pub(super) fn send_main(
 
         let server_uuid = server_id.uuid.hyphenated();
 
-        let aatxe_server = match state.servers.get(&server_id).map(RwLock::read) {
-            Some(Ok(s)) => s.inner.clone(),
-            Some(Err(_)) => {
-                warn!(
-                    "Declining to send to server {uuid} because its lock has been poisoned by \
-                     thread panic! Discarding {output:?}.",
-                    uuid = server_uuid,
-                    output = output
-                );
-                continue;
+        let aatxe_clients = match state.aatxe_clients.read() {
+            Ok(map) => map,
+            Err(_) => {
+                outbox_receiver.disconnect();
+
+                // TODO: This lock being poisoned is so grave that it deserves its own error kind.
+                return Err(ErrorKind::LockPoisoned(
+                    "the associative array of IRC connections".into(),
+                ).into());
             }
+        };
+
+        let aatxe_client = match aatxe_clients.get(&server_id) {
+            Some(client) => client.clone(),
             None => {
                 warn!(
                     "Can't send to unknown server {uuid}. Discarding {output:?}.",
@@ -86,7 +89,7 @@ pub(super) fn send_main(
             }
         };
 
-        send_reaction(&state, &aatxe_server, thread_label, output)
+        send_reaction(&state, &aatxe_client, thread_label, output)
     }
 
     Ok(())
@@ -114,17 +117,17 @@ pub(super) fn process_outgoing_msg(
 
 fn send_reaction(
     state: &State,
-    server: &aatxe::IrcClient,
+    aatxe_client: &aatxe::IrcClient,
     thread_label: &str,
     reaction: LibReaction<Message>,
 ) {
-    send_reaction_with_err_cb(state, server, thread_label, reaction, |err| {
+    send_reaction_with_err_cb(state, aatxe_client, thread_label, reaction, |err| {
         let err_reaction = match state.handle_err_generic(err) {
             Some(r) => r,
             None => return,
         };
 
-        send_reaction_with_err_cb(state, server, thread_label, err_reaction, |err| {
+        send_reaction_with_err_cb(state, aatxe_client, thread_label, err_reaction, |err| {
             error!(
                 "Encountered error {:?} while handling error; stopping error handling to avoid \
                  potential infinite recursion.",
@@ -136,7 +139,7 @@ fn send_reaction(
 
 fn send_reaction_with_err_cb<ErrCb>(
     state: &State,
-    server: &aatxe::IrcClient,
+    aatxe_client: &aatxe::IrcClient,
     thread_label: &str,
     reaction: LibReaction<Message>,
     err_cb: ErrCb,
@@ -144,12 +147,12 @@ fn send_reaction_with_err_cb<ErrCb>(
     ErrCb: Fn(Error) -> (),
 {
     match reaction {
-        LibReaction::RawMsg(msg) => match server.send(msg) {
+        LibReaction::RawMsg(msg) => match aatxe_client.send(msg) {
             Ok(()) => {}
             Err(e) => err_cb(e.into()),
         },
         LibReaction::Multi(reactions) => for reaction in reactions {
-            send_reaction(state, server, thread_label, reaction)
+            send_reaction(state, aatxe_client, thread_label, reaction)
         },
     }
 }

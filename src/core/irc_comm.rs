@@ -16,7 +16,6 @@ use super::parse_msg_to_nick;
 use super::pkg_info;
 use super::reaction::LibReaction;
 use super::trigger;
-use crossbeam_utils;
 use irc::client::prelude as aatxe;
 use irc::proto::Message;
 use itertools::Itertools;
@@ -26,6 +25,7 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::thread;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
 
@@ -283,16 +283,12 @@ pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
     LibReaction::RawMsg(quit)
 }
 
-pub(super) fn handle_msg<'xbs, 'xbsr>(
+pub(super) fn handle_msg(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &OutboxPort,
     input_msg: Message,
-) -> Result<()>
-where
-    'xbs: 'xbsr,
-{
+) -> Result<()> {
     trace!(
         "[{}] Received {:?}",
         state.server_socket_addr_dbg_string(server_id),
@@ -306,7 +302,6 @@ where
             ..
         } => handle_privmsg(
             state,
-            crossbeam_scope,
             server_id,
             outbox,
             OwningMsgPrefix::from_string(prefix.unwrap_or_default()),
@@ -324,18 +319,14 @@ where
     }
 }
 
-fn handle_privmsg<'xbs, 'xbsr>(
+fn handle_privmsg(
     state: &Arc<State>,
-    crossbeam_scope: &'xbsr crossbeam_utils::scoped::Scope<'xbs>,
     server_id: ServerId,
     outbox: &OutboxPort,
     prefix: OwningMsgPrefix,
     target: String,
     msg: String,
-) -> Result<()>
-where
-    'xbs: 'xbsr,
-{
+) -> Result<()> {
     trace!(
         "[{}] Handling PRIVMSG: {:?}",
         state.server_socket_addr_dbg_string(server_id),
@@ -357,7 +348,7 @@ where
         let state = state.clone();
         let outbox = outbox.clone();
 
-        let thread_spawn_result = crossbeam_scope.builder().spawn(move || {
+        let thread_spawn_result = thread::Builder::new().spawn(move || {
             let lib_reaction =
                 handle_bot_command_or_trigger(&state, server_id, prefix, target, msg, bot_nick);
 
@@ -365,7 +356,7 @@ where
         });
 
         match thread_spawn_result {
-            Ok(crossbeam_utils::scoped::ScopedJoinHandle { .. }) => Ok(()),
+            Ok(thread::JoinHandle { .. }) => Ok(()),
             Err(e) => Err(ErrorKind::ThreadSpawnFailure(e).into()),
         }
     }
