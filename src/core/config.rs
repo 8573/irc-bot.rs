@@ -1,36 +1,47 @@
 use super::ErrorKind;
 use super::Result;
+use super::aatxe;
 use super::pkg_info;
 use serde_yaml;
-use std::fmt;
+use smallvec::SmallVec;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::path::Path;
+use std::sync::Arc;
 
-pub(crate) mod inner {
+mod inner {
     /// Configuration structure that can be deserialized by Serde.
     ///
     /// This is hidden from the consumer because Serde won't validate the configuration.
-    #[derive(Debug, Deserialize)]
-    pub(crate) struct Config {
-        pub(crate) nickname: String,
+    #[derive(Debug, Default, Deserialize)]
+    pub(super) struct Config {
+        pub(super) nickname: String,
 
         #[serde(default)]
-        pub(crate) username: String,
+        pub(super) username: String,
 
         #[serde(default)]
-        pub(crate) realname: String,
+        pub(super) realname: String,
 
         #[serde(default)]
-        pub(crate) admins: Vec<super::Admin>,
+        pub(super) admins: Vec<super::Admin>,
 
-        pub(crate) servers: Vec<super::Server>,
+        pub(super) servers: Vec<super::Server>,
     }
 }
 
+#[derive(Debug)]
 pub struct Config {
-    pub(crate) inner: inner::Config,
+    pub(crate) nickname: String,
+
+    pub(crate) username: String,
+
+    pub(crate) realname: String,
+
+    pub(crate) admins: SmallVec<[Admin; 8]>,
+
+    pub(crate) servers: SmallVec<[Arc<aatxe::Config>; 8]>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -46,13 +57,16 @@ pub struct Admin {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Server {
+struct Server {
     pub host: String,
 
     pub port: u16,
 
     #[serde(default = "mk_true")]
     pub tls: bool,
+
+    #[serde(default)]
+    pub channels: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -74,27 +88,7 @@ impl Config {
     }
 
     pub fn build() -> ConfigBuilder {
-        Self::build_from("{nickname: ''}")
-    }
-
-    pub fn build_from<T>(input: T) -> ConfigBuilder
-    where
-        T: IntoConfig,
-    {
-        ConfigBuilder(Self::try_from(input).map(|cfg| cfg.inner))
-    }
-
-    pub fn build_from_path<P>(path: P) -> ConfigBuilder
-    where
-        P: AsRef<Path>,
-    {
-        ConfigBuilder(Self::try_from_path(path).map(|cfg| cfg.inner))
-    }
-}
-
-impl Server {
-    pub fn socket_addr_string(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+        ConfigBuilder(Ok(Default::default()))
     }
 }
 
@@ -198,7 +192,38 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
 
     fill_in_config_defaults(&mut cfg)?;
 
-    Ok(Config { inner: cfg })
+    let nickname = cfg.nickname.to_owned();
+
+    let username = cfg.username.to_owned();
+
+    let realname = cfg.realname.to_owned();
+
+    let admins = cfg.admins.drain(..).collect();
+
+    let servers = cfg.servers
+        .drain(..)
+        .map(|server_cfg| {
+            Arc::new(aatxe::Config {
+                // TODO: Allow nickname etc. to be configured per-server.
+                nickname: Some(nickname.clone()),
+                username: Some(username.clone()),
+                realname: Some(realname.clone()),
+                server: Some(server_cfg.host),
+                port: Some(server_cfg.port),
+                use_ssl: Some(server_cfg.tls),
+                channels: Some(server_cfg.channels),
+                ..Default::default()
+            })
+        })
+        .collect();
+
+    Ok(Config {
+        nickname,
+        username,
+        realname,
+        admins,
+        servers,
+    })
 }
 
 fn validate_config(cfg: &inner::Config) -> Result<()> {
@@ -237,17 +262,4 @@ fn fill_in_config_defaults(cfg: &mut inner::Config) -> Result<()> {
 
 fn mk_true() -> bool {
     true
-}
-
-// Manually implement `Debug` so we get
-//
-//     Config { .. }
-//
-// rather than
-//
-//     Config { inner: Config { .. } }
-impl fmt::Debug for Config {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(&self.inner, f)
-    }
 }

@@ -4,6 +4,8 @@ realname: egbot
 servers:
   - host: irc.mozilla.org
     port: 6697
+    channels:
+      - '#c74d'
 admins:
   - nick: c74d
     user: c74d

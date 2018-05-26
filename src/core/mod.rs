@@ -72,7 +72,7 @@ pub struct State {
     aatxe_clients: RwLock<BTreeMap<ServerId, aatxe::IrcClient>>,
     addressee_suffix: Cow<'static, str>,
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
-    config: config::inner::Config,
+    config: config::Config,
     error_handler: Arc<ErrorHandler>,
     module_data_path: PathBuf,
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
@@ -86,7 +86,7 @@ pub struct State {
 #[derive(Debug)]
 struct Server {
     id: ServerId,
-    config: config::Server,
+    aatxe_config: Arc<aatxe::Config>,
     socket_addr_string: String,
 }
 
@@ -105,7 +105,7 @@ impl ServerId {
 
 impl State {
     fn new<ErrF>(
-        config: config::inner::Config,
+        config: config::Config,
         module_data_path: PathBuf,
         error_handler: ErrF,
     ) -> Result<State>
@@ -180,9 +180,9 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     ModlCtor: Fn() -> Module,
 {
     let config = match config.into_config() {
-        Ok(c) => {
-            trace!("Loaded configuration: {:#?}", c);
-            c.inner
+        Ok(cfg) => {
+            trace!("Loaded configuration: {:#?}", cfg);
+            cfg
         }
         Err(e) => {
             error_handler.run(e);
@@ -229,13 +229,20 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
     let mut servers = BTreeMap::new();
 
-    for server_config in &state.config.servers {
+    for aatxe_config in &state.config.servers {
         let server_id = ServerId::new();
+
+        let socket_addr_string = match (&aatxe_config.server, aatxe_config.port) {
+            (Some(h), Some(p)) => format!("{}:{}", h, p),
+            (Some(h), None) => format!("{}:<unknown port>", h),
+            (None, Some(p)) => format!("<unknown hostname>:{}", p),
+            (None, None) => format!("<unknown hostname>:<unknown port>"),
+        };
 
         let server = Server {
             id: server_id,
-            config: server_config.clone(),
-            socket_addr_string: server_config.socket_addr_string(),
+            aatxe_config: aatxe_config.clone(),
+            socket_addr_string,
         };
 
         match servers.insert(server_id, RwLock::new(server)) {
@@ -284,28 +291,20 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             };
 
             let aatxe_client = {
-                let server_config = &state.servers[&server_id]
+                let server = state.servers[&server_id]
                     .read()
-                    .expect(LOCK_EARLY_POISON_FAIL)
-                    .config;
+                    .expect(LOCK_EARLY_POISON_FAIL);
 
-                let aatxe_config = aatxe::Config {
-                    nickname: Some(state.config.nickname.to_owned()),
-                    username: Some(state.config.username.to_owned()),
-                    realname: Some(state.config.realname.to_owned()),
-                    server: Some(server_config.host.clone()),
-                    port: Some(server_config.port),
-                    use_ssl: Some(server_config.tls),
-                    ..Default::default()
-                };
-
-                match aatxe_reactor.prepare_client_and_connect(&aatxe_config) {
+                match aatxe_reactor.prepare_client_and_connect(&server.aatxe_config) {
                     Ok(client) => {
-                        trace!("Connected to server {:?}.", server_config.host);
+                        trace!("Connected to server {:?}.", server.socket_addr_string);
                         client
                     }
                     Err(err) => {
-                        error!("Failed to connect to server {:?}.", server_config.host);
+                        error!(
+                            "Failed to connect to server {:?}.",
+                            server.socket_addr_string
+                        );
                         return Err(err.into());
                     }
                 }
