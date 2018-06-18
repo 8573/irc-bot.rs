@@ -3,8 +3,8 @@ use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
 use yaml_rust;
-use yaml_rust::Yaml;
 use yaml_rust::yaml;
+use yaml_rust::Yaml;
 
 error_chain! {
     foreign_links {

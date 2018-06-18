@@ -1,3 +1,5 @@
+use super::config;
+use super::irc_msgs::OwningMsgPrefix;
 use super::BotCommand;
 use super::ErrorKind;
 use super::MsgPrefix;
@@ -5,8 +7,6 @@ use super::Result;
 use super::Server;
 use super::ServerId;
 use super::State;
-use super::config;
-use super::irc_msgs::OwningMsgPrefix;
 use rand::StdRng;
 use std::borrow::Cow;
 use std::path::Path;

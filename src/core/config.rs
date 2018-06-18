@@ -1,12 +1,12 @@
-use super::ErrorKind;
-use super::Result;
 use super::aatxe;
 use super::pkg_info;
+use super::ErrorKind;
+use super::Result;
 use serde_yaml;
 use smallvec::SmallVec;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::prelude::*;
+use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 

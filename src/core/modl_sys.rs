@@ -1,3 +1,4 @@
+use super::trigger::TriggerPriority;
 use super::BotCmdAttr;
 use super::BotCmdAuthLvl;
 use super::BotCmdHandler;
@@ -10,7 +11,6 @@ use super::State;
 use super::Trigger;
 use super::TriggerAttr;
 use super::TriggerHandler;
-use super::trigger::TriggerPriority;
 use itertools;
 use regex::Regex;
 use std;
