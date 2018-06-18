@@ -1,16 +1,19 @@
 use super::State;
 
-fn choose(list: &'static [&'static str]) -> &'static str {
+fn choose(list: &'static [Option<&'static str>]) -> &'static str {
     list.iter()
+        .filter_map(|&x| x)
         .find(|s| !s.is_empty() && !s.contains(char::is_control))
         .unwrap_or(&"<unknown>")
 }
 
 lazy_static! {
-    pub(super) static ref NAME_STR: &'static str = choose(&[env!("CARGO_PKG_NAME")]);
-    pub(super) static ref VERSION_STR: &'static str =
-        choose(&[env!("IRC_BOT_RS_GIT_VERSION"), env!("CARGO_PKG_VERSION")]);
-    pub(super) static ref HOMEPAGE_STR: &'static str = choose(&[env!("CARGO_PKG_HOMEPAGE")]);
+    pub(super) static ref NAME_STR: &'static str = choose(&[option_env!("CARGO_PKG_NAME")]);
+    pub(super) static ref VERSION_STR: &'static str = choose(&[
+        option_env!("IRC_BOT_RS_GIT_VERSION"),
+        option_env!("CARGO_PKG_VERSION"),
+    ]);
+    pub(super) static ref HOMEPAGE_STR: &'static str = choose(&[option_env!("CARGO_PKG_HOMEPAGE")]);
     pub(super) static ref BRIEF_CREDITS_STRING: String = format!(
         "Built with <{url}> {ver}",
         url = HOMEPAGE_STR.deref(),
