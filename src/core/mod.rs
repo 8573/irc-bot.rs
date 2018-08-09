@@ -179,6 +179,12 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
     Modls: IntoIterator<Item = ModlCtor>,
     ModlCtor: Fn() -> Module,
 {
+    let module_data_path = module_data_path.into();
+    info!(
+        "This bot is set to look for modules' operator-provided data in: {}",
+        module_data_path.display()
+    );
+
     let config = match config.into_config() {
         Ok(cfg) => {
             trace!("Loaded configuration: {:#?}", cfg);
@@ -191,7 +197,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
         }
     };
 
-    let mut state = match State::new(config, module_data_path.into(), error_handler) {
+    let mut state = match State::new(config, module_data_path, error_handler) {
         Ok(s) => {
             trace!("Assembled bot state.");
             s
