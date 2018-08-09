@@ -45,6 +45,28 @@ error_chain! {
     }
 }
 
+/// Predefined YAML string values.
+pub mod str {
+    use yaml_rust::Yaml;
+
+    lazy_static! {
+        pub static ref YAML_STR_CHAN: Yaml = Yaml::String("chan".into());
+        pub static ref YAML_STR_CMD: Yaml = Yaml::String("cmd".into());
+        pub static ref YAML_STR_LIST: Yaml = Yaml::String("list".into());
+        pub static ref YAML_STR_MSG: Yaml = Yaml::String("msg".into());
+        pub static ref YAML_STR_R: Yaml = Yaml::String("r".into());
+        pub static ref YAML_STR_REGEX: Yaml = Yaml::String("regex".into());
+        pub static ref YAML_STR_S: Yaml = Yaml::String("s".into());
+        pub static ref YAML_STR_STRING: Yaml = Yaml::String("string".into());
+    }
+}
+
+/// A predefined error message for use when one `expect`s that the framework will handle syntax
+/// errors in command arguments for one.
+pub static FW_SYNTAX_CHECK_FAIL: &str =
+    "The framework should have caught this syntax error before it tried to run this command \
+     handler!";
+
 #[derive(Copy, Clone, Debug)]
 pub enum Kind {
     Scalar,

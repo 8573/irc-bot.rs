@@ -3,6 +3,11 @@ use core::*;
 use regex::Captures;
 use std::borrow::Cow;
 use util;
+use util::yaml::str::YAML_STR_CHAN;
+use util::yaml::str::YAML_STR_CMD;
+use util::yaml::str::YAML_STR_LIST;
+use util::yaml::str::YAML_STR_MSG;
+use util::yaml::FW_SYNTAX_CHECK_FAIL;
 use yaml_rust::Yaml;
 
 pub fn mk() -> Module {
@@ -68,17 +73,6 @@ pub fn mk() -> Module {
             &[],
         )
         .end()
-}
-
-static FW_SYNTAX_CHECK_FAIL: &str =
-    "The framework should have caught this syntax error before it tried to run this command \
-     handler!";
-
-lazy_static! {
-    static ref YAML_STR_CHAN: Yaml = Yaml::String("chan".into());
-    static ref YAML_STR_CMD: Yaml = Yaml::String("cmd".into());
-    static ref YAML_STR_LIST: Yaml = Yaml::String("list".into());
-    static ref YAML_STR_MSG: Yaml = Yaml::String("msg".into());
 }
 
 fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
