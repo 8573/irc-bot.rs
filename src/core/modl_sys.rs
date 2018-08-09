@@ -377,7 +377,7 @@ impl State {
         feature: &'modl ModuleFeature,
         mode: ModuleLoadMode,
     ) -> Result<()> {
-        debug!("Loading module feature (f1): {:?}", feature.dbg_info());
+        trace!("Loading module feature (phase 1): {:?}", feature.dbg_info());
 
         if let Some(existing_feature) = match feature {
             &ModuleFeature::Command { .. } => match (mode, self.commands.get(feature.name())) {
@@ -404,7 +404,7 @@ impl State {
         provider: Arc<Module>,
         feature: &'modl ModuleFeature,
     ) {
-        debug!("Loading module feature (f2): {:?}", feature.dbg_info());
+        trace!("Loading module feature (phase 2): {:?}", feature.dbg_info());
 
         match feature {
             &ModuleFeature::Command {
