@@ -12,6 +12,7 @@ extern crate regex;
 extern crate serde_yaml;
 extern crate smallvec;
 extern crate uuid;
+extern crate walkdir;
 extern crate yaml_rust;
 
 #[macro_use]

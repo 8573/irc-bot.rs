@@ -8,6 +8,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::io;
 use util;
+use walkdir;
 
 error_chain! {
     foreign_links {
@@ -16,6 +17,8 @@ error_chain! {
         Rand(rand::Error);
 
         SerdeYaml(serde_yaml::Error);
+
+        WalkDir(walkdir::Error);
     }
 
     links {
