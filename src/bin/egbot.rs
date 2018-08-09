@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 extern crate env_logger;
 extern crate irc_bot;
 
