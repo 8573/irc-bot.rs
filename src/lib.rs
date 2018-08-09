@@ -2,15 +2,12 @@
 // TODO: Determine why `error-chain` triggers the `unused_doc_comment` warning.
 #![allow(unused_doc_comment)]
 
-extern crate clap;
 extern crate crossbeam_channel;
-extern crate crossbeam_utils;
 extern crate irc;
 extern crate itertools;
 extern crate rand;
 extern crate rando;
 extern crate regex;
-extern crate serde;
 extern crate serde_yaml;
 extern crate smallvec;
 extern crate uuid;
