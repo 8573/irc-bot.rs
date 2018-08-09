@@ -68,6 +68,31 @@ impl From<Reaction> for BotCmdResult {
     }
 }
 
+impl From<Error> for BotCmdResult {
+    fn from(e: Error) -> Self {
+        BotCmdResult::LibErr(e)
+    }
+}
+
+impl From<util::yaml::Error> for BotCmdResult {
+    fn from(e: util::yaml::Error) -> Self {
+        Error::from(e).into()
+    }
+}
+
+impl<T, E> From<std::result::Result<T, E>> for BotCmdResult
+where
+    T: Into<BotCmdResult>,
+    E: Into<BotCmdResult>,
+{
+    fn from(result: std::result::Result<T, E>) -> Self {
+        match result {
+            Ok(x) => x.into(),
+            Err(e) => e.into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BotCmdAuthLvl {
     Public,
