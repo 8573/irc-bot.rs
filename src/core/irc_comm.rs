@@ -102,29 +102,30 @@ impl State {
     fn prefix_len(&self, server_id: ServerId) -> Result<usize> {
         Ok(self.read_msg_prefix(server_id)?.len())
     }
+
+    /// Returns the maximum number of bytes that can be sent as the content of a single `PRIVMSG`
+    /// to the specified destination.
+    pub fn privmsg_content_max_len(&self, MsgDest { server_id, target }: MsgDest) -> Result<usize> {
+        // :nick!user@host PRIVMSG target :message
+        // :nick!user@host NOTICE target :message
+        let raw_len_limit = 512;
+        let punctuation_len = {
+            let line_terminator_len = 2;
+            let spaces = 3;
+            let colons = 2;
+            colons + spaces + line_terminator_len
+        };
+        let cmd_len = "PRIVMSG".len();
+        let metadata_len = self.prefix_len(server_id)? + cmd_len + target.len() + punctuation_len;
+        Ok(raw_len_limit - metadata_len)
+    }
 }
 
-fn wrap_msg<F>(
-    state: &State,
-    MsgDest { server_id, target }: MsgDest,
-    msg: &str,
-    mut f: F,
-) -> Result<()>
+fn wrap_msg<F>(state: &State, msg_dest: MsgDest, msg: &str, mut f: F) -> Result<()>
 where
     F: FnMut(&str) -> Result<()>,
 {
-    // :nick!user@host PRIVMSG target :message
-    // :nick!user@host NOTICE target :message
-    let raw_len_limit = 512;
-    let punctuation_len = {
-        let line_terminator_len = 2;
-        let spaces = 3;
-        let colons = 2;
-        colons + spaces + line_terminator_len
-    };
-    let cmd_len = "PRIVMSG".len();
-    let metadata_len = state.prefix_len(server_id)? + cmd_len + target.len() + punctuation_len;
-    let msg_len_limit = raw_len_limit - metadata_len;
+    let msg_len_limit = state.privmsg_content_max_len(msg_dest)?;
 
     if msg.len() < msg_len_limit {
         return f(msg);
