@@ -99,6 +99,34 @@ impl State {
         }
     }
 
+    /// Given a message's metadata, returns a guess at the destination to which replies to the
+    /// message should be sent.
+    pub fn guess_reply_dest<'a>(
+        &self,
+        &MsgMetadata {
+            dest: MsgDest { server_id, target },
+            prefix:
+                MsgPrefix {
+                    nick,
+                    user: _,
+                    host: _,
+                },
+        }: &MsgMetadata<'a>,
+    ) -> Result<MsgDest<'a>> {
+        Ok(MsgDest {
+            server_id,
+            target: if target == self.nick(server_id)? {
+                // The message was sent to the bot in one-to-one messaging, so replies should be
+                // sent in one-to-one messaging to the sender.
+                nick.ok_or(ErrorKind::ReceivedMsgHasBadPrefix)?
+            } else {
+                // The message was sent in a channel, so replies should be sent in the same
+                // channel.
+                target
+            },
+        })
+    }
+
     fn prefix_len(&self, server_id: ServerId) -> Result<usize> {
         Ok(self.read_msg_prefix(server_id)?.len())
     }

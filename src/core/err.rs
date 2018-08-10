@@ -83,6 +83,13 @@ error_chain! {
             display("Puzzlingly, the bot seems to have forgotten its own nickname.")
         }
 
+        ReceivedMsgHasBadPrefix {
+            description("an operation failed because a received message had a malformed prefix \
+                         (the part that identifies the sender)")
+            display("An operation failed because a message was received that had a malformed \
+                     prefix (the part that identifies the sender).")
+        }
+
         UnknownServer(server_id: ServerId) {
             description("server ID not recognized")
             display("An attempt to look up a server connection or metadatum thereof failed, \
