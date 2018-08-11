@@ -117,8 +117,9 @@ impl<'a> AugmentedTy<'a> {
 /// Converts any type of YAML node to a string.
 ///
 /// If the `node` is a `Yaml::String`, a `&str` reference to its content it will be passed to
-/// `lt_map` to construct a `Cow` with the desired lifetime. If the `node` is not a `Yaml::String`,
-/// its `Debug` representation will be returned, wrapped in `Cow::Owned`.
+/// `lt_map` to construct a `Cow` with the desired lifetime (`lt_map` usually should be
+/// `Cow::Borrowed`). If the `node` is not a `Yaml::String`, its `Debug` representation will be
+/// returned, wrapped in `Cow::Owned`.
 pub fn any_to_str<'a, 'b, F>(node: &'a Yaml, lt_map: F) -> Cow<'b, str>
 where
     F: Fn(&'a str) -> Cow<'b, str>,
