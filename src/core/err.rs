@@ -7,12 +7,15 @@ use serde_yaml;
 use std::any::Any;
 use std::borrow::Cow;
 use std::io;
+use std::num::ParseIntError;
 use util;
 use walkdir;
 
 error_chain! {
     foreign_links {
         Io(io::Error);
+
+        ParseIntError(ParseIntError);
 
         Rand(rand::Error);
 
