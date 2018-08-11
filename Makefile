@@ -8,6 +8,9 @@ release-build:
 check:
 	@nix-shell --run 'cargo check'
 
+test:
+	@nix-shell --run 'cargo test'
+
 run:
 	@nix-shell --run 'cargo run'
 
@@ -25,6 +28,9 @@ view-docs:
 
 clean:
 	@nix-shell --run 'cargo clean'
+
+publish:
+	@nix-shell --run 'cargo test && cargo publish'
 
 fmt:
 	@nix-shell --run 'cargo-fmt'
