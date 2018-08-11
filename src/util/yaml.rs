@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use yaml_rust;
 use yaml_rust::yaml;
 use yaml_rust::Yaml;
+use yaml_rust::YamlEmitter;
 
 error_chain! {
     foreign_links {
@@ -26,7 +27,7 @@ error_chain! {
             display("While handling YAML: Encountered a YAML alias, which is not supported by \
                      `yaml_rust`.")
         }
-        TypeMismatch(path: String, expected_ty: Kind, actual_ty: Kind) {
+        TypeMismatch(path: Cow<'static, str>, expected_ty: Kind, actual_ty: Kind) {
             description("encountered a type error while handling YAML")
             display("While handling YAML: Expected {path} to be of type {expected_ty:?}, but it \
                      is of type {actual_ty:?}.",
@@ -118,32 +119,51 @@ impl<'a> AugmentedTy<'a> {
 ///
 /// If the `node` is a `Yaml::String`, a `&str` reference to its content it will be passed to
 /// `lt_map` to construct a `Cow` with the desired lifetime (`lt_map` usually should be
-/// `Cow::Borrowed`). If the `node` is not a `Yaml::String`, its `Debug` representation will be
-/// returned, wrapped in `Cow::Owned`.
-pub fn any_to_str<'a, 'b, F>(node: &'a Yaml, lt_map: F) -> Cow<'b, str>
+/// `Cow::Borrowed`). If the `node` is not a `Yaml::String`, a stringified representation of it
+/// will be returned, wrapped in `Cow::Owned`. If such stringification fails, an `Err` will be
+/// returned.
+pub fn any_to_str<'a, 'b, F>(node: &'a Yaml, lt_map: F) -> Result<Cow<'b, str>>
 where
     F: Fn(&'a str) -> Cow<'b, str>,
 {
-    node.as_str()
-        .map(lt_map)
-        .unwrap_or_else(|| Cow::Owned(format!("{:?}", node)))
+    match node.as_str() {
+        Some(s) => Ok(lt_map(s)),
+        None => {
+            let mut s = String::new();
+
+            {
+                let mut emitter = YamlEmitter::new(&mut s);
+                emitter.compact(true);
+                emitter.dump(node)?;
+            }
+
+            Ok(Cow::Owned(s.trim_left_matches("---\n").to_owned()))
+        }
+    }
 }
 
 /// Converts a scalar YAML node to a string.
 ///
-/// If the `node` is scalar, returns the same value as `any_to_str`, except wrapped in
-/// `Result::Ok`. If the `node` is a sequence, a mapping, or something stranger, returns an `Err`
-/// containing a `Kind` value representing what particular kind of non-scalar `node` is.
-pub fn scalar_to_str<'a, 'b, F>(
+/// If the `node` is scalar, returns the same value as `any_to_str(node, lt_map)`. If the `node` is
+/// a sequence, a mapping, or something stranger, an `Err` containing a `TypeMismatch` error will
+/// be returned.
+///
+/// The parameter `subject_label` serves to identify the `node` in any `TypeMismatch` error message
+/// that may be generated.
+pub fn scalar_to_str<'a, 'b, F, S1>(
     node: &'a Yaml,
     lt_map: F,
-) -> std::result::Result<Cow<'b, str>, Kind>
+    subject_label: S1,
+) -> Result<Cow<'b, str>>
 where
     F: Fn(&'a str) -> Cow<'b, str>,
+    S1: Into<Cow<'static, str>>,
 {
     match Kind::of(node) {
-        Kind::Scalar => Ok(any_to_str(node, lt_map)),
-        kind => Err(kind),
+        Kind::Scalar => any_to_str(node, lt_map),
+        wrong_kind => {
+            Err(ErrorKind::TypeMismatch(subject_label.into(), Kind::Scalar, wrong_kind).into())
+        }
     }
 }
 
@@ -244,7 +264,7 @@ where
         | (&Ty::Sequence, &Ty::Mapping(_))
         | (&Ty::Mapping(_), &Ty::Scalar)
         | (&Ty::Mapping(_), &Ty::Sequence) => bail!(ErrorKind::TypeMismatch(
-            path_buf.join("."),
+            path_buf.join(".").into(),
             Kind::from_aug_ty(&expected_ty),
             Kind::from_aug_ty(&actual_ty),
         )),
@@ -270,7 +290,7 @@ where
                 expected_value,
                 actual_value,
                 path_buf,
-                any_to_str(key, Cow::Borrowed),
+                any_to_str(key, Cow::Borrowed)?,
             )?,
             (&Yaml::String(ref s), None) if s.starts_with("[") && s.ends_with("]") => {
                 // This field is optional.
@@ -284,13 +304,13 @@ where
                     expected_value,
                     &Yaml::Hash(Default::default()),
                     path_buf,
-                    any_to_str(key, Cow::Borrowed),
+                    any_to_str(key, Cow::Borrowed)?,
                 )?
             }
             (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(
                 key,
                 |s| s.to_owned().into()
-            ),)),
+            )?)),
         }
     }
 

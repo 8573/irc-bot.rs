@@ -2,6 +2,7 @@ use core::BotCmdAuthLvl as Auth;
 use core::*;
 use regex::Captures;
 use std::borrow::Cow;
+use try_map::FallibleMapExt;
 use util;
 use util::yaml::str::YAML_STR_CHAN;
 use util::yaml::str::YAML_STR_CMD;
@@ -75,13 +76,13 @@ pub fn mk() -> Module {
         .end()
 }
 
-fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
-    Reaction::RawMsg(
+fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
+    Ok(Reaction::RawMsg(
         format!(
             "JOIN {}",
-            util::yaml::scalar_to_str(arg, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL)
+            util::yaml::scalar_to_str(arg, Cow::Borrowed, "the argument to the command `join`")?
         ).into(),
-    )
+    ))
 }
 
 fn part(
@@ -91,42 +92,48 @@ fn part(
         ..
     }: &MsgMetadata,
     arg: &Yaml,
-) -> BotCmdResult {
+) -> Result<BotCmdResult> {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
 
-    let chan = arg.get(&YAML_STR_CHAN)
-        .map(|y| util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL));
+    let chan = arg.get(&YAML_STR_CHAN).try_map(|y| {
+        util::yaml::scalar_to_str(y, Cow::Borrowed, "the value of the parameter `chan`")
+    })?;
 
     let chan = match (chan, target) {
         (Some(c), _) => c,
         (None, t) if t == state.nick(server_id).unwrap_or("".into()) => {
-            return BotCmdResult::ArgMissing1To1("channel".into())
+            return Ok(BotCmdResult::ArgMissing1To1("channel".into()))
         }
         (None, t) => t.into(),
     };
 
-    let comment = arg.get(&YAML_STR_MSG)
-        .map(|y| util::yaml::scalar_to_str(y, Cow::Borrowed).expect(FW_SYNTAX_CHECK_FAIL));
+    let comment = arg.get(&YAML_STR_MSG).try_map(|y| {
+        util::yaml::scalar_to_str(y, Cow::Borrowed, "the value of the parameter `msg`")
+    })?;
 
-    Reaction::RawMsg(
+    Ok(Reaction::RawMsg(
         format!(
             "PART {}{}{}",
             chan,
             if comment.is_some() { " :" } else { "" },
             comment.unwrap_or_default()
         ).into(),
-    ).into()
+    ).into())
 }
 
-fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Reaction {
+fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
     let comment = arg.as_hash()
         .expect(FW_SYNTAX_CHECK_FAIL)
         .get(&YAML_STR_MSG)
-        .map(|y| {
-            util::yaml::scalar_to_str(y, |s| Cow::Owned(s.to_owned())).expect(FW_SYNTAX_CHECK_FAIL)
-        });
+        .try_map(|y| {
+            util::yaml::scalar_to_str(
+                y,
+                |s| Cow::Owned(s.to_owned()),
+                "the value of the parameter `msg`",
+            )
+        })?;
 
-    Reaction::Quit(comment)
+    Ok(Reaction::Quit(comment))
 }
 
 fn ping(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {

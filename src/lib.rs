@@ -11,6 +11,7 @@ extern crate rando;
 extern crate regex;
 extern crate serde_yaml;
 extern crate smallvec;
+extern crate try_map;
 extern crate uuid;
 extern crate walkdir;
 extern crate yaml_rust;
