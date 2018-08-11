@@ -28,6 +28,10 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
 pub use self::core::*;
 
 pub mod modules;
