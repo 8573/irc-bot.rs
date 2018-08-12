@@ -29,6 +29,7 @@ serde_derive = "1.0.59"
 serde_yaml = "0.7.4"
 smallbitvec = "2.1.1"
 smallvec = {version = "0.6.1", features = ["serde", "std"]}
+string_cache = "0.7.3"
 try_map = "0.3.1"
 uuid = {version = "0.6.5", features = ["v4"]}
 walkdir = "2.2.0"
