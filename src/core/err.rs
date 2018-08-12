@@ -3,6 +3,7 @@ use super::ModuleInfo;
 use super::ServerId;
 use irc;
 use rand;
+use regex;
 use serde_yaml;
 use std::any::Any;
 use std::borrow::Cow;
@@ -18,6 +19,8 @@ error_chain! {
         ParseIntError(ParseIntError);
 
         Rand(rand::Error);
+
+        Regex(regex::Error);
 
         SerdeYaml(serde_yaml::Error);
 
