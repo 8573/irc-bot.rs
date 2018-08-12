@@ -22,3 +22,11 @@ where
         ErrorKind::HandlerPanic(feature_kind.into(), feature_name.into(), panic_payload).into()
     })
 }
+
+/// Calls `ToOwned::to_owned` on the argument and wraps the result in `Cow::Owned`.
+pub fn to_cow_owned<T>(x: &T) -> Cow<'static, T>
+where
+    T: ToOwned + ?Sized,
+{
+    Cow::Owned(x.to_owned())
+}

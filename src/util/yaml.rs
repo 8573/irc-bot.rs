@@ -2,6 +2,7 @@ use smallvec;
 use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
+use util::to_cow_owned;
 use yaml_rust;
 use yaml_rust::yaml;
 use yaml_rust::Yaml;
@@ -118,10 +119,12 @@ impl<'a> AugmentedTy<'a> {
 /// Converts any type of YAML node to a string.
 ///
 /// If the `node` is a `Yaml::String`, a `&str` reference to its content it will be passed to
-/// `lt_map` to construct a `Cow` with the desired lifetime (`lt_map` usually should be
-/// `Cow::Borrowed`). If the `node` is not a `Yaml::String`, a stringified representation of it
-/// will be returned, wrapped in `Cow::Owned`. If such stringification fails, an `Err` will be
-/// returned.
+/// `lt_map` to construct a `Cow` with the desired lifetime. If the `node` is not a `Yaml::String`,
+/// a stringified representation of it will be returned, wrapped in `Cow::Owned`. If such
+/// stringification fails, an `Err` will be returned.
+///
+/// `lt_map` usually should be `Cow::Borrowed`; however, if `'b` is `'static` and `'a` is not,
+/// `lt_map` usually should be `util::to_cow_owned`.
 pub fn any_to_str<'a, 'b, F>(node: &'a Yaml, lt_map: F) -> Result<Cow<'b, str>>
 where
     F: Fn(&'a str) -> Cow<'b, str>,
@@ -137,7 +140,7 @@ where
                 emitter.dump(node)?;
             }
 
-            Ok(Cow::Owned(s.trim_left_matches("---\n").to_owned()))
+            Ok(to_cow_owned(s.trim_left_matches("---\n")))
         }
     }
 }

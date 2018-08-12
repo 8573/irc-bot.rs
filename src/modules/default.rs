@@ -4,6 +4,7 @@ use regex::Captures;
 use std::borrow::Cow;
 use try_map::FallibleMapExt;
 use util;
+use util::to_cow_owned;
 use util::yaml::str::YAML_STR_CHAN;
 use util::yaml::str::YAML_STR_CMD;
 use util::yaml::str::YAML_STR_LIST;
@@ -126,11 +127,7 @@ fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
         .expect(FW_SYNTAX_CHECK_FAIL)
         .get(&YAML_STR_MSG)
         .try_map(|y| {
-            util::yaml::scalar_to_str(
-                y,
-                |s| Cow::Owned(s.to_owned()),
-                "the value of the parameter `msg`",
-            )
+            util::yaml::scalar_to_str(y, to_cow_owned, "the value of the parameter `msg`")
         })?;
 
     Ok(Reaction::Quit(comment))
