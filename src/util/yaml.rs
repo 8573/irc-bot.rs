@@ -44,6 +44,13 @@ error_chain! {
             description("expected empty YAML stream but found non-empty stream")
             display("While handling YAML: Expected an empty stream, but found a non-empty stream.")
         }
+        ArgGivenByBothLongAndShortKey(long_key: Cow<'static, str>, short_key: Cow<'static, str>) {
+            description("wanted one but not both of an argument's full and abbreviated names")
+            display("While handling YAML: An argument was given by both its full key {full:?} and \
+                     its abbreviated key {abbr:?}; please use one or the other but not both.",
+                    full = long_key,
+                    abbr = short_key)
+        }
     }
 }
 
@@ -167,6 +174,26 @@ where
         wrong_kind => {
             Err(ErrorKind::TypeMismatch(subject_label.into(), Kind::Scalar, wrong_kind).into())
         }
+    }
+}
+
+/// Gets an argument from a hash-map of arguments by either an abbreviated ("short") form or the
+/// full ("long") form of the argument's key (i.e., its "name").
+///
+/// If both the long and short forms of the argument's key are found, an `Err` is returned. If
+/// neither is found, `Ok(None)` is returned.
+pub fn get_arg_by_short_or_long_key<'a>(
+    args: &'a yaml::Hash,
+    short_key: &Yaml,
+    long_key: &Yaml,
+) -> Result<Option<&'a Yaml>> {
+    match (args.get(short_key), args.get(long_key)) {
+        (Some(v), None) | (None, Some(v)) => Ok(Some(v)),
+        (Some(_), Some(_)) => Err(ErrorKind::ArgGivenByBothLongAndShortKey(
+            any_to_str(long_key, to_cow_owned)?,
+            any_to_str(short_key, to_cow_owned)?,
+        ).into()),
+        (None, None) => Ok(None),
     }
 }
 
