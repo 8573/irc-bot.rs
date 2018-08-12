@@ -8,6 +8,7 @@ extern crate irc;
 extern crate itertools;
 extern crate rand;
 extern crate rando;
+extern crate ref_slice;
 extern crate regex;
 extern crate serde_yaml;
 extern crate smallvec;

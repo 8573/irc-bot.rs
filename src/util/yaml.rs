@@ -1,3 +1,4 @@
+use ref_slice::ref_slice;
 use smallvec;
 use smallvec::SmallVec;
 use std;
@@ -174,6 +175,40 @@ where
         wrong_kind => {
             Err(ErrorKind::TypeMismatch(subject_label.into(), Kind::Scalar, wrong_kind).into())
         }
+    }
+}
+
+/// Converts any type of YAML node to a sequence.
+///
+/// If the `node` is a sequence, a vector of references to its elements is returned. Otherwise, a
+/// vector with `node` as its single element is returned.
+///
+/// Either a `&Yaml` or `Option<&Yaml>` can be passed as argument; in the latter case, `None` will
+/// be treated as an empty sequence.
+pub fn any_to_seq<'a, Y>(node: Y) -> SmallVec<[&'a Yaml; 8]>
+where
+    Y: Into<Option<&'a Yaml>>,
+{
+    match node.into() {
+        Some(Yaml::Array(ref vec)) => vec.iter().collect(),
+        Some(single) => SmallVec::from_slice(&[single]),
+        None => SmallVec::new(),
+    }
+}
+
+/// Returns an iterator over references to a YAML node's elements if the node is a sequence, or
+/// over a sequence with the node as its single element otherwise.
+///
+/// Either a `&Yaml` or `Option<&Yaml>` can be passed as argument; in the latter case, `None` will
+/// be treated as an empty sequence.
+pub fn iter_as_seq<'a, Y>(node: Y) -> std::slice::Iter<'a, Yaml>
+where
+    Y: Into<Option<&'a Yaml>>,
+{
+    match node.into() {
+        Some(Yaml::Array(ref vec)) => vec.iter(),
+        Some(single) => ref_slice(single).iter(),
+        None => [].iter(),
     }
 }
 
