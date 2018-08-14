@@ -15,6 +15,8 @@ extern crate smallbitvec;
 extern crate smallvec;
 extern crate string_cache;
 extern crate try_map;
+extern crate url;
+extern crate url_serde;
 extern crate uuid;
 extern crate walkdir;
 extern crate yaml_rust;
