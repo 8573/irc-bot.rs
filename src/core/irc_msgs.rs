@@ -1,9 +1,11 @@
 use super::ServerId;
+use std::borrow::Borrow;
+use std::borrow::Cow;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct MsgDest<'a> {
     pub server_id: ServerId,
-    pub target: &'a str,
+    pub target: Cow<'a, str>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,6 +76,34 @@ pub(super) fn parse_prefix(prefix: &str) -> MsgPrefix {
         nick: nick,
         user: user,
         host: host,
+    }
+}
+
+impl<'a> MsgDest<'a> {
+    pub fn to_owning(&self) -> MsgDest<'static> {
+        let &MsgDest {
+            server_id,
+            ref target,
+        } = self;
+
+        MsgDest {
+            server_id,
+            target: Cow::Owned(target.to_string()),
+        }
+    }
+}
+
+impl<'a> Borrow<MsgDest<'a>> for MsgDest<'static> {
+    fn borrow(&self) -> MsgDest<'a> {
+        let &MsgDest {
+            server_id,
+            ref target,
+        } = self;
+
+        MsgDest {
+            server_id,
+            target: Cow::Borrowed(target),
+        }
     }
 }
 

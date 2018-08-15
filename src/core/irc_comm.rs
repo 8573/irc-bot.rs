@@ -58,7 +58,7 @@ impl State {
         for input_line in final_msg.lines() {
             wrap_msg(self, dest, input_line, |output_line| {
                 wrapped_msg.push(LibReaction::RawMsg(
-                    aatxe::Command::PRIVMSG(dest.target.to_owned(), output_line.to_owned()).into(),
+                    aatxe::Command::PRIVMSG(dest.target.to_string(), output_line.to_owned()).into(),
                 ));
                 Ok(())
             })?;
@@ -118,7 +118,7 @@ impl State {
             target: if target == self.nick(server_id)? {
                 // The message was sent to the bot in one-to-one messaging, so replies should be
                 // sent in one-to-one messaging to the sender.
-                nick.ok_or(ErrorKind::ReceivedMsgHasBadPrefix)?
+                Cow::Borrowed(nick.ok_or(ErrorKind::ReceivedMsgHasBadPrefix)?)
             } else {
                 // The message was sent in a channel, so replies should be sent in the same
                 // channel.
@@ -213,7 +213,7 @@ fn handle_reaction(
 
     let reply_dest = MsgDest {
         server_id,
-        target: reply_target,
+        target: Cow::Borrowed(reply_target),
     };
 
     match reaction {
@@ -240,11 +240,11 @@ fn handle_bot_command_or_trigger(
             prefix: prefix.parse(),
             dest: MsgDest {
                 server_id,
-                target: &target,
+                target: Cow::Owned(target),
             },
         };
 
-        let cmd_ln = parse_msg_to_nick(&msg, metadata.dest.target, &bot_nick).unwrap_or("");
+        let cmd_ln = parse_msg_to_nick(&msg, &metadata.dest.target, &bot_nick).unwrap_or("");
 
         let mut cmd_name_and_args = cmd_ln.splitn(2, char::is_whitespace);
         let cmd_name = cmd_name_and_args.next().unwrap_or("");

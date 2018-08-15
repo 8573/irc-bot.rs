@@ -237,13 +237,12 @@ lazy_static! {
     static ref QDB: RwLock<QuotationDatabase> = RwLock::new(QuotationDatabase::new());
 }
 
-#[derive(Debug)]
 struct QuotationDatabase {
     files: SmallVec<[QuotationFileMetadata; 8]>,
 
     quotations: Vec<Quotation>,
 
-    file_permissions_cache: Mutex<ClockProCache>,
+    file_permissions_cache: Mutex<ClockProCache<MsgDest<'static>, SmallBitVec>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -336,6 +335,8 @@ impl QuotationDatabase {
         QuotationDatabase {
             files: Default::default(),
             quotations: Default::default(),
+            file_permissions_cache: Mutex::new(ClockProCache::new(32)
+                .expect("That number passed to the previous method mustn't be less than 3!")),
         }
     }
 
@@ -346,6 +347,44 @@ impl QuotationDatabase {
     fn get_quotation_by_id(&self, id: QuotationId) -> Option<&Quotation> {
         id.array_index()
             .and_then(|index| self.quotations.get(index))
+    }
+
+    /// Computes whether the given message destination is allowed to see the quotations in each of
+    /// our quotation files.
+    ///
+    /// This function's return value is such that, with `file: QuotationFileMetadata`,
+    /// `qdb.check_file_permissions(msg_dest).get(file.array_index())` is `Some(true)` if and only
+    /// if the message destination `msg_dest` is allowed to see `file`'s quotations. In actual
+    /// usage, although this function's return value is cached inside the `QuotationDatabase`, it
+    /// still should be saved and not re-retrieved for each quotation file.
+    ///
+    /// It is assumed that checking permissions for each file is more efficient than doing so for
+    /// each candidate quotation, as there are expected to be few files and many quotations.
+    fn check_file_permissions(&self, msg_dest: &MsgDest) -> SmallBitVec {
+        // Note that cloning these `SmallBitVec`s should be cheap, as they can hold (word size - 2)
+        // bits inline, we use one bit per quotation file, and having over thirty quotation files
+        // is not expected, and so the `SmallBitVec`s are expected to be single words of memory.
+
+        // TODO: Account for the server (`msg_dest.server_id`) as well as the channel. E.g.,
+        // consider channels as `server/#channel` rather than just `#channel`.
+
+        let cache_guard = self.file_permissions_cache.lock().ok();
+
+        if let Some(permissions) = cache_guard.and_then(|cache| cache.get(msg_dest)) {
+            return permissions.clone();
+        }
+
+        let mut permissions = SmallBitVec::from_elem(self.files.len(), false);
+
+        for (index, file) in self.files.iter().enumerate() {
+            permissions.set(index, file.channels_regex.is_match(&msg_dest.target));
+        }
+
+        if let Some(cache) = cache_guard {
+            cache.insert(msg_dest.to_owning(), permissions.clone());
+        }
+
+        permissions
     }
 }
 
@@ -385,16 +424,14 @@ fn pick_quotation<'q>(
 
     let query_params = prepare_query_params(arg)?;
 
-    // TODO: Cache `file_permissions` (by `reply_dest`) in the `qdb`. Maybe wrap CLOCK-Pro in a
-    // Mutex in a new crate?
-    let file_permissions = check_file_permissions(qdb, reply_dest);
+    let file_permissions = qdb.check_file_permissions(&reply_dest);
 
     let mut rejected_a_quotation_for_length = false;
 
     quotations
         .rand_iter()
-        .filter_map(|quotation: &Quotation| -> Option<Result<QuotationChoice>> {
-            match (|quotation: &Quotation| -> Result<Option<QuotationChoice>> {
+        .filter_map(|quotation: &'q Quotation| -> Option<Result<QuotationChoice>> {
+            match (|quotation: &'q Quotation| -> Result<Option<QuotationChoice>> {
                 if !quotation_matches_query_params(arg, &query_params, quotation)? {
                     return Ok(None);
                 }
@@ -650,33 +687,6 @@ fn rendered_quotation_byte_len(quotation: &Quotation) -> usize {
         // changes in the `Display` implementation of `QuotationId`.
         4 + quotation.id.to_string().len()
     }
-}
-
-/// Computes whether the given message destination is allowed to see the quotations in each of our
-/// quotation files.
-///
-/// This function's return value is such that, with `file: QuotationFileMetadata`,
-/// `check_file_permissions(qdb, msg_dest).get(file.array_index())` is `true` if the message
-/// destination `msg_dest` is allowed to see `file`'s quotations, and is `false` otherwise. In
-/// actual usage, this function's return value should be saved and not recomputed for each
-/// quotation file.
-///
-/// It is assumed that checking permissions for each file is more efficient than doing so for each
-/// candidate quotation, as there are expected to be few files and many quotations.
-fn check_file_permissions(
-    QuotationDatabase { files, .. }: &QuotationDatabase,
-    MsgDest { server_id, target }: MsgDest,
-) -> SmallBitVec {
-    // TODO: Account for the server as well as the channel. E.g., consider channels as
-    // `server/#channel` rather than just `#channel`.
-
-    let mut result = SmallBitVec::from_elem(files.len(), false);
-
-    for (index, file) in files.iter().enumerate() {
-        result.set(index, file.channels_regex.is_match(target));
-    }
-
-    result
 }
 
 fn get_quotation_by_user_specified_id<'q>(

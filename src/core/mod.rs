@@ -90,7 +90,7 @@ struct Server {
     socket_addr_string: String,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct ServerId {
     uuid: Uuid,
 }
