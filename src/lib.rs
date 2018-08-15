@@ -3,6 +3,7 @@
 #![allow(unused_doc_comment)]
 #![deny(unsafe_code)]
 
+extern crate clockpro_cache;
 extern crate crossbeam_channel;
 extern crate irc;
 extern crate itertools;
