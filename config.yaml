@@ -6,6 +6,7 @@ servers:
     port: 6697
     channels:
       - '#c74d'
+      - '#rust-irc'
 admins:
   - nick: c74d
     user: c74d
