@@ -31,6 +31,8 @@ serde_yaml = "0.7.4"
 smallbitvec = "2.1.1"
 smallvec = {version = "0.6.1", features = ["serde", "std"]}
 string_cache = "0.7.3"
+strum = "0.10.0"
+strum_macros = "0.10.0"
 try_map = "0.3.1"
 url = "1.7.1"
 url_serde = "0.2.0"

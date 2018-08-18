@@ -15,6 +15,7 @@ extern crate serde_yaml;
 extern crate smallbitvec;
 extern crate smallvec;
 extern crate string_cache;
+extern crate strum;
 extern crate try_map;
 extern crate url;
 extern crate url_serde;
@@ -33,6 +34,9 @@ extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
+
+#[macro_use]
+extern crate strum_macros;
 
 #[cfg(test)]
 #[macro_use]
