@@ -49,7 +49,7 @@ fn main() {
             }
             irc_bot::ErrorReaction::Proceed
         },
-        &[modules::default, modules::test],
+        modules::ALL,
     );
 }
 
