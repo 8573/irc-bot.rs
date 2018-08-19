@@ -312,6 +312,24 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             }
         };
 
+        let caps_to_request = &[aatxe::Capability::MultiPrefix];
+
+        match aatxe_client.send_cap_req(caps_to_request) {
+            Ok(()) => debug!(
+                "recv[{}]: Sent IRCv3 capability request to server, requesting: {:?}",
+                server.socket_addr_string, caps_to_request
+            ),
+            Err(e) => {
+                error!(
+                    "recv[{}]: Failed to send IRCv3 capability request (for {:?}) to server: {}",
+                    server.socket_addr_string, caps_to_request, e
+                );
+                // This is not a fatal error, although we can expect the next step, sending the
+                // identification sequence, to fail, which is a fatal error for this particular
+                // attempt to connect to a server.
+            }
+        }
+
         match aatxe_client.identify() {
             Ok(()) => debug!(
                 "recv[{}]: Sent identification sequence to server.",
