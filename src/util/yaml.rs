@@ -436,3 +436,9 @@ where
 {
     Yaml::Integer(n.into())
 }
+
+#[cfg(test)]
+mod tests {
+    // NOTE: The parsing and type-checking functions are used only(?) by `core::bot_cmd`, and
+    // they're tested via that module, in `core::bot_cmd::tests`.
+}

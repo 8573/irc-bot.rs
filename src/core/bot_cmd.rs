@@ -175,3 +175,62 @@ fn parse_arg<'s>(syntax: &'s Yaml, arg_str: &str) -> std::result::Result<Yaml, B
         Err(err) => Err(BotCmdResult::LibErr(err.into())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use util::yaml::mk_str as s;
+
+    fn pa(syntax_str: &str, arg_str: &str) -> std::result::Result<Yaml, String> {
+        parse_arg(
+            &util::yaml::parse_node(syntax_str)
+                .unwrap()
+                .unwrap_or(Yaml::Hash(Default::default())),
+            arg_str,
+        ).map_err(|err| format!("{:?}", err))
+    }
+
+    fn map<'a, I>(entries: I) -> Yaml
+    where
+        I: IntoIterator<Item = &'a (Yaml, Yaml)>,
+    {
+        util::yaml::mk_map(entries.into_iter().cloned())
+    }
+
+    fn seq<'a, I>(entries: I) -> Yaml
+    where
+        I: IntoIterator<Item = &'a Yaml>,
+    {
+        util::yaml::mk_seq(entries.into_iter().cloned())
+    }
+
+    // TODO: Turn this into a doctest.
+    #[test]
+    fn parse_arg_examples() {
+        assert_eq!(pa("", ""), Ok(map(&[])));
+        assert_eq!(pa("{}", ""), Ok(map(&[])));
+        assert_eq!(pa("{k: '[v]'}", ""), Ok(map(&[])));
+        assert_eq!(pa("{k: '[v]'}", "k: x"), Ok(map(&[(s("k"), s("x"))])));
+        assert_eq!(
+            pa("{k: '[v]'}", "k: 1"),
+            Ok(map(&[(s("k"), Yaml::Integer(1))]))
+        );
+        assert!(pa("{k: '[v]'}", "k: {}").is_err());
+        assert_eq!(pa("{k: v}", "k: x"), Ok(map(&[(s("k"), s("x"))])));
+        assert!(pa("{k: v}", "").is_err());
+        assert_eq!(
+            pa("{k: [a]}", "k: [b]"),
+            Ok(map(&[(s("k"), seq(&[s("b")]))]))
+        );
+        assert_eq!(pa("{k: [a]}", ""), Ok(map(&[])));
+        assert!(pa("{k: [a]}", "k: x").is_err());
+        assert!(pa("{k: '[v]', j: v}", "").is_err());
+        assert_eq!(pa("{k: '[v]', j: v}", "j: x"), Ok(map(&[(s("j"), s("x"))])));
+        assert_eq!(pa("{k: {j: '[v]'}}", ""), Ok(map(&[])));
+        assert!(pa("{k: {j: v}}", "").is_err());
+        assert_eq!(
+            pa("{k: {j: v}}", "k: {j: x}"),
+            Ok(map(&[(s("k"), map(&[(s("j"), s("x"))]))]))
+        );
+    }
+}
