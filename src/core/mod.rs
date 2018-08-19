@@ -312,6 +312,20 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             }
         };
 
+        match aatxe_client.identify() {
+            Ok(()) => debug!(
+                "recv[{}]: Sent identification sequence to server.",
+                server.socket_addr_string
+            ),
+            Err(e) => {
+                error!(
+                    "recv[{}]: Failed to send identification sequence to server: {}",
+                    server.socket_addr_string, e
+                );
+                continue;
+            }
+        }
+
         match state
             .aatxe_clients
             .write()
@@ -329,17 +343,6 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
                 );
                 return;
             }
-        }
-
-        match aatxe_client.identify() {
-            Ok(()) => debug!(
-                "recv[{}]: Sent identification sequence to server.",
-                server.socket_addr_string
-            ),
-            Err(e) => error!(
-                "recv[{}]: Failed to send identification sequence to server: {}",
-                server.socket_addr_string, e
-            ),
         }
 
         aatxe_reactor.register_client_with_handler(aatxe_client, move |_aatxe_client, msg| {
