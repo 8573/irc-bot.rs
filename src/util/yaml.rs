@@ -3,6 +3,7 @@ use smallvec;
 use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
+use std::iter;
 use util::to_cow_owned;
 use yaml_rust;
 use yaml_rust::yaml;
@@ -77,6 +78,17 @@ pub mod str {
 pub static FW_SYNTAX_CHECK_FAIL: &str =
     "The framework should have caught this syntax error before it tried to run this command \
      handler!";
+
+lazy_static! {
+    /// An empty YAML mapping.
+    pub static ref EMPTY_MAP: Yaml = mk_map(iter::empty());
+
+    /// An empty YAML sequence.
+    pub static ref EMPTY_SEQ: Yaml = mk_seq(iter::empty());
+
+    /// An empty YAML string.
+    pub static ref EMPTY_STR: Yaml = mk_str("");
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum Kind {
