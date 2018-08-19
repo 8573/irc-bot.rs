@@ -57,17 +57,18 @@ error_chain! {
 
 /// Predefined YAML string values.
 pub mod str {
+    use super::mk_str;
     use yaml_rust::Yaml;
 
     lazy_static! {
-        pub static ref YAML_STR_CHAN: Yaml = Yaml::String("chan".into());
-        pub static ref YAML_STR_CMD: Yaml = Yaml::String("cmd".into());
-        pub static ref YAML_STR_LIST: Yaml = Yaml::String("list".into());
-        pub static ref YAML_STR_MSG: Yaml = Yaml::String("msg".into());
-        pub static ref YAML_STR_R: Yaml = Yaml::String("r".into());
-        pub static ref YAML_STR_REGEX: Yaml = Yaml::String("regex".into());
-        pub static ref YAML_STR_S: Yaml = Yaml::String("s".into());
-        pub static ref YAML_STR_STRING: Yaml = Yaml::String("string".into());
+        pub static ref YAML_STR_CHAN: Yaml = mk_str("chan");
+        pub static ref YAML_STR_CMD: Yaml = mk_str("cmd");
+        pub static ref YAML_STR_LIST: Yaml = mk_str("list");
+        pub static ref YAML_STR_MSG: Yaml = mk_str("msg");
+        pub static ref YAML_STR_R: Yaml = mk_str("r");
+        pub static ref YAML_STR_REGEX: Yaml = mk_str("regex");
+        pub static ref YAML_STR_S: Yaml = mk_str("s");
+        pub static ref YAML_STR_STRING: Yaml = mk_str("string");
     }
 }
 
@@ -380,4 +381,46 @@ where
     }
 
     Ok(())
+}
+
+#[inline]
+pub fn mk_map<I>(entries: I) -> Yaml
+where
+    I: IntoIterator<Item = (Yaml, Yaml)>,
+{
+    Yaml::Hash(entries.into_iter().collect())
+}
+
+#[inline]
+pub fn mk_seq<I>(entries: I) -> Yaml
+where
+    I: IntoIterator<Item = Yaml>,
+{
+    Yaml::Array(entries.into_iter().collect())
+}
+
+#[inline]
+pub fn mk_str<S>(s: S) -> Yaml
+where
+    S: Into<String>,
+{
+    Yaml::String(s.into())
+}
+
+#[inline]
+pub fn mk_true() -> Yaml {
+    Yaml::Boolean(true)
+}
+
+#[inline]
+pub fn mk_false() -> Yaml {
+    Yaml::Boolean(false)
+}
+
+#[inline]
+pub fn mk_int<N>(n: N) -> Yaml
+where
+    N: Into<i64>,
+{
+    Yaml::Integer(n.into())
 }
