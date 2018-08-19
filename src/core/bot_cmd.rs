@@ -232,5 +232,28 @@ mod tests {
             pa("{k: {j: v}}", "k: {j: x}"),
             Ok(map(&[(s("k"), map(&[(s("j"), s("x"))]))]))
         );
+        assert_eq!(pa("{k: ...}", "k: x"), Ok(map(&[(s("k"), s("x"))])));
+        assert_eq!(pa("{k: '[...]'}", "k: x"), Ok(map(&[(s("k"), s("x"))])));
+        assert_eq!(
+            pa("{k: '[...]'}", "k: 1"),
+            Ok(map(&[(s("k"), Yaml::Integer(1))]))
+        );
+        assert_eq!(pa("{k: '[...]'}", "k: {}"), Ok(map(&[(s("k"), map(&[]))])));
+        assert_eq!(pa("{k: '[...]'}", "k: []"), Ok(map(&[(s("k"), seq(&[]))])));
+        assert_eq!(pa("{k: '[...]'}", ""), Ok(map(&[])));
+        assert!(pa("{k: ...}", "").is_err());
+        assert_eq!(
+            pa("{k: ...}", "k: [b]"),
+            Ok(map(&[(s("k"), seq(&[s("b")]))]))
+        );
+        assert_eq!(
+            pa("{k: ...}", "k: {j: x}"),
+            Ok(map(&[(s("k"), map(&[(s("j"), s("x"))]))]))
+        );
+        assert!(pa("{k: {j: ...}}", "").is_err());
+        assert_eq!(
+            pa("{k: {j: ...}}", "k: {j: 123}"),
+            Ok(map(&[(s("k"), map(&[(s("j"), Yaml::Integer(123))]))]))
+        );
     }
 }

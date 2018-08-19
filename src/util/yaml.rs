@@ -64,6 +64,8 @@ pub mod str {
     lazy_static! {
         pub static ref YAML_STR_CHAN: Yaml = mk_str("chan");
         pub static ref YAML_STR_CMD: Yaml = mk_str("cmd");
+        pub static ref YAML_STR_ELLIPSIS: Yaml = mk_str("...");
+        pub static ref YAML_STR_ELLIPSIS_IN_SQUARE_BRACKETS: Yaml = mk_str("[...]");
         pub static ref YAML_STR_LIST: Yaml = mk_str("list");
         pub static ref YAML_STR_MSG: Yaml = mk_str("msg");
         pub static ref YAML_STR_R: Yaml = mk_str("r");
@@ -321,6 +323,15 @@ where
         expected = expected,
         actual = actual
     );
+
+    // If "..." or "[...]" is requested, it means that anything is acceptable.
+    if [
+        &*str::YAML_STR_ELLIPSIS,
+        &*str::YAML_STR_ELLIPSIS_IN_SQUARE_BRACKETS,
+    ].contains(&expected)
+    {
+        return Ok(());
+    }
 
     use util::yaml::AugmentedTy as Ty;
 
