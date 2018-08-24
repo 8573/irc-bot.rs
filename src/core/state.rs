@@ -7,6 +7,7 @@ use super::Result;
 use super::Server;
 use super::ServerId;
 use super::State;
+use irc::client::prelude as aatxe;
 use rand::StdRng;
 use std::borrow::Cow;
 use std::path::Path;
@@ -74,6 +75,19 @@ impl State {
             },
             None => Err(ErrorKind::UnknownServer(server_id).into()),
         }
+    }
+
+    pub(crate) fn read_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
+    where
+        F: FnOnce(&aatxe::IrcClient) -> Result<T>,
+    {
+        f(self.aatxe_clients
+            .read()
+            .map_err(|_poisoned_guard| {
+                ErrorKind::LockPoisoned("the server connections (`aatxe_clients`)".into())
+            })?
+            .get(&server_id)
+            .ok_or(ErrorKind::UnknownServer(server_id))?)
     }
 
     /// Allows access to a random number generator that's stored centrally, to avoid the cost of
