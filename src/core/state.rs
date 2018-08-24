@@ -64,18 +64,15 @@ impl State {
             .map_err(|_| ErrorKind::LockPoisoned("stored message prefix".into()).into())
     }
 
-    pub(super) fn read_server(
-        &self,
-        server_id: ServerId,
-    ) -> Result<Option<RwLockReadGuard<Server>>> {
+    pub(super) fn read_server(&self, server_id: ServerId) -> Result<RwLockReadGuard<Server>> {
         match self.servers.get(&server_id) {
             Some(lock) => match lock.read() {
-                Ok(guard) => Ok(Some(guard)),
+                Ok(guard) => Ok(guard),
                 Err(_) => Err(ErrorKind::LockPoisoned(
                     format!("server {}", server_id.uuid.hyphenated()).into(),
                 ).into()),
             },
-            None => Ok(None),
+            None => Err(ErrorKind::UnknownServer(server_id).into()),
         }
     }
 
@@ -94,8 +91,7 @@ impl State {
         let uuid = server_id.uuid.hyphenated();
 
         match self.read_server(server_id) {
-            Ok(Some(s)) => s.socket_addr_string.clone(),
-            Ok(None) => format!("<unknown server {} (not found)>", uuid),
+            Ok(s) => s.socket_addr_string.clone(),
             Err(e) => format!("<unknown server {} ({})>", uuid, e),
         }
     }
