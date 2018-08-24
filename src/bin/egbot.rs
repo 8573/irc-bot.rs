@@ -34,7 +34,7 @@ fn main() {
         )
         .get_matches();
 
-    env_logger::init().expect("error: failed to initialize logging");
+    env_logger::init();
 
     let error_verbosity =
         value_t!(args, "error-verbosity", ErrorVerbosity).unwrap_or_else(|err| err.exit());
