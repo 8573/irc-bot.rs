@@ -7,6 +7,7 @@ use core::*;
 use irc::client::data::User as AatxeUser;
 use irc::client::prelude::Client as AatxeClient;
 use itertools::Itertools;
+use quantiles::ckms::CKMS;
 use rando::Rando;
 use ref_slice::ref_slice;
 use regex::Regex;
@@ -1014,7 +1015,35 @@ fn show_qdb_info(state: &State, request_metadata: &MsgMetadata, _: &Yaml) -> Res
 }
 
 fn reload_qdb(state: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
-    on_load(state).map(|()| Reaction::Msg("I have reloaded my quotation database.".into()))
+    on_load(state)?;
+
+    let qdb = read_qdb()?;
+
+    let chat_text_pieces_5ns = {
+        let mut quantiles = CKMS::new(0.0001);
+        for quotation in &qdb.quotations {
+            if quotation.format == QuotationFormat::Chat {
+                let mut text_piece_qty: u32 = 0;
+                for_each_quotation_text_piece(&YamlHash::new(), quotation, &[], |_| {
+                    text_piece_qty = text_piece_qty.saturating_add(1)
+                });
+                quantiles.insert(text_piece_qty)
+            }
+        }
+        [0.0, 0.25, 0.5, 0.75, 1.0]
+            .iter()
+            .filter_map(|&q| quantiles.query(q).map(|(_, r)| r))
+            .collect::<SmallVec<[_; 5]>>()
+    };
+
+    Ok(Reaction::Msg(
+        format!(
+            "I have reloaded my quotation database. The five-number summary of the numbers of \
+             pieces into which chat-format quotations' texts get broken, assuming no anti-ping \
+             munging, is {chat_text_pieces_5ns:?}.",
+            chat_text_pieces_5ns = chat_text_pieces_5ns,
+        ).into(),
+    ))
 }
 
 fn read_qdb() -> Result<impl Deref<Target = QuotationDatabase>> {

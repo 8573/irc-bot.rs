@@ -7,6 +7,7 @@ extern crate clockpro_cache;
 extern crate crossbeam_channel;
 extern crate irc;
 extern crate itertools;
+extern crate quantiles;
 extern crate rand;
 extern crate rando;
 extern crate ref_slice;
