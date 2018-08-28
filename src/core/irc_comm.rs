@@ -280,6 +280,11 @@ fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
              authority to use my {:?} command.",
             cmd_name
         ).into()),
+        BotCmdResult::ParamUnauthorized(param_name) => Err(format!(
+            "My apologies, but you do not appear to have sufficient \
+             authority to use the parameter {:?} of my {:?} command.",
+            param_name, cmd_name
+        ).into()),
         BotCmdResult::SyntaxErr => Err("Syntax error. Try my `help` command.".into()),
         BotCmdResult::ArgMissing(arg_name) => Err(format!(
             "Syntax error: For command {:?}, the argument {:?} \

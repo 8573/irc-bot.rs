@@ -40,6 +40,10 @@ pub enum BotCmdResult {
     /// be sent informing the user of this.
     Unauthorized,
 
+    /// A user used the specified parameter of the command without having sufficient authorization
+    /// to do so. A reply will be sent informing the user of this.
+    ParamUnauthorized(Cow<'static, str>),
+
     /// A user invoked the command with incorrect syntax. A reply will be sent informing the user
     /// of the correct syntax.
     SyntaxErr,

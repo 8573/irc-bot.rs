@@ -29,6 +29,7 @@ use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
 use string_cache::DefaultAtom;
 use strum::IntoEnumIterator;
+use try_map::FallibleMapExt;
 use try_map::FlipResultExt;
 use url::Url;
 use url_serde::SerdeUrl;
@@ -106,6 +107,10 @@ use url_serde::Serde;
 /// whose ID, when displayed as described in the section "Output" above, is the value of this
 /// parameter. Note that any asterisk suffixed to a quotation ID is not part of the quotation ID.
 /// This parameter is optional.
+///
+/// - `anti-ping tactic` — The value of this parameter should be a string. This parameter overrides
+/// the fields of the same name in the quotation database (see below). This parameter may be used
+/// only by administrators of the bot. This parameter is optional.
 ///
 /// ## Examples
 ///
@@ -286,6 +291,7 @@ pub fn mk() -> Module {
 
 lazy_static! {
     static ref QDB: RwLock<QuotationDatabase> = RwLock::new(QuotationDatabase::new());
+    static ref YAML_STR_ANTI_PING_TACTIC: Yaml = util::yaml::mk_str("anti-ping tactic");
 }
 
 #[derive(Debug)]
@@ -434,8 +440,12 @@ impl QuotationDatabase {
     }
 }
 
-fn quote(state: &State, request_metadata: &MsgMetadata, arg: &Yaml) -> Result<BotCmdResult> {
-    let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
+fn quote(
+    state: &State,
+    request_metadata: &MsgMetadata,
+    arg: &Yaml,
+) -> std::result::Result<Reaction, BotCmdResult> {
+    let params = prepare_quote_params(state, request_metadata, arg)?;
     let reply_dest = state.guess_reply_dest(request_metadata)?;
     let qdb = read_qdb()?;
     let channel_users = state.read_aatxe_client(reply_dest.server_id, |aatxe_client| {
@@ -444,46 +454,120 @@ fn quote(state: &State, request_metadata: &MsgMetadata, arg: &Yaml) -> Result<Bo
             .unwrap_or_default())
     })?;
 
-    let result: Result<Cow<_>> = match pick_quotation(
+    let output_text = match pick_quotation(
         state,
         request_metadata,
-        arg,
+        &params,
         reply_dest,
         &qdb,
         &channel_users,
     ) {
         Ok(QuotationChoice::Text { quotation }) => {
-            render_quotation(arg, quotation, &channel_users).map(Into::into)
+            render_quotation(&params, quotation, &channel_users)?.into()
         }
         Ok(QuotationChoice::Url { quotation_id, url }) => {
-            Ok(format!("[{id}] <{url}>", id = quotation_id, url = url).into())
+            format!("[{id}] <{url}>", id = quotation_id, url = url).into()
         }
-        Err(msg) => return Ok(msg),
+        Err(msg) => return Err(msg),
     };
 
-    result.map(|output_text| Reaction::Msg(output_text).into())
+    Ok(Reaction::Msg(output_text))
+}
+
+#[derive(Debug, Default)]
+struct QuoteParams<'a> {
+    // TODO: Use `RegexSet`.
+    regexes: SmallVec<[Regex; 8]>,
+    literals: SmallVec<[Cow<'a, str>; 8]>,
+    tags: SmallVec<[Cow<'a, str>; 4]>,
+    id: Option<Cow<'a, str>>,
+    anti_ping_tactic: Option<AntiPingTactic>,
+}
+
+fn prepare_quote_params<'arg>(
+    state: &State,
+    request_metadata: &MsgMetadata,
+    arg: &'arg Yaml,
+) -> std::result::Result<QuoteParams<'arg>, BotCmdResult> {
+    let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
+    let admin_param_keys = [&YAML_STR_ANTI_PING_TACTIC];
+    let admin_param_used = admin_param_keys.iter().any(|k| arg.get(k).is_some());
+
+    if admin_param_used && !state.have_admin(request_metadata.prefix)? {
+        return Err(BotCmdResult::ParamUnauthorized("anti-ping tactic".into()));
+    }
+
+    let regexes = iter_as_seq(get_arg_by_short_or_long_key(
+        arg,
+        &YAML_STR_R,
+        &YAML_STR_REGEX,
+    )?).map(|y| {
+        scalar_to_str(
+            y,
+            Cow::Borrowed,
+            "a search term given in the argument `regex`",
+        ).map_err(Into::into)
+    })
+        .map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
+        .collect::<Result<Result<_>>>()??;
+
+    let literals = iter_as_seq(get_arg_by_short_or_long_key(
+        arg,
+        &YAML_STR_S,
+        &YAML_STR_STRING,
+    )?).map(|y| {
+        scalar_to_str(
+            y,
+            Cow::Borrowed,
+            "a search term given in the argument `string`",
+        ).map_err(Into::into)
+    })
+        .collect::<Result<_>>()?;
+
+    let tags = iter_as_seq(arg.get(&YAML_STR_TAG))
+        .map(|y| {
+            scalar_to_str(
+                y,
+                Cow::Borrowed,
+                "a search term given in the argument `tag`",
+            ).map_err(Into::into)
+        })
+        .collect::<Result<_>>()?;
+
+    let id = arg.get(&YAML_STR_ID)
+        .try_map(|y| scalar_to_str(y, Cow::Borrowed, "the argument `id`"))?;
+
+    let anti_ping_tactic = arg.get(&YAML_STR_ANTI_PING_TACTIC)
+        .try_map(|y| scalar_to_str(y, Cow::Borrowed, "the argument `anti-ping tactic`"))?
+        .try_map(|s: Cow<'arg, str>| serde_yaml::from_str(&s))?;
+
+    Ok(QuoteParams {
+        regexes,
+        literals,
+        tags,
+        id,
+        anti_ping_tactic,
+    })
 }
 
 // TODO: Probabilities
 fn pick_quotation<'q>(
     state: &State,
     request_metadata: &MsgMetadata,
-    arg: &YamlHash,
+    arg: &QuoteParams,
     reply_dest: MsgDest,
     qdb: &'q QuotationDatabase,
     channel_users: &[AatxeUser],
 ) -> std::result::Result<QuotationChoice<'q>, BotCmdResult> {
     let reply_content_max_len = state.privmsg_content_max_len(reply_dest)?;
 
-    let quotations = match arg.get(&YAML_STR_ID) {
-        Some(requested_quotation_id) => ref_slice(get_quotation_by_user_specified_id(
+    let quotations = match arg.id {
+        Some(ref requested_quotation_id) => ref_slice(get_quotation_by_user_specified_id(
             qdb,
             requested_quotation_id,
         )?),
         None => &qdb.quotations,
     };
-
-    let query_params = prepare_query_params(arg)?;
 
     let file_permissions = check_file_permissions(qdb, reply_dest);
 
@@ -494,7 +578,7 @@ fn pick_quotation<'q>(
         .filter_map(
             |quotation: &'q Quotation| -> Option<Result<QuotationChoice>> {
                 match (|quotation: &'q Quotation| -> Result<Option<QuotationChoice>> {
-                    if !quotation_matches_query_params(arg, &query_params, quotation)? {
+                    if !quotation_matches_query_params(arg, quotation)? {
                         return Ok(None);
                     }
 
@@ -522,7 +606,8 @@ fn pick_quotation<'q>(
                         };
                     }
 
-                    if quotation.anti_ping_tactic == AntiPingTactic::Eschew
+                    if arg.anti_ping_tactic.unwrap_or(quotation.anti_ping_tactic)
+                        == AntiPingTactic::Eschew
                         && quotation_text_contains_any_nick(quotation, channel_users)
                     {
                         return Ok(None);
@@ -554,7 +639,7 @@ fn pick_quotation<'q>(
 }
 
 fn render_quotation(
-    arg: &YamlHash,
+    arg: &QuoteParams,
     quotation: &Quotation,
     channel_users: &[AatxeUser],
 ) -> Result<String> {
@@ -591,7 +676,7 @@ fn render_quotation(
 /// the destination channel appears in the quotation's text, a debug assertion may fail.
 fn append_quotation_text_pieces<'q>(
     buf: &mut SmallVec<[&'q str; 64]>,
-    arg: &YamlHash,
+    arg: &QuoteParams,
     quotation: &'q Quotation,
     channel_users: &[AatxeUser],
 ) -> Result<MustUse<bool>> {
@@ -599,7 +684,7 @@ fn append_quotation_text_pieces<'q>(
 }
 
 fn for_each_quotation_text_piece<'q, 'arg, 'users, F>(
-    arg: &'arg YamlHash,
+    arg: &QuoteParams<'arg>,
     quotation: &'q Quotation,
     channel_users: &'users [AatxeUser],
     mut f: F,
@@ -607,6 +692,8 @@ fn for_each_quotation_text_piece<'q, 'arg, 'users, F>(
 where
     F: FnMut(&'q str) -> (),
 {
+    let anti_ping_tactic = arg.anti_ping_tactic.unwrap_or(quotation.anti_ping_tactic);
+
     match quotation.format {
         QuotationFormat::Chat => {
             let orig_line_count = quotation.text.lines().count();
@@ -623,7 +710,7 @@ where
                     })
                     .intersperse(" ");
 
-                match quotation.anti_ping_tactic {
+                match anti_ping_tactic {
                     AntiPingTactic::Munge => text.flat_map(|s| munge_user_nicks(s, channel_users))
                         .for_each(f),
                     AntiPingTactic::Eschew => {
@@ -639,7 +726,7 @@ where
         QuotationFormat::Plain => {
             let text = &quotation.text;
 
-            match quotation.anti_ping_tactic {
+            match anti_ping_tactic {
                 AntiPingTactic::Munge => munge_user_nicks(text, channel_users).for_each(f),
                 AntiPingTactic::Eschew => {
                     debug_assert!(!quotation_text_contains_any_nick(quotation, channel_users));
@@ -753,66 +840,14 @@ where
     }
 }
 
-#[derive(Debug)]
-struct QueryParams<'a> {
-    // TODO: Use `RegexSet`.
-    regexes: SmallVec<[Regex; 8]>,
-    literals: SmallVec<[Cow<'a, str>; 8]>,
-    tags: SmallVec<[Cow<'a, str>; 4]>,
-}
-
-fn prepare_query_params(arg: &YamlHash) -> Result<QueryParams> {
-    let regexes = iter_as_seq(get_arg_by_short_or_long_key(
-        arg,
-        &YAML_STR_R,
-        &YAML_STR_REGEX,
-    )?).map(|y| {
-        scalar_to_str(
-            y,
-            Cow::Borrowed,
-            "a search term given in the argument `regex`",
-        ).map_err(Into::into)
-    })
-        .map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
-        .collect::<Result<Result<_>>>()??;
-
-    let literals = iter_as_seq(get_arg_by_short_or_long_key(
-        arg,
-        &YAML_STR_S,
-        &YAML_STR_STRING,
-    )?).map(|y| {
-        scalar_to_str(
-            y,
-            Cow::Borrowed,
-            "a search term given in the argument `string`",
-        ).map_err(Into::into)
-    })
-        .collect::<Result<_>>()?;
-
-    let tags = iter_as_seq(arg.get(&YAML_STR_TAG))
-        .map(|y| {
-            scalar_to_str(
-                y,
-                Cow::Borrowed,
-                "a search term given in the argument `tag`",
-            ).map_err(Into::into)
-        })
-        .collect::<Result<_>>()?;
-
-    Ok(QueryParams {
-        regexes,
-        literals,
-        tags,
-    })
-}
-
 fn quotation_matches_query_params(
-    arg: &YamlHash,
-    QueryParams {
+    QuoteParams {
         ref regexes,
         ref literals,
         ref tags,
-    }: &QueryParams,
+        id: _,
+        anti_ping_tactic: _,
+    }: &QuoteParams,
     quotation: &Quotation,
 ) -> Result<bool> {
     #[derive(Debug, Eq, PartialEq)]
@@ -952,16 +987,10 @@ fn check_file_permissions(
     result
 }
 
-fn get_quotation_by_user_specified_id<'q>(
+fn get_quotation_by_user_specified_id<'q, 'arg>(
     qdb: &'q QuotationDatabase,
-    requested_quotation_id: &Yaml,
+    requested_quotation_id_str: &Cow<'arg, str>,
 ) -> std::result::Result<&'q Quotation, BotCmdResult> {
-    let requested_quotation_id_str = util::yaml::scalar_to_str(
-        requested_quotation_id,
-        Cow::Borrowed,
-        "the value of the parameter `id`",
-    )?;
-
     match requested_quotation_id_str
         .parse()
         .map(|quotation_id| qdb.get_quotation_by_id(quotation_id))
@@ -1024,7 +1053,7 @@ fn reload_qdb(state: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
         for quotation in &qdb.quotations {
             if quotation.format == QuotationFormat::Chat {
                 let mut text_piece_qty: u32 = 0;
-                for_each_quotation_text_piece(&YamlHash::new(), quotation, &[], |_| {
+                for_each_quotation_text_piece(&Default::default(), quotation, &[], |_| {
                     text_piece_qty = text_piece_qty.saturating_add(1)
                 });
                 quantiles.insert(text_piece_qty)
@@ -1371,7 +1400,7 @@ mod tests {
                 url: Default::default(),
                 anti_ping_tactic,
             };
-            let arg = YamlHash::new();
+            let arg = Default::default();
             let mut actual_len = 0;
 
             match for_each_quotation_text_piece(&arg, &quotation, &[], |s| actual_len += s.len()) {
@@ -1401,7 +1430,7 @@ mod tests {
                 url: Default::default(),
                 anti_ping_tactic,
             };
-            let rendered_text = match render_quotation(&YamlHash::new(), &quotation, &[]) {
+            let rendered_text = match render_quotation(&Default::default(), &quotation, &[]) {
                 Ok(s) => s,
                 Err(_) => return TestResult::discard(),
             };
@@ -1457,7 +1486,7 @@ mod tests {
             ));
             assert_eq!(lines.next(), None);
 
-            let rendered_text = match render_quotation(&YamlHash::new(), &quotation, &[]) {
+            let rendered_text = match render_quotation(&Default::default(), &quotation, &[]) {
                 Ok(s) => s,
                 Err(_) => return TestResult::discard(),
             };
@@ -1512,7 +1541,7 @@ mod tests {
             assert_eq!(lines.next(), Some("<-- foo has left"));
             assert_eq!(lines.next(), None);
 
-            let rendered_text = match render_quotation(&YamlHash::new(), &quotation, &[]) {
+            let rendered_text = match render_quotation(&Default::default(), &quotation, &[]) {
                 Ok(s) => s,
                 Err(_) => return TestResult::discard(),
             };
@@ -1551,7 +1580,7 @@ mod tests {
                 text,
             };
 
-            let rendered_text = match render_quotation(&YamlHash::new(), &quotation, &[]) {
+            let rendered_text = match render_quotation(&Default::default(), &quotation, &[]) {
                 Ok(s) => s,
                 Err(_) => return TestResult::discard(),
             };
