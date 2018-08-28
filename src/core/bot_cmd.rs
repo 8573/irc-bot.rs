@@ -5,10 +5,17 @@ use super::MsgMetadata;
 use super::Reaction;
 use super::Result;
 use super::State;
+use irc;
+use rand;
+use regex;
+use serde_yaml;
 use std;
 use std::borrow::Cow;
+use std::io;
+use std::num::ParseIntError;
 use std::sync::Arc;
 use util;
+use walkdir;
 use yaml_rust::Yaml;
 
 pub struct BotCommand {
@@ -74,11 +81,27 @@ impl From<Error> for BotCmdResult {
     }
 }
 
-impl From<util::yaml::Error> for BotCmdResult {
-    fn from(e: util::yaml::Error) -> Self {
-        Error::from(e).into()
-    }
+macro_rules! impl_from_err_for_bot_cmd_result {
+    ($err:ty) => {
+        impl From<$err> for BotCmdResult {
+            fn from(e: $err) -> Self {
+                Error::from(e).into()
+            }
+        }
+    };
 }
+
+// Implement `From<E>` for `BotCmdResult` for all error types `E` for which our `Error` implements
+// `From<E>`.
+// TODO: I should be able to quantify over those types once specialization is stable, I think.
+impl_from_err_for_bot_cmd_result!(ParseIntError);
+impl_from_err_for_bot_cmd_result!(io::Error);
+impl_from_err_for_bot_cmd_result!(irc::error::IrcError);
+impl_from_err_for_bot_cmd_result!(rand::Error);
+impl_from_err_for_bot_cmd_result!(regex::Error);
+impl_from_err_for_bot_cmd_result!(serde_yaml::Error);
+impl_from_err_for_bot_cmd_result!(util::yaml::Error);
+impl_from_err_for_bot_cmd_result!(walkdir::Error);
 
 impl<T, E> From<std::result::Result<T, E>> for BotCmdResult
 where
