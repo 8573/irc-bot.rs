@@ -220,10 +220,10 @@ use url_serde::Serde;
 /// asterisk followed by the nickname). Anything, such as a timestamp, before each line's first
 /// "word" containing a (left *or right*) angle bracket or an asterisk will be treated as metadata
 /// and not quoted by default, with a "word" defined as a sequence of characters that aren't ASCII
-/// whitespace, followed by either such whitespace or a line-break. Any leading whitespace or right
-/// angle brackets (`>`) similarly will not be quoted, so a right angle bracket can be inserted to
-/// force the following text not to be treated as metadata. An example of such a quotation's `text`
-/// field follows:
+/// whitespace, followed by such whitespace (note that a line-break counts as whitespace). Any
+/// leading whitespace or right angle brackets (`>`) similarly will not be quoted, so a right angle
+/// bracket can be inserted to force the following text not to be treated as metadata. An example
+/// of such a quotation's `text` field follows:
 ///
 ///   ```yaml
 ///   text: |
