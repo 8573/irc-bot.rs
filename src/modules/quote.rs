@@ -413,17 +413,6 @@ enum QuotationChoice<'q> {
     },
 }
 
-// #[derive(Debug, Deserialize)]
-// #[serde(deny_unknown_fields)]
-// #[serde(rename_all = "kebab-case")]
-// struct QuotationLine {
-//     #[serde(rename = "-")]
-//     text: String,
-
-//     #[serde(rename = "+")]
-//     flags: QuotationLineFlags,
-// }
-
 impl QuotationDatabase {
     fn new() -> Self {
         QuotationDatabase {
