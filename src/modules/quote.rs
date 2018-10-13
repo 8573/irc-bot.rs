@@ -403,6 +403,7 @@ enum QuotationChoice<'q> {
     Text {
         quotation: &'q Quotation,
         // variant_id: usize,
+        // TODO: ^
     },
 
     /// Reply with the URL of the quotation.
@@ -484,6 +485,7 @@ struct QuoteParams<'a> {
     anti_ping_tactic: Option<AntiPingTactic>,
 }
 
+// TODO: Add a parameter controlling whether quotations may be abridged.
 fn prepare_quote_params<'arg>(
     state: &State,
     request_metadata: &MsgMetadata,
@@ -494,6 +496,7 @@ fn prepare_quote_params<'arg>(
     let admin_param_used = admin_param_keys.iter().any(|k| arg.get(k).is_some());
 
     if admin_param_used && !state.have_admin(request_metadata.prefix)? {
+        // TODO: Don't assume `anti-ping tactic` is the only admin param.
         return Err(BotCmdResult::ParamUnauthorized("anti-ping tactic".into()));
     }
 
@@ -708,6 +711,8 @@ where
                         output_line_count += 1;
                         line
                     })
+                    // TODO: Try using two spaces between lines if that fits.
+                    // TODO: Make the line separator configurable.
                     .intersperse(" ");
 
                 match anti_ping_tactic {
@@ -975,8 +980,8 @@ fn check_file_permissions(
     QuotationDatabase { files, .. }: &QuotationDatabase,
     MsgDest { server_id, target }: MsgDest,
 ) -> SmallBitVec {
-    // TODO: Account for the server as well as the channel. E.g., consider channels as
-    // `server/#channel` rather than just `#channel`.
+    // TODO: Account for the server as well as the channel, with a `servers` field in the quotation
+    // files.
 
     let mut result = SmallBitVec::from_elem(files.len(), false);
 
@@ -1065,6 +1070,7 @@ fn reload_qdb(state: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
             .collect::<SmallVec<[_; 5]>>()
     };
 
+    // TODO: Also report a 5NS for the byte-lengths of quotations.
     Ok(Reaction::Msg(
         format!(
             "I have reloaded my quotation database. The five-number summary of the numbers of \
@@ -1130,6 +1136,7 @@ fn on_load(state: &State) -> Result<()> {
             file_id,
             channels_regex: {
                 file_channels_regex.reserve_exact(2);
+                // TODO: Wrap the regex in `^(...)$`, not just `^...$`.
                 file_channels_regex.insert(0, '^');
                 file_channels_regex.push('$');
                 file_channels_regex.into_regex_ci()?
@@ -1251,6 +1258,8 @@ impl qc::Arbitrary for Quotation {
             anti_ping_tactic: qc::Arbitrary::arbitrary(g),
         }
     }
+
+    // TODO: Implement `shrink` (see below).
 }
 
 // TODO: `derive` this `Arbitrary` implementation if QuickCheck implements such a `derive` (see

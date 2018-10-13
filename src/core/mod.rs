@@ -316,6 +316,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
         match aatxe_client.send_cap_req(caps_to_request) {
             Ok(()) => debug!(
+                // TODO: drop colon
                 "recv[{}]: Sent IRCv3 capability request to server, requesting: {:?}",
                 server.socket_addr_string, caps_to_request
             ),

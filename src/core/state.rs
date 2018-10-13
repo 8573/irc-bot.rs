@@ -56,6 +56,8 @@ impl State {
     }
 
     // TODO: This is server-specific.
+    // TODO: This should be named `read_stored_msg_prefix`, because it may not be our actual
+    // current message prefix.
     pub(super) fn read_msg_prefix(
         &self,
         _server_id: ServerId,

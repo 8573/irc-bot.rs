@@ -127,6 +127,7 @@ impl State {
         })
     }
 
+    // TODO: Use the more up-to-date nick info from `IrcClient::current_nickname` in `irc` 0.14.
     fn prefix_len(&self, server_id: ServerId) -> Result<usize> {
         Ok(self.read_msg_prefix(server_id)?.len())
     }

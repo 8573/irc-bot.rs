@@ -9,6 +9,7 @@ type RegexBuildResult = std::result::Result<Regex, regex::Error>;
 fn mk_case_insensitive_regex(s: &str) -> RegexBuildResult {
     let mut rx = RegexBuilder::new(s);
     rx.case_insensitive(true);
+    // TODO: Increase these limits
     rx.size_limit(1 << 16);
     rx.dfa_size_limit(1 << 16);
     rx.build()
