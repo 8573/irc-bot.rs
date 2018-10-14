@@ -1125,9 +1125,8 @@ fn on_load(state: &State) -> Result<()> {
             file_id,
             channels_regex: {
                 file_channels_regex.reserve_exact(2);
-                // TODO: Wrap the regex in `^(...)$`, not just `^...$`.
-                file_channels_regex.insert(0, '^');
-                file_channels_regex.push('$');
+                file_channels_regex.insert_str(0, "^(?:");
+                file_channels_regex.push_str(")$");
                 file_channels_regex.into_regex_ci()?
             },
             quotation_count: deserialized_quotations.len(),
