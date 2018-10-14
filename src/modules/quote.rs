@@ -35,6 +35,7 @@ use url::Url;
 use url_serde::SerdeUrl;
 use util;
 use util::regex::IntoRegexCI;
+use util::yaml::any_to_str;
 use util::yaml::get_arg_by_short_or_long_key;
 use util::yaml::iter_as_seq;
 use util::yaml::scalar_to_str;
@@ -479,11 +480,15 @@ fn prepare_quote_params<'arg>(
 ) -> std::result::Result<QuoteParams<'arg>, BotCmdResult> {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
     let admin_param_keys = [&YAML_STR_ANTI_PING_TACTIC];
-    let admin_param_used = admin_param_keys.iter().any(|k| arg.get(k).is_some());
+    let first_admin_param_used = admin_param_keys.iter().find(|k| arg.get(k).is_some());
 
-    if admin_param_used && !state.have_admin(request_metadata.prefix)? {
-        // TODO: Don't assume `anti-ping tactic` is the only admin param.
-        return Err(BotCmdResult::ParamUnauthorized("anti-ping tactic".into()));
+    if let Some(admin_param_key) = first_admin_param_used {
+        if !state.have_admin(request_metadata.prefix)? {
+            return Err(BotCmdResult::ParamUnauthorized(any_to_str(
+                admin_param_key,
+                Cow::Borrowed,
+            )?));
+        }
     }
 
     let regexes = iter_as_seq(get_arg_by_short_or_long_key(
