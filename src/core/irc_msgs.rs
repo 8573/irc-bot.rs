@@ -43,9 +43,10 @@ fn prefix_from_pircolate<'a>(
 }
 
 pub(super) fn is_msg_to_nick(target: &str, msg: &str, nick: &str) -> bool {
-    target == nick || msg == nick || (msg.starts_with(nick) && (msg.find(|c: char| {
-        [':', ','].contains(&c)
-    }) == Some(nick.len())))
+    target == nick
+        || msg == nick
+        || (msg.starts_with(nick)
+            && (msg.find(|c: char| [':', ','].contains(&c)) == Some(nick.len())))
 }
 
 pub(super) fn parse_msg_to_nick<'msg>(

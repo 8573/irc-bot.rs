@@ -7,16 +7,14 @@ pub fn mk() -> Module {
         .on_load(Box::new(|_: &State| {
             trace!("Hello from the `test` module's `on_load` function!");
             Ok(())
-        }))
-        .command(
+        })).command(
             "test-line-wrap",
             "",
             "Request a long message from the bot, to test its line-wrapping function.",
             Auth::Admin,
             Box::new(test_line_wrap),
             &[],
-        )
-        .command(
+        ).command(
             "test-error-handling",
             "",
             "This command's handler function returns an error, to test the bot framework's \
@@ -24,8 +22,7 @@ pub fn mk() -> Module {
             Auth::Admin,
             Box::new(test_error_handling),
             &[],
-        )
-        .command(
+        ).command(
             "test-panic-catching",
             "",
             "This command's handler function panics, to test the bot framework's panic-catching \
@@ -33,8 +30,7 @@ pub fn mk() -> Module {
             Auth::Admin,
             Box::new(test_panic_catching),
             &[],
-        )
-        .end()
+        ).end()
 }
 
 const LOREM_IPSUM_TEXT: &'static str =

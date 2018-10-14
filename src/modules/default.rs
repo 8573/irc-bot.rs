@@ -123,7 +123,8 @@ fn part(
 }
 
 fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
-    let comment = arg.as_hash()
+    let comment = arg
+        .as_hash()
         .expect(FW_SYNTAX_CHECK_FAIL)
         .get(&YAML_STR_MSG)
         .try_map(|y| {

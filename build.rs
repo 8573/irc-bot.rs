@@ -16,15 +16,15 @@ fn set_git_ver_env_var() {
             "--always",
             "--dirty",
             "--broken",
-        ])
-        .output();
+        ]).output();
 
     let git_ver = match git_ver {
         Ok(Output {
             ref status,
             ref stdout,
             ..
-        }) if status.success() =>
+        })
+            if status.success() =>
         {
             let v = String::from_utf8_lossy(stdout);
             eprintln!("Detected version from Git repository: {}", v);

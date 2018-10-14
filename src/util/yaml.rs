@@ -330,7 +330,8 @@ where
     if [
         &*str::YAML_STR_ELLIPSIS,
         &*str::YAML_STR_ELLIPSIS_IN_SQUARE_BRACKETS,
-    ].contains(&expected)
+    ]
+        .contains(&expected)
     {
         return Ok(());
     }
@@ -398,10 +399,9 @@ where
                     any_to_str(key, Cow::Borrowed)?,
                 )?
             }
-            (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(
-                key,
-                |s| s.to_owned().into()
-            )?)),
+            (_, None) => bail!(ErrorKind::RequiredFieldMissing(any_to_str(key, |s| s
+                .to_owned()
+                .into())?)),
         }
     }
 

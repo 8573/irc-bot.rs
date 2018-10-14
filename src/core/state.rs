@@ -49,7 +49,8 @@ impl State {
                  user: ref user_2,
                  host: ref host_2,
              }| {
-                check_admin_cred(nick_1, nick_2) && check_admin_cred(user_1, user_2)
+                check_admin_cred(nick_1, nick_2)
+                    && check_admin_cred(user_1, user_2)
                     && check_admin_cred(host_1, host_2)
             },
         ))
@@ -83,12 +84,12 @@ impl State {
     where
         F: FnOnce(&aatxe::IrcClient) -> Result<T>,
     {
-        f(self.aatxe_clients
+        f(self
+            .aatxe_clients
             .read()
             .map_err(|_poisoned_guard| {
                 ErrorKind::LockPoisoned("the server connections (`aatxe_clients`)".into())
-            })?
-            .get(&server_id)
+            })?.get(&server_id)
             .ok_or(ErrorKind::UnknownServer(server_id))?)
     }
 

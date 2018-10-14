@@ -268,8 +268,7 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(quote),
             &[],
-        )
-        .command(
+        ).command(
             "quote-database-info",
             "",
             "Request information about the bot's database of quotations, such as the number of \
@@ -277,16 +276,14 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(show_qdb_info),
             &[],
-        )
-        .command(
+        ).command(
             "quote-database-reload",
             "",
             "Tell the bot to reload its quotation database.",
             Auth::Admin,
             Box::new(reload_qdb),
             &[],
-        )
-        .end()
+        ).end()
 }
 
 lazy_static! {
@@ -499,9 +496,8 @@ fn prepare_quote_params<'arg>(
             Cow::Borrowed,
             "a search term given in the argument `regex`",
         ).map_err(Into::into)
-    })
-        .map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
-        .collect::<Result<Result<_>>>()??;
+    }).map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
+    .collect::<Result<Result<_>>>()??;
 
     let literals = iter_as_seq(get_arg_by_short_or_long_key(
         arg,
@@ -513,8 +509,7 @@ fn prepare_quote_params<'arg>(
             Cow::Borrowed,
             "a search term given in the argument `string`",
         ).map_err(Into::into)
-    })
-        .collect::<Result<_>>()?;
+    }).collect::<Result<_>>()?;
 
     let tags = iter_as_seq(arg.get(&YAML_STR_TAG))
         .map(|y| {
@@ -523,13 +518,14 @@ fn prepare_quote_params<'arg>(
                 Cow::Borrowed,
                 "a search term given in the argument `tag`",
             ).map_err(Into::into)
-        })
-        .collect::<Result<_>>()?;
+        }).collect::<Result<_>>()?;
 
-    let id = arg.get(&YAML_STR_ID)
+    let id = arg
+        .get(&YAML_STR_ID)
         .try_map(|y| scalar_to_str(y, Cow::Borrowed, "the argument `id`"))?;
 
-    let anti_ping_tactic = arg.get(&YAML_STR_ANTI_PING_TACTIC)
+    let anti_ping_tactic = arg
+        .get(&YAML_STR_ANTI_PING_TACTIC)
         .try_map(|y| scalar_to_str(y, Cow::Borrowed, "the argument `anti-ping tactic`"))?
         .try_map(|s: Cow<'arg, str>| serde_yaml::from_str(&s))?;
 
@@ -613,8 +609,7 @@ fn pick_quotation<'q>(
                     Err(e) => Some(Err(e)),
                 }
             },
-        )
-        .next()
+        ).next()
         .flip()?
         .ok_or_else(|| {
             Reaction::Reply(
@@ -705,7 +700,8 @@ where
                     .intersperse(" ");
 
                 match anti_ping_tactic {
-                    AntiPingTactic::Munge => text.flat_map(|s| munge_user_nicks(s, channel_users))
+                    AntiPingTactic::Munge => text
+                        .flat_map(|s| munge_user_nicks(s, channel_users))
                         .for_each(f),
                     AntiPingTactic::Eschew => {
                         debug_assert!(!quotation_text_contains_any_nick(quotation, channel_users));
@@ -1022,15 +1018,15 @@ fn show_qdb_info(state: &State, request_metadata: &MsgMetadata, _: &Yaml) -> Res
                  {file_list}.",
                 quotation_qty = qdb.quotations.len(),
                 file_qty = qdb.files.len(),
-                file_list = qdb.files
+                file_list = qdb
+                    .files
                     .iter()
                     .filter(|file| file_permissions.get(file.array_index()) == Some(true))
                     .map(|file| format!(
                         "{name} ({quotation_count})",
                         name = file.name,
                         quotation_count = file.quotation_count
-                    ))
-                    .pad_using(1, |_| "<none>".to_owned())
+                    )).pad_using(1, |_| "<none>".to_owned())
                     .format(", "),
             ).into(),
         ].into(),

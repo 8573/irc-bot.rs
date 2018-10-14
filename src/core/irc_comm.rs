@@ -162,7 +162,8 @@ where
 
     let mut split_end_idx = 0;
 
-    let lines = msg.match_indices(char::is_whitespace)
+    let lines = msg
+        .match_indices(char::is_whitespace)
         .peekable()
         .batching(|iter| {
             debug_assert!(msg.len() >= msg_len_limit);

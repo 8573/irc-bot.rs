@@ -354,8 +354,7 @@ impl State {
                     Ok(()) => None,
                     Err(e) => Some(e),
                 },
-            )
-            .collect::<Vec<Error>>();
+            ).collect::<Vec<Error>>();
 
         if !errs.is_empty() {
             return Err(errs);

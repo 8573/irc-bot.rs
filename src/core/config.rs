@@ -100,9 +100,9 @@ impl ConfigBuilder {
         let nickname = nickname.into();
 
         if nickname.is_empty() {
-            return ConfigBuilder(
-                Err(ErrorKind::Config("nickname".into(), "is empty".into()).into()),
-            );
+            return ConfigBuilder(Err(
+                ErrorKind::Config("nickname".into(), "is empty".into()).into()
+            ));
         }
 
         ConfigBuilder(self.0.map(|cfg| inner::Config { nickname, ..cfg }))
@@ -200,7 +200,8 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
 
     let admins = cfg.admins.drain(..).collect();
 
-    let servers = cfg.servers
+    let servers = cfg
+        .servers
         .drain(..)
         .map(|server_cfg| {
             Arc::new(aatxe::Config {
@@ -214,8 +215,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 channels: Some(server_cfg.channels),
                 ..Default::default()
             })
-        })
-        .collect();
+        }).collect();
 
     Ok(Config {
         nickname,
