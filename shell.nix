@@ -2,8 +2,9 @@ let
   nixpkgs-mozilla = (import <nixpkgs> {}).fetchFromGitHub {
     owner = "mozilla";
     repo = "nixpkgs-mozilla";
-    rev = "ca0031baaac0538b9089625c8fa0b790b4270d36";
-    sha256 = "0albnrwnx5ixgxvlrrcdyjsh5r25bqiw0xw7kdgi298inwyz3xz5";
+    # This revision is dated 2018-10-08.
+    rev = "c72ff151a3e25f14182569679ed4cd22ef352328";
+    sha256 = "0akyhdv5p0qiiyp6940k9bvismjqm9f8xhs0gpznjl6509dwgfxl";
   };
 
   rust-overlay = "${nixpkgs-mozilla}/rust-overlay.nix";
