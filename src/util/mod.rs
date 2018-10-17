@@ -53,11 +53,19 @@ pub(crate) struct Munge<'a> {
 /// Needles that are a single `char` long are ignored.
 ///
 /// TODO: Split a generalized version of this out as a new crate.
+///
+/// TODO: See the logs of <ircs://irc.mozilla.org/c74d> from 2018-10-17 regarding possible munging
+/// characters.
+///
+/// TODO: A generalized version perhaps should operate over graphemes (as does the function
+/// `create_non_highlighting_name` in <https://github.com/nuxeh/url-bot-rs>) rather than Unicode
+/// scalar values; I should investigate the distinction more once my oaths permit.
 pub(crate) fn zwsp_munge<'a, 'b, I, S>(string: &'a str, needles: I) -> Munge<'a>
 where
     I: IntoIterator<Item = S>,
     S: 'b + AsRef<str>,
 {
+    // TODO: Maybe increase the stack space allocated here when splitting this function out?
     let mut munge_points = SmallVec::<[usize; 32]>::new();
 
     for (needle, needle_first_char_byte_len) in needles.into_iter().filter_map(|needle| {
