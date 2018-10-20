@@ -190,7 +190,7 @@ use url_serde::Serde;
 /// - `text` — The value of this field should be the text of the quotation. This field is
 /// **required**.
 ///
-/// - `url` — The value of this field should be a string whose text forms a valid Uniform Resource
+/// - `URL` — The value of this field should be a string whose text forms a valid Uniform Resource
 /// Locator (URL) that can be parsed as such by the Rust [`url`] library. If such a URL is
 /// provided, it will be taken as a reference to a copy of the text of the quotation, such as in a
 /// "pastebin" website, that may be offered rather than the quotation's text itself if that text is
@@ -346,6 +346,7 @@ struct QuotationIR {
     tags: SmallVec<[DefaultAtom; 2]>,
 
     #[serde(default)]
+    #[serde(rename = "URL")]
     url: Option<SerdeUrl>,
 
     #[serde(default)]
