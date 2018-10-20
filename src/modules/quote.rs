@@ -81,8 +81,8 @@ use url_serde::Serde;
 ///
 /// ## Input
 ///
-/// The `quote` command takes as argument a YAML mapping, which may contain the following key-value
-/// pairs (hereinafter termed _parameters_), listed by their keys:
+/// The `quote` command takes as argument a YAML mapping, which may contain the key-value pairs
+/// (hereinafter termed _parameters_) that follow, listed by their keys:
 ///
 /// - `regex` — The value of this parameter may be a string or a sequence of strings. If a string,
 /// it will be parsed as a regular expression using the Rust [`regex`] library and [its particular
@@ -106,8 +106,7 @@ use url_serde::Serde;
 ///
 /// - `id` — The value of this parameter should be a string. This parameter requests the quotation
 /// whose ID, when displayed as described in the section "Output" above, is the value of this
-/// parameter. Note that any asterisk suffixed to a quotation ID is not part of the quotation ID.
-/// This parameter is optional.
+/// parameter. This parameter is optional.
 ///
 /// - `anti-ping tactic` — The value of this parameter should be a string. This parameter overrides
 /// the fields of the same name in the quotation database (see below). This parameter may be used
@@ -140,6 +139,8 @@ use url_serde::Serde;
 ///
 /// - `quote-database-info`
 ///
+/// For a full list of commands available, use the bot's `help` command.
+///
 ///
 /// # Quotation files
 ///
@@ -147,7 +148,7 @@ use url_serde::Serde;
 /// named `quote` inside the bot's module data directory. This `quote` directory should contain
 /// zero or more [YAML] files, termed _quotation files_, whose filenames do not start with the full
 /// stop character (`.`). The text of each quotation file should constitute a YAML mapping with the
-/// following key-value pairs (hereinafter termed _fields_):
+/// key-value pairs (hereinafter termed _fields_) that follow, listed by their keys:
 ///
 /// - `channels` — The value of this field should be a string, which will be parsed as a regular
 /// expression using the Rust [`regex`] library and [its particular syntax][`regex` syntax].
