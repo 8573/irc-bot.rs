@@ -109,3 +109,25 @@ Users of the Linux distribution **[NixOS]** may prefer to use the provided
 
 [NixOS]: <https://nixos.org>
 [`Makefile`]: <https://github.com/8573/irc-bot.rs/blob/master/Makefile>
+
+
+Supported Rust versions
+---
+
+This package supports Rust version 1.29.1 and any Rust versions
+backwards-compatible therewith. This minimum supported Rust version may be
+increased at any time to the latest release of Rust understood by the
+maintainer(s) of this package to fix or to mitigate one or more security
+vulnerabilities in the standard library or compiler output. The minimum
+supported Rust version may not be increased for reasons unrelated to security.
+
+Although increases in the minimum supported Rust version are breaking changes,
+they are also, under this policy, bug-fixes, and for the purposes of [SemVer]
+they will be treated as bug-fixes and not as breaking changes. The idea here
+is that not upgrading Rust when a security fix is available is an
+irresponsible course of (in)action that the maintainer(s) of this package wish
+not to support, as confessedly doctrinairely as such a denial of support may
+ignore users' reasons for not updating.
+
+[SemVer]: <https://semver.org>
+
