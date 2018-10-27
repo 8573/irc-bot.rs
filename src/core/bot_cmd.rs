@@ -145,9 +145,11 @@ pub(super) fn run(
         None => return Ok(None),
     };
 
+    let invoker_prefix = metadata.prefix;
+
     let user_authorized = match auth_lvl {
         &BotCmdAuthLvl::Public => Ok(true),
-        &BotCmdAuthLvl::Admin => state.have_admin(metadata.prefix),
+        &BotCmdAuthLvl::Admin => state.have_admin(invoker_prefix),
     };
 
     let arg = match parse_arg(usage_yaml, cmd_args) {
@@ -157,7 +159,10 @@ pub(super) fn run(
 
     let result = match user_authorized {
         Ok(true) => {
-            debug!("Running bot command {:?} with arg: {:?}", name, arg);
+            debug!(
+                "Running bot command {:?} invoked by {:?} with argument {:?}",
+                name, invoker_prefix, cmd_args
+            );
             match util::run_handler("command", name.clone(), || {
                 handler.run(state, &metadata, &arg)
             }) {
