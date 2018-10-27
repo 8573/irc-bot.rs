@@ -1,4 +1,6 @@
+use super::Result;
 use super::ServerId;
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MsgDest<'a> {
@@ -6,7 +8,9 @@ pub struct MsgDest<'a> {
     pub target: &'a str,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+// TODO: Per <https://tools.ietf.org/html/rfc2812#section-2.3.1>, a prefix can be a <servername>
+// rather than the usual nick/user/host triple; allow for representing this.
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct MsgPrefix<'a> {
     pub nick: Option<&'a str>,
     pub user: Option<&'a str>,
@@ -92,13 +96,40 @@ impl<'a> MsgPrefix<'a> {
     ///
     /// This can't be a `ToOwned` implementation because that would conflict with `MsgPrefix`'s
     /// `Clone` implementation.
-    pub fn to_owning(&self) -> OwningMsgPrefix {
-        OwningMsgPrefix::from_string(format!(
-            "{}!{}@{}",
-            self.nick.unwrap_or(""),
-            self.user.unwrap_or(""),
-            self.host.unwrap_or("")
-        ))
+    pub fn to_owning(&self) -> Result<OwningMsgPrefix> {
+        let mut s = String::with_capacity(self.len());
+        self.fmt_write(&mut s)?;
+        Ok(OwningMsgPrefix::from_string(s))
+    }
+
+    fn fmt_write<W>(&self, writer: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        // TODO: It's against <https://tools.ietf.org/html/rfc2812#section-2.3.1> for any of {nick,
+        // user, host} to be the empty string; follow my own advice from
+        // <https://github.com/aatxe/irc/pull/149#issuecomment-422204352>.
+        // TODO: Add a round-trip property test.
+        write!(writer, "{}", self.nick.unwrap_or(""))?;
+        match (self.user.unwrap_or(""), self.host.unwrap_or("")) {
+            ("", "") => Ok(()),
+            ("", host) => write!(writer, "@{}", host),
+            (user, "") => {
+                // This case is not allowed under the grammar specified in
+                // <https://tools.ietf.org/html/rfc2812#section-2.3.1>.
+                write!(writer, "!{}@prefix-has-user-without-host.invalid", user)
+            }
+            (user, host) => write!(writer, "!{}@{}", user, host),
+        }
+    }
+}
+
+impl<'a> fmt::Debug for MsgPrefix<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(", stringify!(MsgPrefix))?;
+        self.fmt_write(f)?;
+        write!(f, ")")?;
+        Ok(())
     }
 }
 

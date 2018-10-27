@@ -7,6 +7,7 @@ use regex;
 use serde_yaml;
 use std::any::Any;
 use std::borrow::Cow;
+use std::fmt;
 use std::io;
 use std::num::ParseIntError;
 use util;
@@ -14,6 +15,8 @@ use walkdir;
 
 error_chain! {
     foreign_links {
+        Fmt(fmt::Error);
+
         Io(io::Error);
 
         ParseIntError(ParseIntError);
