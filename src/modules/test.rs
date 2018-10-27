@@ -1,5 +1,6 @@
 use core::BotCmdAuthLvl as Auth;
 use core::*;
+use std::mem;
 use yaml_rust::Yaml;
 
 pub fn mk() -> Module {
@@ -30,6 +31,15 @@ pub fn mk() -> Module {
             Auth::Admin,
             Box::new(test_panic_catching),
             &[],
+        ).command(
+            "test-stack-overflow",
+            "",
+            "This command's handler function allocates an enormous value on the stack, to test \
+             how the bot framework handles stack overflow in command handler functions. \
+             (Currently (October 2018), this simply makes the bot crash.)",
+            Auth::Admin, // TODO: Use `Auth::Owner` once available.
+            Box::new(test_stack_overflow),
+            &[],
         ).end()
 }
 
@@ -57,4 +67,14 @@ fn test_error_handling(_: HandlerContext, _: &Yaml) -> BotCmdResult {
 
 fn test_panic_catching(_: HandlerContext, _: &Yaml) -> BotCmdResult {
     panic!("Panicking for testing purposes....")
+}
+
+fn test_stack_overflow(_: HandlerContext, _: &Yaml) -> Reaction {
+    let huge = [[[1usize; 1024]; 1024]; 1024];
+    Reaction::Msg(
+        format!(
+        "Wow, I allocated {byte_len} bytes on the stack! I have more stack space than I thought.",
+        byte_len = mem::size_of_val(&huge) // Ensure that the value is used (theoretically).
+    ).into(),
+    )
 }
