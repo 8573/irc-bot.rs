@@ -77,7 +77,7 @@ pub fn mk() -> Module {
         .end()
 }
 
-fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
+fn join(_: HandlerContext, arg: &Yaml) -> Result<Reaction> {
     Ok(Reaction::RawMsg(
         format!(
             "JOIN {}",
@@ -87,11 +87,11 @@ fn join(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
 }
 
 fn part(
-    state: &State,
-    &MsgMetadata {
-        dest: MsgDest { server_id, target },
+    HandlerContext {
+        state,
+        request_origin: MsgDest { server_id, target },
         ..
-    }: &MsgMetadata,
+    }: HandlerContext,
     arg: &Yaml,
 ) -> Result<BotCmdResult> {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
@@ -122,7 +122,7 @@ fn part(
     ).into())
 }
 
-fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
+fn quit(_: HandlerContext, arg: &Yaml) -> Result<Reaction> {
     let comment = arg
         .as_hash()
         .expect(FW_SYNTAX_CHECK_FAIL)
@@ -134,11 +134,11 @@ fn quit(_: &State, _: &MsgMetadata, arg: &Yaml) -> Result<Reaction> {
     Ok(Reaction::Quit(comment))
 }
 
-fn ping(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+fn ping(_: HandlerContext, _: &Yaml) -> BotCmdResult {
     Reaction::Reply("pong".into()).into()
 }
 
-fn bot_fw_info(state: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+fn bot_fw_info(HandlerContext { state, .. }: HandlerContext, _: &Yaml) -> BotCmdResult {
     Reaction::Reply(
         format!(
             "This bot was built with `{name}.rs`, version {ver}; see <{url}>.",
@@ -149,7 +149,7 @@ fn bot_fw_info(state: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
     ).into()
 }
 
-fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
+fn help(HandlerContext { state, .. }: HandlerContext, arg: &Yaml) -> BotCmdResult {
     let arg = arg.as_hash();
 
     let cmd = arg.and_then(|m| m.get(&YAML_STR_CMD));
@@ -217,6 +217,6 @@ fn help(state: &State, _: &MsgMetadata, arg: &Yaml) -> BotCmdResult {
     }
 }
 
-fn empty_msg_trigger(_: &State, _: &MsgMetadata, _: Captures) -> Reaction {
+fn empty_msg_trigger(_: HandlerContext, _: Captures) -> Reaction {
     Reaction::Msg("Yes?".into())
 }

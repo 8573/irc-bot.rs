@@ -430,13 +430,11 @@ impl QuotationDatabase {
     }
 }
 
-fn quote(
-    state: &State,
-    request_metadata: &MsgMetadata,
-    arg: &Yaml,
-) -> std::result::Result<Reaction, BotCmdResult> {
-    let params = prepare_quote_params(state, request_metadata, arg)?;
-    let reply_dest = state.guess_reply_dest(request_metadata)?;
+fn quote(ctx: HandlerContext, arg: &Yaml) -> std::result::Result<Reaction, BotCmdResult> {
+    let state = ctx.state;
+    let request_metadata = ctx.request_metadata();
+    let params = prepare_quote_params(&ctx, arg)?;
+    let reply_dest = ctx.guess_reply_dest()?;
     let qdb = read_qdb()?;
     let channel_users = state.read_aatxe_client(reply_dest.server_id, |aatxe_client| {
         Ok(aatxe_client
@@ -444,14 +442,7 @@ fn quote(
             .unwrap_or_default())
     })?;
 
-    let output_text = match pick_quotation(
-        state,
-        request_metadata,
-        &params,
-        reply_dest,
-        &qdb,
-        &channel_users,
-    ) {
+    let output_text = match pick_quotation(&ctx, &params, reply_dest, &qdb, &channel_users) {
         Ok(QuotationChoice::Text { quotation }) => {
             render_quotation(&params, quotation, &channel_users)?.into()
         }
@@ -476,8 +467,7 @@ struct QuoteParams<'a> {
 
 // TODO: Add a parameter controlling whether quotations may be abridged.
 fn prepare_quote_params<'arg>(
-    state: &State,
-    request_metadata: &MsgMetadata,
+    &HandlerContext { state, invoker, .. }: &HandlerContext,
     arg: &'arg Yaml,
 ) -> std::result::Result<QuoteParams<'arg>, BotCmdResult> {
     let arg = arg.as_hash().expect(FW_SYNTAX_CHECK_FAIL);
@@ -485,7 +475,7 @@ fn prepare_quote_params<'arg>(
     let first_admin_param_used = admin_param_keys.iter().find(|k| arg.get(k).is_some());
 
     if let Some(admin_param_key) = first_admin_param_used {
-        if !state.have_admin(request_metadata.prefix)? {
+        if !state.have_admin(invoker)? {
             return Err(BotCmdResult::ParamUnauthorized(any_to_str(
                 admin_param_key,
                 Cow::Borrowed,
@@ -547,13 +537,13 @@ fn prepare_quote_params<'arg>(
 
 // TODO: Probabilities
 fn pick_quotation<'q>(
-    state: &State,
-    request_metadata: &MsgMetadata,
+    ctx: &HandlerContext,
     arg: &QuoteParams,
     reply_dest: MsgDest,
     qdb: &'q QuotationDatabase,
     channel_users: &[AatxeUser],
 ) -> std::result::Result<QuotationChoice<'q>, BotCmdResult> {
+    let state = ctx.state;
     let reply_content_max_len = state.privmsg_content_max_len(reply_dest)?;
 
     let quotations = match arg.id {
@@ -1011,9 +1001,9 @@ fn get_quotation_by_user_specified_id<'q, 'arg>(
     }
 }
 
-fn show_qdb_info(state: &State, request_metadata: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
+fn show_qdb_info(ctx: HandlerContext, _: &Yaml) -> Result<Reaction> {
     let qdb = read_qdb()?;
-    let reply_dest = state.guess_reply_dest(request_metadata)?;
+    let reply_dest = ctx.guess_reply_dest()?;
     let file_permissions = check_file_permissions(&qdb, reply_dest);
     let any_files_are_visible = !file_permissions.is_empty() && !file_permissions.all_false();
 
@@ -1040,8 +1030,8 @@ fn show_qdb_info(state: &State, request_metadata: &MsgMetadata, _: &Yaml) -> Res
     ))
 }
 
-fn reload_qdb(state: &State, _: &MsgMetadata, _: &Yaml) -> Result<Reaction> {
-    on_load(state)?;
+fn reload_qdb(ctx: HandlerContext, _: &Yaml) -> Result<Reaction> {
+    on_load(ctx.state)?;
 
     let qdb = read_qdb()?;
 

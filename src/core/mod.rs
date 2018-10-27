@@ -9,6 +9,8 @@ pub use self::err::ErrorKind;
 pub use self::err::Result;
 pub use self::handler::BotCmdHandler;
 pub use self::handler::ErrorHandler;
+pub use self::handler::HandlerContext;
+pub use self::handler::ModuleFeatureRef;
 pub use self::handler::ModuleLoadHandler;
 pub use self::handler::TriggerHandler;
 use self::irc_msgs::parse_msg_to_nick;

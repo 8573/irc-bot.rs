@@ -47,14 +47,14 @@ const LOREM_IPSUM_TEXT: &'static str =
      sagittis in. Mauris a lectus nec ligula eleifend rutrum. Class aptent taciti sociosqu ad \
      litora torquent per conubia massa nunc.";
 
-fn test_line_wrap(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+fn test_line_wrap(_: HandlerContext, _: &Yaml) -> BotCmdResult {
     BotCmdResult::Ok(Reaction::Reply(LOREM_IPSUM_TEXT.into()))
 }
 
-fn test_error_handling(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+fn test_error_handling(_: HandlerContext, _: &Yaml) -> BotCmdResult {
     BotCmdResult::BotErrMsg("An error for testing purposes.".into())
 }
 
-fn test_panic_catching(_: &State, _: &MsgMetadata, _: &Yaml) -> BotCmdResult {
+fn test_panic_catching(_: HandlerContext, _: &Yaml) -> BotCmdResult {
     panic!("Panicking for testing purposes....")
 }

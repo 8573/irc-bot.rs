@@ -1,6 +1,8 @@
 use super::BotCmdHandler;
 use super::Error;
+use super::HandlerContext;
 use super::Module;
+use super::ModuleFeatureRef;
 use super::MsgMetadata;
 use super::Reaction;
 use super::Result;
@@ -141,6 +143,11 @@ pub(super) fn run(
     cmd_args: &str,
     metadata: &MsgMetadata,
 ) -> Result<Option<BotCmdResult>> {
+    let cmd_ref = match state.commands.get(cmd_name) {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+
     let &BotCommand {
         ref name,
         ref provider,
@@ -149,10 +156,7 @@ pub(super) fn run(
         ref usage_yaml,
         usage_str: _,
         help_msg: _,
-    } = match state.commands.get(cmd_name) {
-        Some(c) => c,
-        None => return Ok(None),
-    };
+    } = cmd_ref;
 
     let invoker_prefix = metadata.prefix;
 
@@ -172,9 +176,16 @@ pub(super) fn run(
                 "Running bot command {:?} invoked by {:?} with argument {:?}",
                 name, invoker_prefix, cmd_args
             );
-            match util::run_handler("command", name.clone(), || {
-                handler.run(state, &metadata, &arg)
-            }) {
+
+            let ctx = HandlerContext {
+                state,
+                this_feature: ModuleFeatureRef::Command(cmd_ref),
+                request_origin: metadata.dest,
+                invoker: invoker_prefix,
+                __nonexhaustive: (),
+            };
+
+            match util::run_handler("command", name.clone(), || handler.run(ctx, &arg)) {
                 Ok(r) => r,
                 Err(e) => BotCmdResult::LibErr(e),
             }

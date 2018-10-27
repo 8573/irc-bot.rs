@@ -1,6 +1,8 @@
 use super::BotCmdResult;
 use super::ErrorKind;
+use super::HandlerContext;
 use super::Module;
+use super::ModuleFeatureRef;
 use super::MsgMetadata;
 use super::Result;
 use super::State;
@@ -111,6 +113,14 @@ pub(super) fn run_any_matching(
         None => return Ok(None),
     };
 
+    let ctx = HandlerContext {
+        state,
+        this_feature: ModuleFeatureRef::Trigger(trigger),
+        request_origin: msg_metadata.dest,
+        invoker: msg_metadata.prefix,
+        __nonexhaustive: (),
+    };
+
     let args = trigger.read_regex()?.captures(text).expect(
         "We shouldn't have reached this point if the \
          trigger didn't match!",
@@ -119,6 +129,6 @@ pub(super) fn run_any_matching(
     Ok(Some(util::run_handler(
         "trigger",
         trigger.name.clone(),
-        || trigger.handler.run(state, msg_metadata, args),
+        || trigger.handler.run(ctx, args),
     )?))
 }
