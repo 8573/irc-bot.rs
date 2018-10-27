@@ -63,8 +63,6 @@ pub(super) fn send_main(
             None => continue,
         };
 
-        let server_uuid = server_id.uuid.hyphenated();
-
         let aatxe_clients = match state.aatxe_clients.read() {
             Ok(map) => map,
             Err(_) => {
@@ -81,8 +79,8 @@ pub(super) fn send_main(
             Some(client) => client.clone(),
             None => {
                 warn!(
-                    "Can't send to unknown server {uuid}. Discarding {output:?}.",
-                    uuid = server_uuid,
+                    "Can't send to unknown server {server_id:?}. Discarding {output:?}.",
+                    server_id = server_id,
                     output = output
                 );
                 continue;

@@ -56,10 +56,10 @@ error_chain! {
         }
 
         ServerRegistryClash(server_id: ServerId) {
-            description("server registry UUID clash")
-            display("Failed to register a server because an existing server had the same UUID: \
-                     {uuid}",
-                    uuid = server_id.uuid.hyphenated())
+            description("server registry ID clash")
+            display("Failed to register a server because an existing server had the same ID: \
+                     {server_id:?}",
+                    server_id = server_id)
         }
 
         Config(key: String, problem: String) {
@@ -99,9 +99,9 @@ error_chain! {
         UnknownServer(server_id: ServerId) {
             description("server ID not recognized")
             display("An attempt to look up a server connection or metadatum thereof failed, \
-                     because the given server identification token (UUID {id}) was not a valid \
-                     key in the relevant associative array.",
-                    id = server_id.uuid.hyphenated())
+                     because the given server identification token ({server_id:?}) was not a \
+                     valid key in the relevant associative array.",
+                    server_id = server_id)
         }
 
         LockPoisoned(lock_contents_desc: Cow<'static, str>) {

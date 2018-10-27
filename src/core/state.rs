@@ -72,9 +72,9 @@ impl State {
         match self.servers.get(&server_id) {
             Some(lock) => match lock.read() {
                 Ok(guard) => Ok(guard),
-                Err(_) => Err(ErrorKind::LockPoisoned(
-                    format!("server {}", server_id.uuid.hyphenated()).into(),
-                ).into()),
+                Err(_) => {
+                    Err(ErrorKind::LockPoisoned(format!("server {:?}", server_id).into()).into())
+                }
             },
             None => Err(ErrorKind::UnknownServer(server_id).into()),
         }
@@ -105,11 +105,9 @@ impl State {
     ///
     /// TODO: This should return something less allocate-y.
     pub(super) fn server_socket_addr_dbg_string(&self, server_id: ServerId) -> String {
-        let uuid = server_id.uuid.hyphenated();
-
         match self.read_server(server_id) {
             Ok(s) => s.socket_addr_string.clone(),
-            Err(e) => format!("<unknown server {} ({})>", uuid, e),
+            Err(e) => format!("<unknown server {:?} ({})>", server_id, e),
         }
     }
 }

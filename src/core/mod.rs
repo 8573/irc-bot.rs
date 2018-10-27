@@ -39,6 +39,7 @@ use rand::StdRng;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -90,9 +91,12 @@ struct Server {
     socket_addr_string: String,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ServerId {
     uuid: Uuid,
+    // TODO: Maybe add a `Weak` pointing to the `State` containing the map of servers, so that
+    // `ServerId`'s `Debug` implementation can return some information about the server other than
+    // its UUID, such as its domain name.
 }
 
 impl ServerId {
@@ -100,6 +104,12 @@ impl ServerId {
         ServerId {
             uuid: Uuid::new_v4(),
         }
+    }
+}
+
+impl fmt::Debug for ServerId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", stringify!(ServerId), self.uuid.hyphenated())
     }
 }
 
@@ -255,9 +265,9 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             None => {}
             Some(other_server) => {
                 error!(
-                    "This shouldn't happen, but there was already a server registered with UUID \
-                     {uuid}: {other_server:?}",
-                    uuid = server_id.uuid.hyphenated(),
+                    "This shouldn't happen, but there was already a server registered with ID \
+                     {server_id:?}: {other_server:?}",
+                    server_id = server_id,
                     other_server = other_server.read().expect(LOCK_EARLY_POISON_FAIL),
                 );
                 return;
@@ -357,8 +367,8 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
                 // `IrcServer` implementing `Debug`, add the other server to this message.
                 error!(
                     "This shouldn't happen, but there was already a server registered \
-                     with UUID {uuid}!",
-                    uuid = server_id.uuid.hyphenated(),
+                     with ID {server_id:?}!",
+                    server_id = server_id,
                 );
                 return;
             }
