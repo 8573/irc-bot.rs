@@ -1,15 +1,15 @@
 
 build:
-	@nix-shell --run 'cargo build'
+	@nix-shell --run 'cargo build --color=always' 2>&1 | $(PAGER)
 
 release-build:
-	@nix-shell --run 'cargo build --release'
+	@nix-shell --run 'cargo build --release --color=always' 2>&1 | $(PAGER)
 
 check:
-	@nix-shell --run 'cargo check'
+	@nix-shell --run 'cargo check --color=always' 2>&1 | $(PAGER)
 
 test:
-	@nix-shell --run 'cargo test'
+	@nix-shell --run 'cargo test --color=always' 2>&1 | $(PAGER)
 
 run:
 	@nix-shell --run 'cargo run'
