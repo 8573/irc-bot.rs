@@ -18,13 +18,22 @@ use util;
 use walkdir;
 use yaml_rust::Yaml;
 
+#[derive(CustomDebug)]
 pub struct BotCommand {
     pub name: Cow<'static, str>,
+
     pub provider: Arc<Module>,
+
     pub auth_lvl: BotCmdAuthLvl,
+
+    #[debug(skip)]
     pub(super) handler: Arc<BotCmdHandler>,
+
     pub usage_str: Cow<'static, str>,
+
+    #[debug(skip)]
     pub(super) usage_yaml: Yaml,
+
     pub help_msg: Cow<'static, str>,
 }
 

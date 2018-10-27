@@ -23,10 +23,16 @@ use util;
 use uuid::Uuid;
 use yaml_rust::Yaml;
 
+#[derive(CustomDebug)]
 pub struct Module {
     pub name: Cow<'static, str>,
+
+    #[debug(with = "util::fmt::debug_uuid")]
     uuid: Uuid,
+
     features: Vec<ModuleFeature>,
+
+    #[debug(skip)]
     on_load: SmallVec<[Box<ModuleLoadHandler>; 1]>,
 }
 
@@ -196,21 +202,34 @@ pub struct ModuleInfo {
     name: String,
 }
 
+#[derive(CustomDebug)]
 enum ModuleFeature {
     Command {
         name: Cow<'static, str>,
+
         usage_str: Cow<'static, str>,
+
         usage_yaml: Yaml,
+
         help_msg: Cow<'static, str>,
+
         auth_lvl: BotCmdAuthLvl,
+
+        #[debug(skip)]
         handler: Arc<BotCmdHandler>,
     },
     Trigger {
         name: Cow<'static, str>,
+
         help_msg: Cow<'static, str>,
+
         regex: Arc<RwLock<Regex>>,
+
+        #[debug(skip)]
         handler: Arc<TriggerHandler>,
+
         priority: TriggerPriority,
+
         uuid: Uuid,
     },
 }

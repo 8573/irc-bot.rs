@@ -69,18 +69,30 @@ const LOCK_EARLY_POISON_FAIL: &str =
     "A lock was poisoned?! Already?! We really oughtn't have panicked yet, so let's panic some \
      more....";
 
+#[derive(CustomDebug)]
 pub struct State {
     aatxe_clients: RwLock<BTreeMap<ServerId, aatxe::IrcClient>>,
+
     addressee_suffix: Cow<'static, str>,
+
     commands: BTreeMap<Cow<'static, str>, BotCommand>,
+
     config: config::Config,
+
+    #[debug(skip)]
     error_handler: Arc<ErrorHandler>,
+
     module_data_path: PathBuf,
+
     modules: BTreeMap<Cow<'static, str>, Arc<Module>>,
+
     // TODO: This is server-specific.
     msg_prefix: RwLock<OwningMsgPrefix>,
+
     rng: Mutex<StdRng>,
+
     servers: BTreeMap<ServerId, RwLock<Server>>,
+
     triggers: BTreeMap<TriggerPriority, Vec<Trigger>>,
 }
 

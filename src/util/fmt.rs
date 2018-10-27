@@ -2,6 +2,7 @@ use core;
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt;
+use uuid::Uuid;
 
 pub(crate) struct FmtAny<'a>(pub(crate) &'a Any);
 
@@ -39,3 +40,7 @@ impl_fmt!(fmt::Debug {
     Cow<'static, str>;
     core::Error;
 });
+
+pub(crate) fn debug_uuid(uuid: &Uuid, formatter: &mut fmt::Formatter) -> fmt::Result {
+    write!(formatter, "{}", uuid.hyphenated())
+}

@@ -15,13 +15,21 @@ use std::sync::RwLockReadGuard;
 use util;
 use uuid::Uuid;
 
+#[derive(CustomDebug)]
 pub struct Trigger {
     pub name: Cow<'static, str>,
+
     pub provider: Arc<Module>,
+
     pub regex: Arc<RwLock<Regex>>,
+
     pub priority: TriggerPriority,
+
+    #[debug(skip)]
     pub(super) handler: Arc<TriggerHandler>,
+
     pub help_msg: Cow<'static, str>,
+
     pub uuid: Uuid,
 }
 
