@@ -23,6 +23,9 @@ extern crate walkdir;
 extern crate yaml_rust;
 
 #[macro_use]
+extern crate custom_debug_derive;
+
+#[macro_use]
 extern crate error_chain;
 
 #[macro_use]
