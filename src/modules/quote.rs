@@ -4,13 +4,14 @@
 use clockpro_cache::ClockProCache;
 use core::BotCmdAuthLvl as Auth;
 use core::*;
+use inlinable_string::InlinableString;
 use irc::client::data::User as AatxeUser;
 use irc::client::prelude::Client as AatxeClient;
 use itertools::Itertools;
 use quantiles::ckms::CKMS;
 use rando::Rando;
 use ref_slice::ref_slice;
-use regex::Regex;
+use regex;
 use serde_yaml;
 use smallbitvec::SmallBitVec;
 use smallvec::SmallVec;
@@ -34,7 +35,8 @@ use try_map::FlipResultExt;
 use url::Url;
 use url_serde::SerdeUrl;
 use util;
-use util::regex::IntoRegexCI;
+use util::regex::config as rx_cfg;
+use util::regex::Regex;
 use util::yaml::any_to_str;
 use util::yaml::get_arg_by_short_or_long_key;
 use util::yaml::iter_as_seq;
@@ -310,7 +312,10 @@ struct QuotationId(usize);
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 struct QuotationFileIR {
-    channels: String,
+    /// TODO: I think this was case-insensitive only because the previous way in which I was
+    /// building this regex didn't provide separate size-limit and case-insensitivity options but
+    /// rather always had the one go with the other. Drop the case-insensitivity.
+    channels: Regex<rx_cfg::Anchored<rx_cfg::SizeLimit<rx_cfg::CaseInsensitive>>>,
 
     #[serde(default = "default_quotation_format_for_serde")]
     format: QuotationFormat,
@@ -329,7 +334,7 @@ struct QuotationFileMetadata {
 
     file_id: QuotationFileId,
 
-    channels_regex: Regex,
+    channels_regex: Regex<rx_cfg::Anchored<rx_cfg::SizeLimit<rx_cfg::CaseInsensitive>>>,
 
     quotation_count: usize,
 }
@@ -493,7 +498,7 @@ fn prepare_quote_params<'arg>(
             Cow::Borrowed,
             "a search term given in the argument `regex`",
         ).map_err(Into::into)
-    }).map_results(|s| s.as_ref().into_regex_ci().map_err(Into::into))
+    }).map_results(|s| s.as_ref().parse().map_err(Into::into))
     .collect::<Result<Result<_>>>()??;
 
     let literals = iter_as_seq(get_arg_by_short_or_long_key(
@@ -777,8 +782,9 @@ fn chat_lines_stripped(quotation: &Quotation) -> impl Iterator<Item = &str> + Cl
 
 fn strip_chat_metadata(line: &str) -> Option<&str> {
     lazy_static! {
-        static ref METADATA_REGEX: Regex = Regex::new("^(?:[^[:space:]*<>]+(?:[[:space:]]+|$))*")
-            .expect("Apparently, we have a syntax error in a static regex.");
+        static ref METADATA_REGEX: regex::Regex =
+            regex::Regex::new(r"^(?:[^[:space:]*<>]+(?:[[:space:]]+|$))*")
+                .expect("Apparently, we have a syntax error in a static regex.");
     }
 
     METADATA_REGEX
@@ -1105,7 +1111,7 @@ fn on_load(state: &State) -> Result<()> {
         trace!("Loading quotation file: {}", path.display());
 
         let QuotationFileIR {
-            channels: mut file_channels_regex,
+            channels: file_channels_regex,
             format: file_default_format,
             anti_ping_tactic: file_default_anti_ping_tactic,
             quotations: deserialized_quotations,
@@ -1116,12 +1122,7 @@ fn on_load(state: &State) -> Result<()> {
         let file_metadata = QuotationFileMetadata {
             name: entry.file_name().to_string_lossy().into_owned(),
             file_id,
-            channels_regex: {
-                file_channels_regex.reserve_exact(2);
-                file_channels_regex.insert_str(0, "^(?:");
-                file_channels_regex.push_str(")$");
-                file_channels_regex.into_regex_ci()?
-            },
+            channels_regex: file_channels_regex,
             quotation_count: deserialized_quotations.len(),
         };
 

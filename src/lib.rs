@@ -11,6 +11,7 @@ extern crate rand;
 extern crate rando;
 extern crate ref_slice;
 extern crate regex;
+extern crate serde;
 extern crate serde_yaml;
 extern crate smallbitvec;
 extern crate smallvec;
