@@ -3,6 +3,7 @@
 
 extern crate clockpro_cache;
 extern crate crossbeam_channel;
+extern crate inlinable_string;
 extern crate irc;
 extern crate itertools;
 extern crate quantiles;
