@@ -3,7 +3,6 @@ name = "irc-bot"
 version = "0.2.1"
 authors = ["c74d <8573dd@gmail.com>"]
 description = "A library for writing Internet Relay Chat (IRC) bots in Rust"
-documentation = "https://docs.rs/irc-bot"
 homepage = "https://docs.rs/crate/irc-bot"
 repository = "https://github.com/8573/irc-bot.rs"
 readme = "README.md"
