@@ -590,6 +590,8 @@ fn pick_quotation<'q>(
                                 url,
                             })),
                             None => {
+                                // TODO: metrics: Track how *many* quotations get rejected for
+                                // length.
                                 rejected_a_quotation_for_length = true;
                                 Ok(None)
                             }
