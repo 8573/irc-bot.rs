@@ -364,3 +364,242 @@ where
         Self::Value::try_from_string(input).map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use itertools::Itertools;
+    use quickcheck::TestResult;
+
+    trait RegexTrait {
+        fn is_match(&self, input_text: &str) -> bool;
+
+        fn captures_iter<'r, 't>(&'r self, input_text: &'t str) -> regex::CaptureMatches<'r, 't>;
+
+        fn as_str(&self) -> &str;
+    }
+
+    impl RegexTrait for regex::Regex {
+        fn is_match(&self, input_text: &str) -> bool {
+            regex::Regex::is_match(self, input_text)
+        }
+
+        fn captures_iter<'r, 't>(&'r self, input_text: &'t str) -> regex::CaptureMatches<'r, 't> {
+            regex::Regex::captures_iter(self, input_text)
+        }
+
+        fn as_str(&self) -> &str {
+            regex::Regex::as_str(self)
+        }
+    }
+
+    impl<Cfg> RegexTrait for Regex<Cfg>
+    where
+        Cfg: RegexConfig,
+    {
+        fn is_match(&self, input_text: &str) -> bool {
+            regex::Regex::is_match(self, input_text)
+        }
+
+        fn captures_iter<'r, 't>(&'r self, input_text: &'t str) -> regex::CaptureMatches<'r, 't> {
+            regex::Regex::captures_iter(self, input_text)
+        }
+
+        fn as_str(&self) -> &str {
+            regex::Regex::as_str(self)
+        }
+    }
+
+    fn test_regex_equivalence_for_input<Rx1, Rx2>(
+        is_match_only: bool,
+        rx1_build_result: StdResult<Rx1, regex::Error>,
+        rx2_build_result: StdResult<Rx2, regex::Error>,
+        input_text: &str,
+    ) -> TestResult
+    where
+        Rx1: RegexTrait,
+        Rx2: RegexTrait,
+    {
+        let rx1 = match rx1_build_result {
+            Ok(rx) => rx,
+            Err(_) => return TestResult::discard(),
+        };
+        let rx2 = match rx2_build_result {
+            Ok(rx) => rx,
+            Err(_) => return TestResult::discard(),
+        };
+
+        match (rx1.is_match(input_text), rx2.is_match(input_text)) {
+            (false, false) | (true, true) => {}
+            (false, true) => {
+                return TestResult::error(format!(
+                    "against {text:?}, regex {rx1:?} does not match but regex {rx2:?} matches",
+                    text = input_text,
+                    rx1 = rx1.as_str(),
+                    rx2 = rx2.as_str()
+                ));
+            }
+            (true, false) => {
+                return TestResult::error(format!(
+                    "against {text:?}, regex {rx1:?} matches but regex {rx2:?} does not match",
+                    text = input_text,
+                    rx1 = rx1.as_str(),
+                    rx2 = rx2.as_str()
+                ));
+            }
+        }
+
+        if is_match_only {
+            return TestResult::passed();
+        }
+
+        let rx1_captures_iter = rx1.captures_iter(input_text);
+        let rx2_captures_iter = rx2.captures_iter(input_text);
+
+        for (match_idx, (rx1_match, rx2_match)) in
+            rx1_captures_iter.zip_eq(rx2_captures_iter).enumerate()
+        {
+            for (capture_idx, (rx1_capture, rx2_capture)) in
+                rx1_match.iter().zip_eq(rx2_match.iter()).enumerate()
+            {
+                match (rx1_capture, rx2_capture) {
+                    (None, None) => {}
+                    (None, Some(_rx2_capture)) => {
+                        panic!();
+                    }
+                    (Some(_rx1_capture), None) => {
+                        panic!();
+                    }
+                    (Some(rx1_capture), Some(rx2_capture)) if (rx1_capture == rx2_capture) => {}
+                    (Some(rx1_capture), Some(rx2_capture)) => {
+                        return TestResult::error(format!(
+                            "[match {match_idx}, capture group {capture_idx}] \
+                             regex {rx1:?} matched {rx1_match:?} \
+                             (start: {rx1_start}, end: {rx1_end}); \
+                             regex {rx2:?} matched {rx2_match:?} \
+                             (start: {rx2_start}, end: {rx2_end}).",
+                            match_idx = match_idx,
+                            capture_idx = capture_idx,
+                            rx1 = rx1.as_str(),
+                            rx1_match = rx1_capture.as_str(),
+                            rx1_start = rx1_capture.start(),
+                            rx1_end = rx1_capture.end(),
+                            rx2 = rx2.as_str(),
+                            rx2_match = rx2_capture.as_str(),
+                            rx2_start = rx2_capture.start(),
+                            rx2_end = rx2_capture.end()
+                        ));
+                    }
+                }
+            }
+        }
+
+        TestResult::passed()
+    }
+
+    // To run rustfmt on this code, temporarily change the `quickcheck! {...}` to `mod qc {...}`.
+    // Beware, however, of rustfmt's adding trailing commas, which `quickcheck!` doesn't accept.
+    quickcheck! {
+        fn std_cfg_matches_regex_crate(pattern: String, haystack: String) -> TestResult {
+            let theirs = regex::Regex::from_str(&pattern);
+            let ours = Regex::<config::Standard>::try_from_string(pattern);
+
+            test_regex_equivalence_for_input(false, ours, theirs, &haystack)
+        }
+
+        fn anchoring_basically_works(pattern: String, haystack: String) -> TestResult {
+            let orig = match regex::Regex::from_str(&pattern) {
+                Ok(rx) => rx,
+                Err(_) => return TestResult::discard(),
+            };
+
+            let anchored = match Regex::<config::Anchored>::try_from_string(pattern) {
+                Ok(rx) => rx,
+                Err(_) => return TestResult::discard(),
+            };
+
+            let orig_matches = orig.is_match(&haystack);
+            let orig_matches_whole_input = orig
+                .find(&haystack)
+                .map(|m| m.as_str() == haystack)
+                .unwrap_or(false);
+            let anchored_matches = anchored.is_match(&haystack);
+
+            const F: bool = false;
+            const T: bool = true;
+
+            match (orig_matches, orig_matches_whole_input, anchored_matches) {
+                (F, F, F) | (T, F, F) | (T, T, T) => TestResult::passed(),
+                (F, F, T) => TestResult::error(
+                    "plain regex doesn't match but anchored regex does"
+                ),
+                (T, F, T) => TestResult::error(
+                    "plain regex matches only substring but anchored regex matches"
+                ),
+                (T, T, F) => TestResult::error(
+                    "plain regex match matches whole input but anchored regex doesn't match"
+                ),
+                (F, T, F) | (F, T, T) => unreachable!("this is a bug in the crate `regex`"),
+            }
+        }
+
+        fn anchoring_is_irrelevant_if_regex_does_not_match_anyway(
+            pattern: String,
+            haystack: String
+        ) -> TestResult {
+            let unanchored = match regex::Regex::from_str(&pattern) {
+                Ok(rx) => rx,
+                Err(_) => return TestResult::discard(),
+            };
+
+            if unanchored.is_match(&haystack) {
+                return TestResult::discard();
+            }
+
+            let anchored = Regex::<config::Anchored>::try_from_string(pattern);
+
+            test_regex_equivalence_for_input(false, Ok(unanchored), anchored, &haystack)
+        }
+
+        fn anchoring_is_irrelevant_if_regex_matches_whole_input(
+            pattern: String,
+            haystack: String
+        ) -> TestResult {
+            let unanchored = match regex::Regex::from_str(&pattern) {
+                Ok(rx) => rx,
+                Err(_) => return TestResult::discard(),
+            };
+
+            let matches_whole_input = unanchored
+                .find(&haystack)
+                .map(|m| m.as_str() == haystack)
+                .unwrap_or(false);
+
+            if !matches_whole_input {
+                return TestResult::discard();
+            }
+
+            let anchored = Regex::<config::Anchored>::try_from_string(pattern);
+
+            test_regex_equivalence_for_input(false, Ok(unanchored), anchored, &haystack)
+        }
+
+        fn anchoring_can_be_negated_for_nonempty_patterns(
+            pattern: String,
+            haystack: String
+        ) -> TestResult {
+            if pattern.is_empty() {
+                return TestResult::discard();
+            }
+
+            let unchanged = regex::Regex::from_str(&pattern);
+
+            let mut pattern = pattern;
+            pattern.insert_str(0, "(?s:.*)(?:");
+            pattern.push_str(")(?s:.*)");
+            let unanchored_anchored = Regex::<config::Anchored>::try_from_string(pattern);
+
+            test_regex_equivalence_for_input(true, unchanged, unanchored_anchored, &haystack)
+        }
+    }
+}
