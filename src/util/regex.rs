@@ -245,12 +245,12 @@ pub mod config {
     /// This is the default [`regex`] configuration.
     ///
     /// [`regex`]: <https://docs.rs/regex/*/regex/>
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
     pub struct Standard;
 
     /// This configuration causes regexes to be wrapped in `\A(?:` and `)\z`, so that they will
     /// match a string only if they match the whole string, and not merely a substring of it.
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
     pub struct Anchored<Base = Standard>(PhantomData<Base>)
     where
         Base: RegexConfig;
@@ -259,7 +259,7 @@ pub mod config {
     /// `rxb.case_insensitive(true)` where `rxb` is the relevant [`RegexBuilder`].
     ///
     /// [`RegexBuilder`]: <https://docs.rs/regex/*/regex/struct.RegexBuilder.html>
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
     pub struct CaseInsensitive<Base = Standard>(PhantomData<Base>)
     where
         Base: RegexConfig;
@@ -267,7 +267,7 @@ pub mod config {
     /// This is unstable and longs for integer generics.
     ///
     /// TODO: Add `ProgramSizeLimit` (`size_limit`) and `RuntimeSizeLimit` (`dfa_size_limit`).
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
     pub struct SizeLimit<Base = Standard>(PhantomData<Base>)
     where
         Base: RegexConfig;
