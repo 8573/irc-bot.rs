@@ -152,7 +152,7 @@ impl<'a> IntoRegexCI for &'a str {
 /// [`RegexConfig`]: <trait.RegexConfig.html>
 /// [`Regex`]: <https://docs.rs/regex/*/regex/struct.Regex.html>
 /// [`serde_regex`]: <https://docs.rs/serde_regex/*/serde_regex/>
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Regex<Cfg = config::Standard>(regex::Regex, PhantomData<Cfg>)
 where
     Cfg: RegexConfig;
