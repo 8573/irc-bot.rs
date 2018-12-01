@@ -42,7 +42,7 @@ at least put one's IRC nick in the `admins` field — e.g., if one's nick is
       - nick: Ferris
 
 Configuration fields currently supported are as follows (with values given for
-example only):
+example only) (TODO: Document these in rustdoc, with rich text):
 
     # A string to be used as the bot's IRC nickname. This field is required.
     nickname: egbot
@@ -62,15 +62,17 @@ example only):
     # no servers are listed; both of these issues should be fixed at some
     # future point.
     servers:
-      - host: irc.mozilla.org
+      - name: Mozilla
+        host: irc.mozilla.org
         port: 6697
         # Whether to use Transport Layer Security. Defaults to `true`.
         tls: true
         # A list of channels that the bot should join after connecting. Note
-        # that each channel should be wrapped in quotation marks or otherwise
-        # escaped so that the '#' is not taken as the start of a comment.
+        # that each channel's name should be wrapped in quotation marks or
+        # otherwise escaped so that the '#' is not taken as the start of a
+        # comment.
         channels:
-          - '#rust-irc'
+          - name: '#rust-irc'
 
     # A list of IRC users who will be authorized to direct the bot to run
     # certain priviledged commands. For each listed user, the fields `nick`,

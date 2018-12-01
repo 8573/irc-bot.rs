@@ -2,11 +2,12 @@ nickname: bot74d
 username: egbot
 realname: egbot
 servers:
-  - host: irc.mozilla.org
+  - name: Mozilla
+    host: irc.mozilla.org
     port: 6697
     channels:
-      - '#c74d'
-      - '#rust-irc'
+      - name: '#c74d'
+      - name: '#rust-irc'
 admins:
   - nick: c74d
     user: c74d

@@ -9,6 +9,10 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
+use util::irc::ChannelName;
+use util::lock::RoLock;
+use util::regex::config as rx_cfg;
+use util::regex::Regex;
 
 mod inner {
     use smallvec::SmallVec;
@@ -44,7 +48,9 @@ pub struct Config {
 
     pub(crate) admins: SmallVec<[Admin; 8]>,
 
-    pub(crate) servers: SmallVec<[Arc<aatxe::Config>; 8]>,
+    pub(super) servers: SmallVec<[Server; 8]>,
+
+    pub(crate) aatxe_configs: SmallVec<[Arc<aatxe::Config>; 8]>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -59,8 +65,11 @@ pub struct Admin {
     pub host: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-struct Server {
+#[derive(Debug, Deserialize)]
+pub(super) struct Server {
+    // TODO: Use a `ServerName` newtype that checks that the string is a valid identifier.
+    pub name: String,
+
     pub host: String,
 
     pub port: u16,
@@ -69,7 +78,18 @@ struct Server {
     pub tls: bool,
 
     #[serde(default)]
-    pub channels: Vec<String>,
+    pub channels: SmallVec<[Channel; 24]>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct Channel {
+    pub name: ChannelName,
+
+    #[serde(rename = "can see")]
+    pub can_see: Option<RoLock<Regex<rx_cfg::Anchored>>>,
+
+    #[serde(rename = "seen by")]
+    pub seen_by: Option<RoLock<Regex<rx_cfg::Anchored>>>,
 }
 
 #[derive(Debug)]
@@ -203,18 +223,24 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
         servers,
     } = cfg;
 
-    let servers = servers
-        .into_iter()
+    let aatxe_configs = servers
+        .iter()
         .map(|server_cfg| {
             Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
                 username: Some(username.clone()),
                 realname: Some(realname.clone()),
-                server: Some(server_cfg.host),
+                server: Some(server_cfg.host.clone()),
                 port: Some(server_cfg.port),
                 use_ssl: Some(server_cfg.tls),
-                channels: Some(server_cfg.channels),
+                channels: Some(
+                    server_cfg
+                        .channels
+                        .iter()
+                        .map(|chan| chan.name.as_ref().into())
+                        .collect(),
+                ),
                 ..Default::default()
             })
         }).collect();
@@ -225,6 +251,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
         realname,
         admins,
         servers,
+        aatxe_configs,
     })
 }
 

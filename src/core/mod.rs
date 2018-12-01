@@ -259,7 +259,7 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
     let mut servers = BTreeMap::new();
 
-    for aatxe_config in &state.config.servers {
+    for aatxe_config in &state.config.aatxe_configs {
         let server_id = ServerId::new();
 
         let socket_addr_string = match (&aatxe_config.server, aatxe_config.port) {
