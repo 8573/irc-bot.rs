@@ -61,7 +61,7 @@ use quickcheck as qc;
 #[cfg(test)]
 use url_serde::Serde;
 
-/// This module provides functionality for retrieving quotations from a database thereof.
+/// This bot module provides functionality for retrieving quotations from a database thereof.
 ///
 ///
 /// # The `quote` command
@@ -103,8 +103,8 @@ use url_serde::Serde;
 /// - `tag` — The value of this parameter may be a string or a sequence of strings. Each string so
 /// provided will be interpreted as a quotation _tag_ (see below). A quotation will be displayed
 /// only if it has all tags so provided. These tags will be matched case-sensitively. Note that
-/// searching by `regex` also searches tags as well as quotations' text. This parameter is
-/// optional.
+/// searching by `regex` or `string` also searches tags as well as quotations' text. This parameter
+/// is optional.
 ///
 /// - `id` — The value of this parameter should be a string. This parameter requests the quotation
 /// whose ID, when displayed as described in the section "Output" above, is the value of this
@@ -177,6 +177,12 @@ use url_serde::Serde;
 ///   to most IRC users but also are expected to prevent most IRC users from getting pinged. As of
 ///   2017-06-07, this is known not to prevent some or all users of the chat platform Matrix from
 ///   being pinged.
+///
+///     Currently, this anti-ping tactic specifically alters the quotations' text by inserting
+///     zero-width spaces in the nicknames of users who are present. To give credit where credit is
+///     due, the author of this functionality first encountered this anti-ping tactic being used in
+///     the Mozilla IRC channel `#rust-offtopic` by the users ["Havvy"] and ["succ"] based on a
+///     suggestion by the user ["ubsan"] on 2016-09-30 UTC.
 ///
 ///   - `eschew` — Simply forbid the bot from posting a quotation to a channel while one or more
 ///   users who would be expected to be pinged by the quotation are in the channel.
@@ -252,9 +258,14 @@ use url_serde::Serde;
 ///   ```
 ///
 ///   Note that, in YAML, the `>` character here, the block scalar folded style indicator, means
-///   that the line-breaks in the text will be changed to spaces at the YAML level.
+///   that the line-breaks in the text will be changed to spaces at the YAML level. One instead
+///   could use the block scalar literal style indicator (`|`) as above to have the line-breaks be
+///   preserved at the YAML level, as would be proper if quoting poetry or lyrics.
 ///
 ///
+/// ["Havvy"]: <https://github.com/Havvy>
+/// ["succ"]: <https://github.com/edef1c>
+/// ["ubsan"]: <https://github.com/ubsan>
 /// [YAML]: <http://yaml.org>
 /// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
 /// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
