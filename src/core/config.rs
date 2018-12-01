@@ -11,6 +11,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 mod inner {
+    use smallvec::SmallVec;
+
     /// Configuration structure that can be deserialized by Serde.
     ///
     /// This is hidden from the consumer because Serde won't validate the configuration.
@@ -24,10 +26,11 @@ mod inner {
         #[serde(default)]
         pub(super) realname: String,
 
+        // TODO: admins should be per-server.
         #[serde(default)]
-        pub(super) admins: Vec<super::Admin>,
+        pub(super) admins: SmallVec<[super::Admin; 8]>,
 
-        pub(super) servers: Vec<super::Server>,
+        pub(super) servers: SmallVec<[super::Server; 8]>,
     }
 }
 
@@ -192,17 +195,16 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
 
     fill_in_config_defaults(&mut cfg)?;
 
-    let nickname = cfg.nickname.to_owned();
+    let inner::Config {
+        nickname,
+        username,
+        realname,
+        admins,
+        servers,
+    } = cfg;
 
-    let username = cfg.username.to_owned();
-
-    let realname = cfg.realname.to_owned();
-
-    let admins = cfg.admins.drain(..).collect();
-
-    let servers = cfg
-        .servers
-        .drain(..)
+    let servers = servers
+        .into_iter()
         .map(|server_cfg| {
             Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
