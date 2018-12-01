@@ -255,11 +255,11 @@ use url_serde::Serde;
 ///   that the line-breaks in the text will be changed to spaces at the YAML level.
 ///
 ///
-/// [`regex`]: <https://docs.rs/regex/*/regex/>
-/// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
-/// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
-/// [`url`]: <https://docs.rs/url/*/url/>
 /// [YAML]: <http://yaml.org>
+/// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
+/// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
+/// [`regex`]: <https://docs.rs/regex/*/regex/>
+/// [`url`]: <https://docs.rs/url/*/url/>
 pub fn mk() -> Module {
     mk_module("quote")
         .on_load(Box::new(on_load))
