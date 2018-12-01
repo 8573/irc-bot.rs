@@ -9,6 +9,9 @@ pub(crate) mod lock;
 pub mod regex;
 pub mod yaml;
 
+pub(crate) const STATIC_REGEX_PARSE_ERR_MSG: &str =
+    "Apparently, we have a syntax error in a static regex.";
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[must_use]
 pub(crate) struct MustUse<T>(pub T);

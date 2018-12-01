@@ -50,6 +50,7 @@ use util::yaml::str::YAML_STR_STRING;
 use util::yaml::str::YAML_STR_TAG;
 use util::yaml::FW_SYNTAX_CHECK_FAIL;
 use util::MustUse;
+use util::STATIC_REGEX_PARSE_ERR_MSG;
 use walkdir::WalkDir;
 use yaml_rust;
 use yaml_rust::yaml::Hash as YamlHash;
@@ -797,7 +798,7 @@ fn strip_chat_metadata(line: &str) -> Option<&str> {
     lazy_static! {
         static ref METADATA_REGEX: regex::Regex =
             regex::Regex::new(r"^(?:[^[:space:]*<>]+(?:[[:space:]]+|$))*")
-                .expect("Apparently, we have a syntax error in a static regex.");
+                .expect(STATIC_REGEX_PARSE_ERR_MSG);
     }
 
     METADATA_REGEX
