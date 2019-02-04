@@ -1,29 +1,37 @@
 channels: '.*'
+
 quotations:
-  - text: |
-      <foo> foo bar
-  - text: |
-      <bar> foo baz
-  - text: |
-      <baz> bar baz
-      <foo> frob qux
-  - text: |
-      2018-08-27 21:16 <c74d> Why do you find solid mechanics harder than fluid mechanics?
-      2018-08-27 21:16 <c74d> Er, allow me to rephrase: Why do you find solid mechanics more difficult than fluid mechanics?
-  - format: plain
-    text: >
-      “I recognize that I am only making an assertion and
-      furnishing no proof; I am sorry, but this is a habit of
-      mine; sorry also that I am not alone in it; everybody
-      seems to have this disease.” — Mark Twain
-  - format: plain
-    text: >
-      “In 5-billion yrs the Sun will expand & engulf our orbit
-      as the charred ember that was once Earth vaporizes. Have a
-      nice day.” — Neil deGrasse Tyson
-  - format: plain
-    # Based on the following suggestion from WindowsBunny:
-    # > 2018-08-11 06:31:56 <+WindowsBunny> c74d: your face is a quote
-    text: >
-      c74d's face
-    tags: [WindowsBunny]
+
+- text: |
+    <foo> foo bar
+
+- text: |
+    <bar> foo baz
+
+- text: |
+    <baz> bar baz
+    <foo> frob qux
+
+- text: |
+    2018-08-27 21:16 <c74d> Why do you find solid mechanics harder than fluid mechanics?
+    2018-08-27 21:16 <c74d> Er, allow me to rephrase: Why do you find solid mechanics more difficult than fluid mechanics?
+
+- format: plain
+  text: >
+    “I recognize that I am only making an assertion and
+    furnishing no proof; I am sorry, but this is a habit of
+    mine; sorry also that I am not alone in it; everybody
+    seems to have this disease.” — Mark Twain
+
+- format: plain
+  text: >
+    “In 5-billion yrs the Sun will expand & engulf our orbit
+    as the charred ember that was once Earth vaporizes. Have a
+    nice day.” — Neil deGrasse Tyson
+
+- format: plain
+  # Based on the following suggestion from WindowsBunny:
+  # > 2018-08-11 06:31:56 <+WindowsBunny> c74d: your face is a quote
+  text: >
+    c74d's face
+  tags: [WindowsBunny]
