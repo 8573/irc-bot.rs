@@ -329,8 +329,8 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             }
             Err(err) => {
                 error!(
-                    "Failed to connect to server {:?}: {}",
-                    server.socket_addr_string, err,
+                    "Failed to connect to server {:?}: {} ({:?})",
+                    server.socket_addr_string, err, err,
                 );
                 continue;
             }
