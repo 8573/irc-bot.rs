@@ -24,12 +24,6 @@ mod inner {
     pub(super) struct Config {
         pub(super) nickname: String,
 
-        #[serde(rename = "nick password")]
-        pub(super) nick_password: Option<String>,
-
-        #[serde(rename = "server password")]
-        pub(super) server_password: Option<String>,
-
         #[serde(default)]
         pub(super) username: String,
 
@@ -47,10 +41,6 @@ mod inner {
 #[derive(Debug)]
 pub struct Config {
     pub(crate) nickname: String,
-
-    pub(crate) nick_password: Option<String>,
-
-    pub(crate) server_password: Option<String>,
 
     pub(crate) username: String,
 
@@ -83,6 +73,12 @@ pub(super) struct Server {
     pub host: String,
 
     pub port: u16,
+
+    #[serde(rename = "nick password")]
+    pub(super) nick_password: Option<String>,
+
+    #[serde(rename = "server password")]
+    pub(super) server_password: Option<String>,
 
     #[serde(default = "mk_true")]
     pub tls: bool,
@@ -139,16 +135,6 @@ impl ConfigBuilder {
         }
 
         ConfigBuilder(self.0.map(|cfg| inner::Config { nickname, ..cfg }))
-    }
-
-    pub fn nick_password<S>(self, nick_password: S) -> Self
-    where
-        S: Into<String>,
-    {
-        ConfigBuilder(self.0.map(|cfg| inner::Config {
-            nick_password: Some(nick_password.into()),
-            ..cfg
-        }))
     }
 
     pub fn username<S>(self, username: S) -> Self
@@ -237,8 +223,6 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
 
     let inner::Config {
         nickname,
-        nick_password,
-        server_password,
         username,
         realname,
         admins,
@@ -251,8 +235,8 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
             Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
-                nick_password: nick_password.clone(),
-                password: server_password.clone(),
+                nick_password: server_cfg.nick_password.clone(),
+                password: server_cfg.server_password.clone(),
                 username: Some(username.clone()),
                 realname: Some(realname.clone()),
                 server: Some(server_cfg.host.clone()),
@@ -271,8 +255,6 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
 
     Ok(Config {
         nickname,
-        nick_password,
-        server_password,
         username,
         realname,
         admins,
