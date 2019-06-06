@@ -27,6 +27,9 @@ mod inner {
         #[serde(rename = "nick password")]
         pub(super) nick_password: Option<String>,
 
+        #[serde(rename = "server password")]
+        pub(super) server_password: Option<String>,
+
         #[serde(default)]
         pub(super) username: String,
 
@@ -46,6 +49,8 @@ pub struct Config {
     pub(crate) nickname: String,
 
     pub(crate) nick_password: Option<String>,
+
+    pub(crate) server_password: Option<String>,
 
     pub(crate) username: String,
 
@@ -233,6 +238,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
     let inner::Config {
         nickname,
         nick_password,
+        server_password,
         username,
         realname,
         admins,
@@ -246,6 +252,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
                 nick_password: nick_password.clone(),
+                password: server_password.clone(),
                 username: Some(username.clone()),
                 realname: Some(realname.clone()),
                 server: Some(server_cfg.host.clone()),
@@ -265,6 +272,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
     Ok(Config {
         nickname,
         nick_password,
+        server_password,
         username,
         realname,
         admins,
