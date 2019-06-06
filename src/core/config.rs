@@ -74,6 +74,12 @@ pub(super) struct Server {
 
     pub port: u16,
 
+    #[serde(rename = "nick password")]
+    pub(super) nick_password: Option<String>,
+
+    #[serde(rename = "server password")]
+    pub(super) server_password: Option<String>,
+
     #[serde(default = "mk_true")]
     pub tls: bool,
 
@@ -229,6 +235,8 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
             Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
+                nick_password: server_cfg.nick_password.clone(),
+                password: server_cfg.server_password.clone(),
                 username: Some(username.clone()),
                 realname: Some(realname.clone()),
                 server: Some(server_cfg.host.clone()),
