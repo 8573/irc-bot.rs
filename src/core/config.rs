@@ -24,6 +24,7 @@ mod inner {
     pub(super) struct Config {
         pub(super) nickname: String,
 
+        #[serde(rename = "nick password")]
         pub(super) nick_password: Option<String>,
 
         #[serde(default)]
