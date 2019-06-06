@@ -232,19 +232,28 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
     let aatxe_configs = servers
         .iter()
         .map(|server_cfg| {
+            let &Server {
+                name: _,
+                ref host,
+                port,
+                tls,
+                ref nick_password,
+                ref server_password,
+                ref channels,
+            } = server_cfg;
+
             Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
-                nick_password: server_cfg.nick_password.clone(),
-                password: server_cfg.server_password.clone(),
+                nick_password: nick_password.clone(),
+                password: server_password.clone(),
                 username: Some(username.clone()),
                 realname: Some(realname.clone()),
-                server: Some(server_cfg.host.clone()),
-                port: Some(server_cfg.port),
-                use_ssl: Some(server_cfg.tls),
+                server: Some(host.clone()),
+                port: Some(port),
+                use_ssl: Some(tls),
                 channels: Some(
-                    server_cfg
-                        .channels
+                    channels
                         .iter()
                         .map(|chan| chan.name.as_ref().into())
                         .collect(),
