@@ -192,21 +192,21 @@ mod inner {
 /// [`regex`]: <https://docs.rs/regex/*/regex/>
 #[derive(Debug)]
 pub struct Config {
-    pub(crate) nickname: String,
+    pub(super) nickname: String,
 
-    pub(crate) username: String,
+    pub(super) username: String,
 
-    pub(crate) realname: String,
+    pub(super) realname: String,
 
-    pub(crate) admins: SmallVec<[Admin; 8]>,
+    pub(super) admins: SmallVec<[Admin; 8]>,
 
     pub(super) servers: SmallVec<[Server; 8]>,
 
-    pub(crate) aatxe_configs: SmallVec<[Arc<aatxe::Config>; 8]>,
+    pub(super) aatxe_configs: SmallVec<[Arc<aatxe::Config>; 8]>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Admin {
+pub(super) struct Admin {
     #[serde(default)]
     pub nick: Option<String>,
 
