@@ -18,6 +18,7 @@ use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
@@ -145,21 +146,81 @@ use url_serde::Serde;
 /// For a full list of commands available, use the bot's `help` command.
 ///
 ///
+/// # Configuration
+///
+/// This bot module may be configured by the bot operator with a YAML configuration file named
+/// `config.yaml` located in a directory named `quote` inside the bot's module data directory. The
+/// text of the configuration file should constitute a YAML mapping with the key-value pairs
+/// (hereinafter termed _fields_) that follow, listed by their keys:
+///
+/// TODO: Move `channels` docs up from next section. Change per-file `channels` to
+/// just `channel`, noting only the channel from which the quotations came, which automatically is
+/// allowed to see them.
+///
+/// - `channels` — The value of this field should be a mapping whose keys are channel identifiers
+/// and whose values are mappings, the fields of which mappings are termed _per-channel settings_
+/// and will be documented after the code example. Each of this field's value's key-value pairs of
+/// a key `C` and a value `S` specifies per-channel settings `S` for the channel `C`. An example
+/// follows:
+///
+///   ```yaml
+///   channels:
+///     'Mozilla/#rust':
+///       can see: 'freenode/##rust'
+///       seen by: 'Mozilla/#rust-.*'
+///     'Mozilla/#rust-offtopic':
+///       seen by: 'Mozilla/#rust-.*'
+///     'irc\.example\.net/#scryers':
+///       can see: '.*'
+///   ```
+///
+///   In the above example, per-channel settings are specified such that—
+///
+///   - the Mozilla channel `#rust` can see the freenode channel `##rust`,
+///
+///   - all Mozilla channels whose names begin with `#rust-` can see `#rust`,
+///
+///   - all Mozilla channels whose names begin with `#rust-` can see `#rust-offtopic`, and
+///
+///   - the fictitious channel `#scryers` can see all channels.
+///
+///   In the documentation for this field, a channel `L` being able to _see_ a channel `Q` means
+///   that the bot will be willing to display quotations from `Q` (1) in `L` and (2) in one-to-one
+///   messaging with any user who the bot believes is present in `L` (as of 2018-11-03, the bot is
+///   incapable of forming such beliefs, and so should not display quotations in one-to-one
+///   messaging). All channels can see themselves. By default, the bot will refuse to display
+///   quotations from a channel `Q` (1) in all channels that cannot see `Q` and (2) in one-to-one
+///   messaging with all users who the bot believes are not present in any channel that can see
+///   `Q`; however, administrators of the bot may be permitted to override this restriction if they
+///   so choose.
+///
+///   The available per-channel settings for each channel `C` follow, listed by their keys:
+///
+///   - `can see` — The value of this per-channel setting should be a string, which will be parsed
+///   as a regular expression using the Rust [`regex`] library and [its particular syntax][`regex`
+///   syntax]. Channel `C` will be able to see all channels whose names (including any leading `#`)
+///   match this regular expression. This regular expression is _anchored_; i.e., it will be
+///   considered to match a channel name only if it matches the whole of the channel name rather
+///   than only part of it; e.g., the anchored regular expression `#rust` will match the channel
+///   name `#rust` but not the channel name `#rust-offtopic`, which, in contrast, it would match
+///   were it not anchored.
+///
+///   - `seen by`: The value of this per-channel setting should be a string, which will be parsed
+///   as an anchored Rust regular expression in the same way as the value of the per-channel
+///   setting with the key `can see`. All channels whose names (including any leading `#`) match
+///   this regular expression will be able to see channel `C`.
+///
+///
 /// # Quotation files
 ///
 /// The database of quotations from which the bot is to quote should be provided as a directory
 /// named `quote` inside the bot's module data directory. This `quote` directory should contain
-/// zero or more [YAML] files, termed _quotation files_, whose filenames do not start with the full
-/// stop character (`.`). The text of each quotation file should constitute a YAML mapping with the
-/// key-value pairs (hereinafter termed _fields_) that follow, listed by their keys:
+/// zero or more [YAML] files, termed _quotation files_, whose filenames are not `config.yaml` and
+/// do not start with the full stop character (`.`). The text of each quotation file should
+/// constitute a YAML mapping with the key-value pairs (hereinafter termed _fields_) that follow,
+/// listed by their keys:
 ///
-/// - `channels` — The value of this field should be a string, which will be parsed as a regular
-/// expression using the Rust [`regex`] library and [its particular syntax][`regex` syntax].
-/// Quotations from this file will be shown only in channels whose names (including any leading
-/// `#`) match this regular expression, unless an administrator of the bot chooses to override this
-/// restriction. This regular expression will be prefixed with the anchor meta-character `^` and
-/// suffixed with the anchor meta-character `$`, such that the regular expression must match the
-/// whole of a channel name rather than only part of it. This field is **required**.
+/// - `channels` — The value of this field should be a string, . This field is **required**.
 ///
 /// - `format` — The value of this field should be a string indicating the manner in which the
 /// texts of the quotations in this file generally are formatted. This field is optional and
@@ -314,6 +375,27 @@ struct QuotationDatabase {
     quotations: Vec<Quotation>,
 }
 
+#[derive(Debug, Deserialize)]
+struct Config {
+    channels: BTreeMap<ChannelId, ChannelConfig>,
+
+    #[serde(default = "default_quotation_format_for_serde")]
+    quotation_format: QuotationFormat,
+}
+
+type ChannelId = DefaultAtom;
+
+#[derive(Debug, Deserialize)]
+struct ChannelConfig {
+    #[serde(default)]
+    #[serde(rename = "can see")]
+    can_see: Option<Regex<rx_cfg::Anchored>>,
+
+    #[serde(default)]
+    #[serde(rename = "seen by")]
+    seen_by: Option<Regex<rx_cfg::Anchored>>,
+}
+
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 struct QuotationFileId(usize);
 
@@ -368,6 +450,7 @@ struct QuotationIR {
     url: Option<SerdeUrl>,
 
     #[serde(default)]
+    #[serde(rename = "anti-ping tactic")]
     anti_ping_tactic: Option<AntiPingTactic>,
 }
 
