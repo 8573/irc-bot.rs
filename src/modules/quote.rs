@@ -18,6 +18,7 @@ use smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
@@ -145,21 +146,24 @@ use url_serde::Serde;
 /// For a full list of commands available, use the bot's `help` command.
 ///
 ///
+/// # Configuration
+///
+/// This bot module may be configured by the bot operator with a YAML configuration file named
+/// `config.yaml` located in a directory named `quote` inside the bot's module data directory. The
+/// text of the configuration file should constitute a YAML mapping with the key-value pairs
+/// (hereinafter termed _fields_) that follow, listed by their keys:
+///
+///
 /// # Quotation files
 ///
 /// The database of quotations from which the bot is to quote should be provided as a directory
 /// named `quote` inside the bot's module data directory. This `quote` directory should contain
-/// zero or more [YAML] files, termed _quotation files_, whose filenames do not start with the full
-/// stop character (`.`). The text of each quotation file should constitute a YAML mapping with the
-/// key-value pairs (hereinafter termed _fields_) that follow, listed by their keys:
+/// zero or more [YAML] files, termed _quotation files_, whose filenames are not `config.yaml` and
+/// do not start with the full stop character (`.`). The text of each quotation file should
+/// constitute a YAML mapping with the key-value pairs (hereinafter termed _fields_) that follow,
+/// listed by their keys:
 ///
-/// - `channels` — The value of this field should be a string, which will be parsed as a regular
-/// expression using the Rust [`regex`] library and [its particular syntax][`regex` syntax].
-/// Quotations from this file will be shown only in channels whose names (including any leading
-/// `#`) match this regular expression, unless an administrator of the bot chooses to override this
-/// restriction. This regular expression will be prefixed with the anchor meta-character `^` and
-/// suffixed with the anchor meta-character `$`, such that the regular expression must match the
-/// whole of a channel name rather than only part of it. This field is **required**.
+/// - `channels` — The value of this field should be a string, . This field is **required**.
 ///
 /// - `format` — The value of this field should be a string indicating the manner in which the
 /// texts of the quotations in this file generally are formatted. This field is optional and
@@ -267,7 +271,7 @@ use url_serde::Serde;
 /// ["Havvy"]: <https://github.com/Havvy>
 /// ["succ"]: <https://github.com/edef1c>
 /// ["ubsan"]: <https://github.com/ubsan>
-/// [YAML]: <http://yaml.org>
+/// [YAML]: <https://en.wikipedia.org/wiki/YAML>
 /// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
 /// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
 /// [`regex`]: <https://docs.rs/regex/*/regex/>
@@ -315,6 +319,12 @@ struct QuotationDatabase {
     files: SmallVec<[QuotationFileMetadata; 8]>,
 
     quotations: Vec<Quotation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    #[serde(default = "default_quotation_format_for_serde")]
+    quotation_format: QuotationFormat,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
