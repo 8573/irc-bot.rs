@@ -368,6 +368,7 @@ struct QuotationIR {
     url: Option<SerdeUrl>,
 
     #[serde(default)]
+    #[serde(rename = "anti-ping tactic")]
     anti_ping_tactic: Option<AntiPingTactic>,
 }
 
