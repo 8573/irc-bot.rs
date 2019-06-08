@@ -165,7 +165,7 @@ where
                 emitter.dump(node)?;
             }
 
-            Ok(to_cow_owned(s.trim_left_matches("---\n")))
+            Ok(to_cow_owned(s.trim_start_matches("---\n")))
         }
     }
 }

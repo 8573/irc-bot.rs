@@ -805,7 +805,7 @@ fn strip_chat_metadata(line: &str) -> Option<&str> {
     METADATA_REGEX
         .find(line)
         .and_then(|regex_match| line.get(regex_match.end()..))
-        .map(|line| line.trim_left_matches(">"))
+        .map(|line| line.trim_start_matches(">"))
 }
 
 fn strip_quotation_lines<F>(

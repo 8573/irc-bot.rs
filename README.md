@@ -116,7 +116,7 @@ Users of the Linux distribution **[NixOS]** may prefer to use the provided
 Supported Rust versions
 ---
 
-This package supports Rust version 1.29.1 and any Rust versions
+This package supports Rust version 1.34.2 and any Rust versions
 backwards-compatible therewith. This minimum supported Rust version may be
 increased at any time to the latest release of Rust understood by the
 maintainer(s) of this package to fix or to mitigate one or more security

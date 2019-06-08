@@ -328,7 +328,7 @@ pub(super) fn handle_msg(
     trace!(
         "[{}] Received {:?}",
         state.server_socket_addr_dbg_string(server_id),
-        input_msg.to_string().trim_right_matches("\r\n")
+        input_msg.to_string().trim_end_matches("\r\n")
     );
 
     match input_msg {

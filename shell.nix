@@ -1,10 +1,13 @@
 let
-  nixpkgs-mozilla = (import <nixpkgs> {}).fetchFromGitHub {
-    owner = "mozilla";
-    repo = "nixpkgs-mozilla";
-    # This revision is dated 2018-10-08.
-    rev = "c72ff151a3e25f14182569679ed4cd22ef352328";
-    sha256 = "0akyhdv5p0qiiyp6940k9bvismjqm9f8xhs0gpznjl6509dwgfxl";
+  nixpkgs-mozilla = (import <nixpkgs> {}).fetchgit {
+    # [2019-06-08] `fetchFromGitHub` was timing out, whereas `fetchgit` seems
+    # to work.
+    #owner = "mozilla";
+    #repo = "nixpkgs-mozilla";
+    url = "https://github.com/mozilla/nixpkgs-mozilla.git";
+    # This revision is dated 2019-05-09.
+    rev = "33bda5d711a82a2b511262ef3be367a86ef880df";
+    sha256 = "0lbb22paqsn3g0ajxzw4vj7lbn9ny2vdkp5sqm3a7wrc56a8r35b";
   };
 
   rust-overlay = "${nixpkgs-mozilla}/rust-overlay.nix";
@@ -21,7 +24,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     (rustChannelOf {
-      channel = "1.29.1";
+      channel = "1.34.2";
     }).rust
     clang
     git

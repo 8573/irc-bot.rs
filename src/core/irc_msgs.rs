@@ -60,8 +60,8 @@ pub(super) fn parse_msg_to_nick<'msg>(
 ) -> Option<&'msg str> {
     if is_msg_to_nick(target, text, nick) {
         Some(
-            text.trim_left_matches(nick)
-                .trim_left_matches(|c: char| [':', ','].contains(&c))
+            text.trim_start_matches(nick)
+                .trim_start_matches(|c: char| [':', ','].contains(&c))
                 .trim(),
         )
     } else {
