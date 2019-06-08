@@ -99,7 +99,7 @@ mod inner {
 ///   password to be used to verify that the bot is authorized to connect to the server, i.e., a
 ///   password to be sent with the IRC protocol command `PASS` at the start of the IRC session.
 ///
-///   - `tls` — The value of this field, if specified, should be `true` or `false`, specifying
+///   - `TLS` — The value of this field, if specified, should be `true` or `false`, specifying
 ///   whether the bot should attempt to connect to the server using Transport Layer Security (TLS).
 ///   This field is optional; its value defaults to `true`.
 ///
@@ -232,7 +232,7 @@ pub(super) struct Server {
     #[serde(rename = "server password")]
     pub(super) server_password: Option<String>,
 
-    #[serde(default = "mk_true")]
+    #[serde(default = "mk_true", rename = "TLS")]
     pub tls: bool,
 
     #[serde(default)]

@@ -66,7 +66,7 @@ example only) (TODO: Document these in rustdoc, with rich text):
         host: irc.mozilla.org
         port: 6697
         # Whether to use Transport Layer Security. Defaults to `true`.
-        tls: true
+        TLS: true
         # A list of channels that the bot should join after connecting. Note
         # that each channel's name should be wrapped in quotation marks or
         # otherwise escaped so that the '#' is not taken as the start of a
