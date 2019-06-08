@@ -209,7 +209,8 @@ pub(super) fn run(
                     provider_name = provider.name,
                     cmd_auth_lvl = auth_lvl,
                     quit_msg = s
-                ).into(),
+                )
+                .into(),
             )))
         }
         r => Ok(Some(r)),
@@ -239,7 +240,8 @@ mod tests {
                 .unwrap()
                 .unwrap_or(Yaml::Hash(Default::default())),
             arg_str,
-        ).map_err(|err| format!("{:?}", err))
+        )
+        .map_err(|err| format!("{:?}", err))
     }
 
     fn map<'a, I>(entries: I) -> Yaml

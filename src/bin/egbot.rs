@@ -18,18 +18,21 @@ fn main() {
                 .long("config-file")
                 .short("c")
                 .default_value("config.yaml"),
-        ).arg(
+        )
+        .arg(
             clap::Arg::with_name("data-dir")
                 .long("data-dir")
                 .short("d")
                 .default_value("data"),
-        ).arg(
+        )
+        .arg(
             clap::Arg::with_name("error-verbosity")
                 .long("error-verbosity")
                 .possible_values(&ErrorVerbosity::variants())
                 .case_insensitive(true)
                 .default_value("Display"),
-        ).get_matches();
+        )
+        .get_matches();
 
     env_logger::init();
 

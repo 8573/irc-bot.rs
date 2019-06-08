@@ -284,7 +284,8 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(quote),
             &[],
-        ).command(
+        )
+        .command(
             "quote-database-info",
             "",
             "Request information about the bot's database of quotations, such as the number of \
@@ -292,14 +293,16 @@ pub fn mk() -> Module {
             Auth::Public,
             Box::new(show_qdb_info),
             &[],
-        ).command(
+        )
+        .command(
             "quote-database-reload",
             "",
             "Tell the bot to reload its quotation database.",
             Auth::Admin,
             Box::new(reload_qdb),
             &[],
-        ).end()
+        )
+        .end()
 }
 
 lazy_static! {
@@ -505,26 +508,32 @@ fn prepare_quote_params<'arg>(
         arg,
         &YAML_STR_R,
         &YAML_STR_REGEX,
-    )?).map(|y| {
+    )?)
+    .map(|y| {
         scalar_to_str(
             y,
             Cow::Borrowed,
             "a search term given in the argument `regex`",
-        ).map_err(Into::into)
-    }).map_results(|s| s.as_ref().parse().map_err(Into::into))
+        )
+        .map_err(Into::into)
+    })
+    .map_results(|s| s.as_ref().parse().map_err(Into::into))
     .collect::<Result<Result<_>>>()??;
 
     let literals = iter_as_seq(get_arg_by_short_or_long_key(
         arg,
         &YAML_STR_S,
         &YAML_STR_STRING,
-    )?).map(|y| {
+    )?)
+    .map(|y| {
         scalar_to_str(
             y,
             Cow::Borrowed,
             "a search term given in the argument `string`",
-        ).map_err(Into::into)
-    }).collect::<Result<_>>()?;
+        )
+        .map_err(Into::into)
+    })
+    .collect::<Result<_>>()?;
 
     let tags = iter_as_seq(arg.get(&YAML_STR_TAG))
         .map(|y| {
@@ -532,8 +541,10 @@ fn prepare_quote_params<'arg>(
                 y,
                 Cow::Borrowed,
                 "a search term given in the argument `tag`",
-            ).map_err(Into::into)
-        }).collect::<Result<_>>()?;
+            )
+            .map_err(Into::into)
+        })
+        .collect::<Result<_>>()?;
 
     let id = arg
         .get(&YAML_STR_ID)
@@ -626,7 +637,8 @@ fn pick_quotation<'q>(
                     Err(e) => Some(Err(e)),
                 }
             },
-        ).next()
+        )
+        .next()
         .flip()?
         .ok_or_else(|| {
             Reaction::Reply(
@@ -637,8 +649,10 @@ fn pick_quotation<'q>(
                 } else {
                     "I have found no quotation matching the given query parameters in the files I \
                      am allowed to quote in this channel."
-                }.into(),
-            ).into()
+                }
+                .into(),
+            )
+            .into()
         })
 }
 
@@ -1009,7 +1023,8 @@ fn get_quotation_by_user_specified_id<'q, 'arg>(
                 "The given value of the parameter `id`, {input:?}, was not recognized as \
                  the identifier of a quotation in my quotation database.",
                 input = requested_quotation_id_str,
-            ).into(),
+            )
+            .into(),
         )),
         Err(parse_err) => Err(BotCmdResult::UserErrMsg(
             format!(
@@ -1017,7 +1032,8 @@ fn get_quotation_by_user_specified_id<'q, 'arg>(
                  quotation identifier: {parse_err}",
                 input = requested_quotation_id_str,
                 parse_err = parse_err,
-            ).into(),
+            )
+            .into(),
         )),
     }
 }
@@ -1029,25 +1045,26 @@ fn show_qdb_info(ctx: HandlerContext, _: &Yaml) -> Result<Reaction> {
     let any_files_are_visible = !file_permissions.is_empty() && !file_permissions.all_false();
 
     Ok(Reaction::Msgs(
-        vec![
-            format!(
-                "I have {quotation_qty} total quotation(s) in {file_qty} file(s). \
-                 The files I may name in this channel, along with their quotation counts, are: \
-                 {file_list}.",
-                quotation_qty = qdb.quotations.len(),
-                file_qty = qdb.files.len(),
-                file_list = qdb
-                    .files
-                    .iter()
-                    .filter(|file| file_permissions.get(file.array_index()) == Some(true))
-                    .map(|file| format!(
-                        "{name} ({quotation_count})",
-                        name = file.name,
-                        quotation_count = file.quotation_count
-                    )).pad_using(1, |_| "<none>".to_owned())
-                    .format(", "),
-            ).into(),
-        ].into(),
+        vec![format!(
+            "I have {quotation_qty} total quotation(s) in {file_qty} file(s). \
+             The files I may name in this channel, along with their quotation counts, are: \
+             {file_list}.",
+            quotation_qty = qdb.quotations.len(),
+            file_qty = qdb.files.len(),
+            file_list = qdb
+                .files
+                .iter()
+                .filter(|file| file_permissions.get(file.array_index()) == Some(true))
+                .map(|file| format!(
+                    "{name} ({quotation_count})",
+                    name = file.name,
+                    quotation_count = file.quotation_count
+                ))
+                .pad_using(1, |_| "<none>".to_owned())
+                .format(", "),
+        )
+        .into()]
+        .into(),
     ))
 }
 
@@ -1080,7 +1097,8 @@ fn reload_qdb(ctx: HandlerContext, _: &Yaml) -> Result<Reaction> {
              pieces into which chat-format quotations' texts get broken, assuming no anti-ping \
              munging, is {chat_text_pieces_5ns:?}.",
             chat_text_pieces_5ns = chat_text_pieces_5ns,
-        ).into(),
+        )
+        .into(),
     ))
 }
 
@@ -1120,7 +1138,8 @@ fn on_load(state: &State) -> Result<()> {
         .into_iter()
         .filter_entry(|entry| {
             entry.file_type().is_file() && !entry.file_name().to_string_lossy().starts_with(".")
-        }) {
+        })
+    {
         let entry = entry?;
         let path = entry.path();
         trace!("Loading quotation file: {}", path.display());
@@ -1153,7 +1172,8 @@ fn on_load(state: &State) -> Result<()> {
         {
             return Err(ErrorKind::IntegerOverflow(
                 "Attempted to load a quotation database containing too many quotations.".into(),
-            ).into());
+            )
+            .into());
         }
 
         new_qdb

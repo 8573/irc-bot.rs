@@ -89,7 +89,8 @@ impl State {
             .read()
             .map_err(|_poisoned_guard| {
                 ErrorKind::LockPoisoned("the server connections (`aatxe_clients`)".into())
-            })?.get(&server_id)
+            })?
+            .get(&server_id)
             .ok_or(ErrorKind::UnknownServer(server_id))?)
     }
 

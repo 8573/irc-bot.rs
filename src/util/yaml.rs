@@ -244,7 +244,8 @@ pub fn get_arg_by_short_or_long_key<'a>(
         (Some(_), Some(_)) => Err(ErrorKind::ArgGivenByBothLongAndShortKey(
             any_to_str(long_key, to_cow_owned)?,
             any_to_str(short_key, to_cow_owned)?,
-        ).into()),
+        )
+        .into()),
         (None, None) => Ok(None),
     }
 }
@@ -331,7 +332,7 @@ where
         &*str::YAML_STR_ELLIPSIS,
         &*str::YAML_STR_ELLIPSIS_IN_SQUARE_BRACKETS,
     ]
-        .contains(&expected)
+    .contains(&expected)
     {
         return Ok(());
     }

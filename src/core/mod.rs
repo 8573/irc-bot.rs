@@ -234,18 +234,20 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
     match state.load_modules(modules.into_iter().map(|f| f()), ModuleLoadMode::Add) {
         Ok(()) => trace!("Loaded all requested modules without error."),
-        Err(errs) => for err in errs {
-            match state.error_handler.run(err) {
-                ErrorReaction::Proceed => {}
-                ErrorReaction::Quit(msg) => {
-                    error!(
-                        "Terminal error while loading modules: {:?}",
-                        msg.unwrap_or_default().as_ref()
-                    );
-                    return;
+        Err(errs) => {
+            for err in errs {
+                match state.error_handler.run(err) {
+                    ErrorReaction::Proceed => {}
+                    ErrorReaction::Quit(msg) => {
+                        error!(
+                            "Terminal error while loading modules: {:?}",
+                            msg.unwrap_or_default().as_ref()
+                        );
+                        return;
+                    }
                 }
             }
-        },
+        }
     }
 
     info!(

@@ -78,8 +78,10 @@ impl Trigger {
                     "the regex for trigger {uuid} ({name:?})",
                     name = self.name,
                     uuid = self.uuid.hyphenated()
-                ).into(),
-            ).into()
+                )
+                .into(),
+            )
+            .into()
         })
     }
 }

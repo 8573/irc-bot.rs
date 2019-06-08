@@ -71,7 +71,8 @@ pub(super) fn send_main(
                 // TODO: This lock being poisoned is so grave that it deserves its own error kind.
                 return Err(ErrorKind::LockPoisoned(
                     "the associative array of IRC connections".into(),
-                ).into());
+                )
+                .into());
             }
         };
 
@@ -149,8 +150,10 @@ fn send_reaction_with_err_cb<ErrCb>(
             Ok(()) => {}
             Err(e) => err_cb(e.into()),
         },
-        LibReaction::Multi(reactions) => for reaction in reactions {
-            send_reaction(state, aatxe_client, thread_label, reaction)
-        },
+        LibReaction::Multi(reactions) => {
+            for reaction in reactions {
+                send_reaction(state, aatxe_client, thread_label, reaction)
+            }
+        }
     }
 }

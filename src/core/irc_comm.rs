@@ -269,7 +269,8 @@ fn handle_bot_command_or_trigger(
             aatxe::Command::PRIVMSG(
                 target,
                 format!("Encountered error while trying to handle message: {}", e),
-            ).into(),
+            )
+            .into(),
         )),
     }
 }
@@ -281,24 +282,28 @@ fn bot_command_reaction(cmd_name: &str, result: BotCmdResult) -> Reaction {
             "My apologies, but you do not appear to have sufficient \
              authority to use my {:?} command.",
             cmd_name
-        ).into()),
+        )
+        .into()),
         BotCmdResult::ParamUnauthorized(param_name) => Err(format!(
             "My apologies, but you do not appear to have sufficient \
              authority to use the parameter {:?} of my {:?} command.",
             param_name, cmd_name
-        ).into()),
+        )
+        .into()),
         BotCmdResult::SyntaxErr => Err("Syntax error. Try my `help` command.".into()),
         BotCmdResult::ArgMissing(arg_name) => Err(format!(
             "Syntax error: For command {:?}, the argument {:?} \
              is required, but it was not given.",
             cmd_name, arg_name
-        ).into()),
+        )
+        .into()),
         BotCmdResult::ArgMissing1To1(arg_name) => Err(format!(
             "Syntax error: When command {:?} is used \
              outside of a channel, the argument {:?} is \
              required, but it was not given.",
             cmd_name, arg_name
-        ).into()),
+        )
+        .into()),
         BotCmdResult::LibErr(e) => Err(format!("Error: {}", e).into()),
         BotCmdResult::UserErrMsg(s) => Err(format!("User error: {}", s).into()),
         BotCmdResult::BotErrMsg(s) => Err(format!("Internal error: {}", s).into()),
@@ -314,7 +319,8 @@ pub fn mk_quit<'a>(msg: Option<Cow<'a, str>>) -> LibReaction<Message> {
     let quit = aatxe::Command::QUIT(
         msg.map(Cow::into_owned)
             .or_else(|| Some(pkg_info::BRIEF_CREDITS_STRING.clone())),
-    ).into();
+    )
+    .into();
 
     LibReaction::RawMsg(quit)
 }
@@ -415,7 +421,8 @@ fn update_prefix_info(state: &State, _server_id: ServerId, prefix: &MsgPrefix) -
             );
             poisoned_guard.into_inner()
         }
-    }.update_from(prefix);
+    }
+    .update_from(prefix);
 
     Ok(())
 }
@@ -435,6 +442,7 @@ fn send_msg_prefix_update_request(
         aatxe::Command::PRIVMSG(
             state.nick(server_id)?.to_owned(),
             UPDATE_MSG_PREFIX_STR.to_owned(),
-        ).into(),
+        )
+        .into(),
     ))
 }

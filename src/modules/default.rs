@@ -82,7 +82,8 @@ fn join(_: HandlerContext, arg: &Yaml) -> Result<Reaction> {
         format!(
             "JOIN {}",
             util::yaml::scalar_to_str(arg, Cow::Borrowed, "the argument to the command `join`")?
-        ).into(),
+        )
+        .into(),
     ))
 }
 
@@ -118,8 +119,10 @@ fn part(
             chan,
             if comment.is_some() { " :" } else { "" },
             comment.unwrap_or_default()
-        ).into(),
-    ).into())
+        )
+        .into(),
+    )
+    .into())
 }
 
 fn quit(_: HandlerContext, arg: &Yaml) -> Result<Reaction> {
@@ -145,8 +148,10 @@ fn bot_fw_info(HandlerContext { state, .. }: HandlerContext, _: &Yaml) -> BotCmd
             name = state.framework_crate_name(),
             ver = state.framework_version_str(),
             url = state.framework_homepage_url_str(),
-        ).into(),
-    ).into()
+        )
+        .into(),
+    )
+    .into()
 }
 
 fn help(HandlerContext { state, .. }: HandlerContext, arg: &Yaml) -> BotCmdResult {
@@ -181,8 +186,10 @@ fn help(HandlerContext { state, .. }: HandlerContext, arg: &Yaml) -> BotCmdResul
                 format!("- [module {:?}, auth level {:?}]", provider.name, auth_lvl).into(),
                 format!("- Syntax: {} {}", name, usage_str).into(),
                 help_msg.clone(),
-            ].into(),
-        ).into()
+            ]
+            .into(),
+        )
+        .into()
     } else if let Some(&Yaml::String(ref list_name)) = list {
         let list_names = ["commands", "lists"];
 
@@ -199,8 +206,10 @@ fn help(HandlerContext { state, .. }: HandlerContext, arg: &Yaml) -> BotCmdResul
                 format!(
                     "List {:?} not found. Available lists: {:?}",
                     list_name, list_names
-                ).into(),
-            ).into()
+                )
+                .into(),
+            )
+            .into()
         }
     } else {
         Reaction::Msgs(
@@ -211,9 +220,12 @@ fn help(HandlerContext { state, .. }: HandlerContext, arg: &Yaml) -> BotCmdResul
                     "For this bot software's documentation, including an introduction to the \
                      command syntax, see <{homepage}>",
                     homepage = state.framework_homepage_url_str(),
-                ).into(),
-            ].into(),
-        ).into()
+                )
+                .into(),
+            ]
+            .into(),
+        )
+        .into()
     }
 }
 

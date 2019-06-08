@@ -414,7 +414,8 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 ),
                 ..Default::default()
             })
-        }).collect();
+        })
+        .collect();
 
     Ok(Config {
         nickname,

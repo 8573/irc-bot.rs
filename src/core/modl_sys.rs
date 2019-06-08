@@ -326,7 +326,8 @@ impl State {
                 Ok(()) => None,
                 Err(e) => Some(e),
             }
-        })).collect::<Vec<Error>>();
+        }))
+        .collect::<Vec<Error>>();
 
         if errs.is_empty() {
             Ok(())
@@ -355,10 +356,11 @@ impl State {
             (_, None) | (ModuleLoadMode::Replace, _) | (ModuleLoadMode::Force, _) => None,
             (ModuleLoadMode::Add, Some(old)) => Some(old),
         } {
-            return Err(vec![
-                ErrorKind::ModuleRegistryClash(existing_module.dbg_info(), module.dbg_info())
-                    .into(),
-            ]);
+            return Err(vec![ErrorKind::ModuleRegistryClash(
+                existing_module.dbg_info(),
+                module.dbg_info(),
+            )
+            .into()]);
         }
 
         let module = Arc::new(module);
@@ -373,7 +375,8 @@ impl State {
                     Ok(()) => None,
                     Err(e) => Some(e),
                 },
-            ).collect::<Vec<Error>>();
+            )
+            .collect::<Vec<Error>>();
 
         if !errs.is_empty() {
             return Err(errs);
