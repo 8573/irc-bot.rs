@@ -71,7 +71,9 @@ mod inner {
 ///
 ///   - `name` — The value of this field should be a string that does not include a US-ASCII
 ///   character considered a Common Separator in Unicode (namely `,`, `.`, `/`, or `:`). This field
-///   specifies a name to be used to identify the server.
+///   specifies a name to be used to identify the server. This field's value should be enclosed in
+///   quotation marks (`'...'` or `"..."`) so that any leading `#` character is not interpreted as
+///   the start of a comment.
 ///
 ///     A concept that depends on this field is the **_channel identifier_**. For each server, each
 ///     IRC channel thereon that is known to the bot is assigned a channel identifier, which is a
