@@ -3,13 +3,19 @@ irc-bot.rs
 
 [![Docs.rs][b-docs]][docs]
 [![Crates.io][b-crate]][crate]
+[![GitLab CI status][b-CI-GitLab]][CI-GitLab]
+[![Travis CI status][b-CI-Travis]][CI-Travis]
 
 A library for writing [Internet Relay Chat (IRC) bots] in the programming
 language [Rust], additionally providing a pre-configured bot for immediate
 use.
 
+[CI-GitLab]: <https://gitlab.com/c74d/irc-bot.rs/pipelines>
+[CI-Travis]: <https://travis-ci.org/8573/irc-bot.rs>
 [Internet Relay Chat (IRC) bots]: <https://en.wikipedia.org/wiki/IRC_bot>
 [Rust]: <https://www.rust-lang.org>
+[b-CI-GitLab]: <https://gitlab.com/c74d/irc-bot.rs/badges/dev/pipeline.svg>
+[b-CI-Travis]: <https://api.travis-ci.org/8573/irc-bot.rs.svg?branch=dev>
 [b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
 [b-docs]: <https://docs.rs/irc-bot/badge.svg>
 [crate]: <https://crates.io/crates/irc-bot>
