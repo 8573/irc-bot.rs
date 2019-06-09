@@ -1,0 +1,24 @@
+# Vim: set et ts=2 sts=2 sw=2
+
+include:
+  - '/RUST_VERSION.yaml'
+
+test:
+  before_script:
+    - apt-get update -yqq
+    - apt-get install -yqq --no-install-recommends build-essential
+    - cargo install --force cargo-audit
+  script:
+    - rustc --version && cargo --version
+    - cargo test --all --verbose
+    - cargo audit
+
+pages:
+  stage: deploy
+  script:
+    - cargo doc
+    - mkdir -p public/${CI_COMMIT_REF_NAME}
+    - mv target/doc public/${CI_COMMIT_REF_NAME}/
+  artifacts:
+    paths: [public]
+  only: [dev]

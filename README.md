@@ -1,20 +1,36 @@
-irc-bot.rs [![Docs.rs][b-docs]][docs] [![Crates.io][b-crate]][crate]
+irc-bot.rs
 ===
+
+[![Docs.rs][b-docs]][docs]
+[![Crates.io][b-crate]][crate]
+[![GitLab CI status][b-CI-GitLab]][CI-GitLab]
+[![Travis CI status][b-CI-Travis]][CI-Travis]
 
 A library for writing [Internet Relay Chat (IRC) bots] in the programming
 language [Rust], additionally providing a pre-configured bot for immediate
 use.
 
+[CI-GitLab]: <https://gitlab.com/c74d/irc-bot.rs/pipelines>
+[CI-Travis]: <https://travis-ci.org/8573/irc-bot.rs>
 [Internet Relay Chat (IRC) bots]: <https://en.wikipedia.org/wiki/IRC_bot>
 [Rust]: <https://www.rust-lang.org>
-
-What documentation there is should be available [on Docs.rs][docs].
-
-[docs]: <https://docs.rs/irc-bot>
-[b-docs]: <https://docs.rs/irc-bot/badge.svg>
-
-[crate]: <https://crates.io/crates/irc-bot>
+[b-CI-GitLab]: <https://gitlab.com/c74d/irc-bot.rs/badges/dev/pipeline.svg>
+[b-CI-Travis]: <https://api.travis-ci.org/8573/irc-bot.rs.svg?branch=dev>
 [b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
+[b-docs]: <https://docs.rs/irc-bot/badge.svg>
+[crate]: <https://crates.io/crates/irc-bot>
+[docs]: <https://docs.rs/irc-bot>
+
+
+Documentation
+---
+
+What documentation there is for the versions of this crate published to
+Crates.io should be available [on Docs.rs][docs]. Also available is
+[documentation for the development version][docs-dev] of this crate, i.e., for
+the latest build of this crate from the Git branch `dev`.
+
+[docs-dev]: <https://c74d.gitlab.io/irc-bot.rs/dev/doc/irc_bot/>
 
 
 Quick-start
@@ -116,12 +132,13 @@ Users of the Linux distribution **[NixOS]** may prefer to use the provided
 Supported Rust versions
 ---
 
-This package supports Rust version 1.34.2 and any Rust versions
-backwards-compatible therewith. This minimum supported Rust version may be
-increased at any time to the latest release of Rust understood by the
-maintainer(s) of this package to fix or to mitigate one or more security
-vulnerabilities in the standard library or compiler output. The minimum
-supported Rust version may not be increased for reasons unrelated to security.
+This package supports the Rust version noted in the file [`RUST_VERSION.yaml`]
+and any Rust versions backwards-compatible therewith. This minimum supported
+Rust version may be increased at any time to the latest release of Rust
+understood by the maintainer(s) of this package to fix or to mitigate one or
+more security vulnerabilities in the standard library or compiler output. The
+minimum supported Rust version may not be increased for reasons unrelated to
+security.
 
 Although increases in the minimum supported Rust version are breaking changes,
 they are also, under this policy, bug-fixes, and for the purposes of [SemVer]
@@ -132,4 +149,4 @@ not to support, as confessedly doctrinairely as such a denial of support may
 ignore users' reasons for not updating.
 
 [SemVer]: <https://semver.org>
-
+[`RUST_VERSION.yaml`]: <https://github.com/8573/irc-bot.rs/blob/master/RUST_VERSION.yaml>

@@ -16,12 +16,17 @@ with import <nixpkgs> {
   ];
 };
 
+let
+  GitLab-CI-container-image-id = (lib.importJSON ./RUST_VERSION.yaml).image;
+  Rust-version-str = lib.removePrefix "rust:" GitLab-CI-container-image-id;
+in
+
 stdenv.mkDerivation rec {
   name = "irc-bot.rs";
 
   nativeBuildInputs = [
     (rustChannelOf {
-      channel = "1.34.2";
+      channel = Rust-version-str;
     }).rust
     clang
     git
