@@ -6,9 +6,9 @@ irc-bot.rs
 [![GitLab CI status][b-CI-GitLab]][CI-GitLab]
 [![Travis CI status][b-CI-Travis]][CI-Travis]
 
-A library for writing [Internet Relay Chat (IRC) bots] in the programming
-language [Rust], additionally providing a pre-configured bot for immediate
-use.
+`irc-bot` is a library for writing [Internet Relay Chat (IRC) bots] in the
+programming language [Rust], additionally providing a pre-configured bot for
+immediate use.
 
 This project is hosted both [on GitHub] and [on GitLab]; the repositories are
 synchronized automatically.
@@ -41,8 +41,8 @@ the latest build of this crate from the Git branch `dev`.
 Quick-start
 ---
 
-To use this library without writing one's own bot with it, run the provided
-program `src/bin/egbot.rs`:
+To use this library without writing one's own bot with it, one can run the
+provided program `src/bin/egbot.rs`:
 
     $ # For most people:
     $ cargo run
@@ -55,9 +55,9 @@ also a pun on the name of [Eggdrop], an old IRC bot.
 ["e.g."]: <https://en.wiktionary.org/wiki/e.g.>
 [Eggdrop]: <https://en.wikipedia.org/wiki/Eggdrop>
 
-The bot can be configured by editing the [YAML] file `config.yaml`. One should
-at least put one's IRC nick in the `admins` field — e.g., if one's nick is
-["Ferris"]:
+The bot can be configured by editing the [YAML] file `config.yaml`. One at
+least should put one's IRC nickname ("nick") in the `admins` field — e.g., if
+one's nick is ["Ferris"]:
 
     admins:
       - nick: Ferris
