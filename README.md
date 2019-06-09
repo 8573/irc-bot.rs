@@ -7,14 +7,21 @@ use.
 
 [Internet Relay Chat (IRC) bots]: <https://en.wikipedia.org/wiki/IRC_bot>
 [Rust]: <https://www.rust-lang.org>
-
-What documentation there is should be available [on Docs.rs][docs].
-
-[docs]: <https://docs.rs/irc-bot>
-[b-docs]: <https://docs.rs/irc-bot/badge.svg>
-
-[crate]: <https://crates.io/crates/irc-bot>
 [b-crate]: <https://img.shields.io/crates/v/irc-bot.svg>
+[b-docs]: <https://docs.rs/irc-bot/badge.svg>
+[crate]: <https://crates.io/crates/irc-bot>
+[docs]: <https://docs.rs/irc-bot>
+
+
+Documentation
+---
+
+What documentation there is for the versions of this crate published to
+Crates.io should be available [on Docs.rs][docs]. Also available is
+[documentation for the development version][docs-dev] of this crate, i.e., for
+the latest build of this crate from the Git branch `dev`.
+
+[docs-dev]: <https://c74d.gitlab.io/irc-bot.rs/dev/doc/irc_bot/>
 
 
 Quick-start
