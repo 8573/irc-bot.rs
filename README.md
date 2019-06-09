@@ -38,6 +38,32 @@ the latest build of this crate from the Git branch `dev`.
 [docs-dev]: <https://c74d.gitlab.io/irc-bot.rs/dev/doc/irc_bot/>
 
 
+Contributing
+---
+
+Please see the file [`CONTRIBUTING.md`]. Please note that the said file
+contains some terms, particularly concerning licensing of contributions, to
+which one must agree to contribute to this project.
+
+[`CONTRIBUTING.md`]: <https://github.com/8573/irc-bot.rs/blob/dev/CONTRIBUTING.md>
+
+
+Licensing
+---
+
+All parts of this crate are available under the standard open-source software
+licence or licences specified in the file [`Cargo.toml`]. From the earliest
+release of this crate, this has been [the Apache License, version 2.0].
+
+Some portions of this crate may be available under other licences in addition,
+but, in any such case, one may opt to accept such portions solely under the
+crate-wide licence (or any of the crate-wide licences, if there are multiple
+crate-wide licences).
+
+[`Cargo.toml`]: <https://github.com/8573/irc-bot.rs/blob/dev/Cargo.toml>
+[the Apache License, version 2.0]: <https://spdx.org/licenses/Apache-2.0.html>
+
+
 Quick-start
 ---
 
