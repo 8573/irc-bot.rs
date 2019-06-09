@@ -123,12 +123,13 @@ Users of the Linux distribution **[NixOS]** may prefer to use the provided
 Supported Rust versions
 ---
 
-This package supports Rust version 1.34.2 and any Rust versions
-backwards-compatible therewith. This minimum supported Rust version may be
-increased at any time to the latest release of Rust understood by the
-maintainer(s) of this package to fix or to mitigate one or more security
-vulnerabilities in the standard library or compiler output. The minimum
-supported Rust version may not be increased for reasons unrelated to security.
+This package supports the Rust version noted in the file [`RUST_VERSION.yaml`]
+and any Rust versions backwards-compatible therewith. This minimum supported
+Rust version may be increased at any time to the latest release of Rust
+understood by the maintainer(s) of this package to fix or to mitigate one or
+more security vulnerabilities in the standard library or compiler output. The
+minimum supported Rust version may not be increased for reasons unrelated to
+security.
 
 Although increases in the minimum supported Rust version are breaking changes,
 they are also, under this policy, bug-fixes, and for the purposes of [SemVer]
@@ -139,4 +140,4 @@ not to support, as confessedly doctrinairely as such a denial of support may
 ignore users' reasons for not updating.
 
 [SemVer]: <https://semver.org>
-
+[`RUST_VERSION.yaml`]: <https://github.com/8573/irc-bot.rs/blob/master/RUST_VERSION.yaml>

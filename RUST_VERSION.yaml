@@ -1,0 +1,14 @@
+{
+  "image": "rust:1.34.2",
+
+  ".NOTES": [
+
+    "The Rust version noted in the `image` field above is the minimum Rust
+    version supported by this crate, as explained in the README.",
+
+    "This file is nominally a YAML file, because `.gitlab-ci.yml` requires that
+    it be so, but is written in the subset of YAML that is valid JSON, because
+    `shell.nix` requires that it be so."
+
+  ]
+}

@@ -1,6 +1,7 @@
 # Vim: set et ts=2 sts=2 sw=2
 
-image: "rust:1.34.2"
+include:
+  - '/RUST_VERSION.yaml'
 
 test:
   before_script:
