@@ -10,6 +10,10 @@ keywords = ["irc", "internet-relay-chat", "internet_relay_chat", "bot", "bots"]
 categories = ["network-programming"]
 license = "Apache-2.0"
 
+[badges]
+gitlab = { repository = "c74d/irc-bot.rs", branch = "dev" }
+travis-ci = { repository = "8573/irc-bot.rs", branch = "dev" }
+
 [dependencies]
 clap = "2.32.0"
 clockpro-cache = "=0.1.6" # Version locked for <https://github.com/jedisct1/rust-clockpro-cache/issues/5>
