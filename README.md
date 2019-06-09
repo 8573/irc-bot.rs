@@ -131,7 +131,7 @@ Users of the Linux distribution **[NixOS]** may prefer to use the provided
     $ make build
 
 [NixOS]: <https://nixos.org>
-[`Makefile`]: <https://github.com/8573/irc-bot.rs/blob/master/Makefile>
+[`Makefile`]: <https://github.com/8573/irc-bot.rs/blob/dev/Makefile>
 
 
 Supported Rust versions
@@ -154,4 +154,4 @@ not to support, as confessedly doctrinairely as such a denial of support may
 ignore users' reasons for not updating.
 
 [SemVer]: <https://semver.org>
-[`RUST_VERSION.yaml`]: <https://github.com/8573/irc-bot.rs/blob/master/RUST_VERSION.yaml>
+[`RUST_VERSION.yaml`]: <https://github.com/8573/irc-bot.rs/blob/dev/RUST_VERSION.yaml>
