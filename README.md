@@ -1,5 +1,8 @@
-irc-bot.rs [![Docs.rs][b-docs]][docs] [![Crates.io][b-crate]][crate]
+irc-bot.rs
 ===
+
+[![Docs.rs][b-docs]][docs]
+[![Crates.io][b-crate]][crate]
 
 A library for writing [Internet Relay Chat (IRC) bots] in the programming
 language [Rust], additionally providing a pre-configured bot for immediate
