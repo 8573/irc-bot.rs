@@ -20,7 +20,11 @@ This file contains—
    agree to license your contributions under `Apache-2.0 OR MIT`. These
    licences are standard in open-source Rust development.
 
-3. You agree that you have all legal rights required for you to agree to these
+3. You agree to the release of each contribution you make to this project
+   together with, and under the same licensing terms as, all other
+   contributions to this project, including those made by the original author.
+
+4. You agree that you have all legal rights required for you to agree to these
    provisions.
 
 [SPDX License Expression syntax]: <https://www.kernel.org/doc/html/latest/process/license-rules.html#license-identifier-syntax>
