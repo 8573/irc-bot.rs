@@ -11,7 +11,7 @@ test:
   script:
     - rustc --version && cargo --version
     - cargo test --all --verbose
-    - cargo audit
+    - test -r 'Cargo.lock' && cargo audit
 
 pages:
   stage: deploy

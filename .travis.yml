@@ -15,4 +15,4 @@ before_script:
 
 script:
   - cargo test --all --verbose
-  - cargo audit
+  - test -r 'Cargo.lock' && cargo audit
