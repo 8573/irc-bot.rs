@@ -13,6 +13,13 @@ immediate use.
 This project is hosted both [on GitHub] and [on GitLab]; the repositories are
 synchronized automatically.
 
+If you use, or are interested in using, this library, you may post in one of
+the support tickets that have been opened [on GitHub][users-ticket-GH] and [on
+GitLab][users-ticket-GL] in which for people to note their interest in this
+library so that this library's maintainers can survey them as to, notify them
+of, and/or help them adjust to changes in the API of this library, and perhaps
+provide other support.
+
 [CI-GitLab]: <https://gitlab.com/c74d/irc-bot.rs/pipelines>
 [CI-Travis]: <https://travis-ci.org/8573/irc-bot.rs>
 [Internet Relay Chat (IRC) bots]: <https://en.wikipedia.org/wiki/IRC_bot>
@@ -25,6 +32,8 @@ synchronized automatically.
 [docs]: <https://docs.rs/irc-bot>
 [on GitHub]: <https://github.com/8573/irc-bot.rs>
 [on GitLab]: <https://gitlab.com/c74d/irc-bot.rs>
+[users-ticket-GH]: <https://github.com/8573/irc-bot.rs/issues/50>
+[users-ticket-GL]: <https://gitlab.com/c74d/irc-bot.rs/issues/1>
 
 
 Documentation
