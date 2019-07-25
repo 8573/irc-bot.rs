@@ -66,8 +66,6 @@ pub(super) fn send_main(
         let aatxe_clients = match state.aatxe_clients.read() {
             Ok(map) => map,
             Err(_) => {
-                outbox_receiver.disconnect();
-
                 // TODO: This lock being poisoned is so grave that it deserves its own error kind.
                 return Err(ErrorKind::LockPoisoned(
                     "the associative array of IRC connections".into(),
