@@ -8,8 +8,10 @@ test:
     - apt-get update -yqq
     - apt-get install -yqq --no-install-recommends build-essential
     - cargo install --force cargo-audit
+    - cargo install --force cargo-tree
   script:
     - rustc --version && cargo --version
+    - cargo tree
     - cargo test --all --verbose
     - test -r 'Cargo.lock' && cargo audit
 
