@@ -1,5 +1,16 @@
 #![forbid(unsafe_code)]
 
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
+extern crate strum_macros;
+
+extern crate strum;
+
 extern crate env_logger;
 extern crate irc_bot;
 
@@ -9,7 +20,12 @@ extern crate clap;
 #[macro_use]
 extern crate log;
 
-use irc_bot::modules;
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
+
+mod modules;
 
 fn main() {
     let args = clap::App::new("egbot")

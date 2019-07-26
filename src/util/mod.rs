@@ -10,12 +10,12 @@ pub(crate) mod lock;
 pub mod regex;
 pub mod yaml;
 
-pub(crate) const STATIC_REGEX_PARSE_ERR_MSG: &str =
+pub const STATIC_REGEX_PARSE_ERR_MSG: &str =
     "Apparently, we have a syntax error in a static regex.";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[must_use]
-pub(crate) struct MustUse<T>(pub T);
+pub struct MustUse<T>(pub T);
 
 pub(crate) fn run_handler<S1, S2, F, R>(
     feature_kind: S1,
@@ -41,7 +41,7 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Munge<'a> {
+pub struct Munge<'a> {
     string: &'a str,
     munge_points: SmallVec<[usize; 32]>,
     outgoing_str: Option<&'a str>,
@@ -64,7 +64,7 @@ pub(crate) struct Munge<'a> {
 /// TODO: A generalized version perhaps should operate over graphemes (as does the function
 /// `create_non_highlighting_name` in <https://github.com/nuxeh/url-bot-rs>) rather than Unicode
 /// scalar values; I should investigate the distinction more once my oaths permit.
-pub(crate) fn zwsp_munge<'a, 'b, I, S>(string: &'a str, needles: I) -> Munge<'a>
+pub fn zwsp_munge<'a, 'b, I, S>(string: &'a str, needles: I) -> Munge<'a>
 where
     I: IntoIterator<Item = S>,
     S: 'b + AsRef<str>,

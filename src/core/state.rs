@@ -80,7 +80,7 @@ impl State {
         }
     }
 
-    pub(crate) fn read_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
+    pub fn read_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
     where
         F: FnOnce(&aatxe::IrcClient) -> Result<T>,
     {

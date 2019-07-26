@@ -1,7 +1,9 @@
-use core::BotCmdAuthLvl as Auth;
-use core::*;
+extern crate yaml_rust;
+
+use irc_bot::BotCmdAuthLvl as Auth;
+use irc_bot::*;
 use std::mem;
-use yaml_rust::Yaml;
+use self::yaml_rust::Yaml;
 
 pub fn mk() -> Module {
     mk_module("test")

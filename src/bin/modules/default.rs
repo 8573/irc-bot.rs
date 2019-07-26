@@ -1,16 +1,20 @@
-use core::BotCmdAuthLvl as Auth;
-use core::*;
-use regex::Captures;
+extern crate regex;
+extern crate try_map;
+extern crate yaml_rust;
+
+use irc_bot::BotCmdAuthLvl as Auth;
+use irc_bot::*;
+use self::regex::Captures;
 use std::borrow::Cow;
-use try_map::FallibleMapExt;
-use util;
-use util::to_cow_owned;
-use util::yaml::str::YAML_STR_CHAN;
-use util::yaml::str::YAML_STR_CMD;
-use util::yaml::str::YAML_STR_LIST;
-use util::yaml::str::YAML_STR_MSG;
-use util::yaml::FW_SYNTAX_CHECK_FAIL;
-use yaml_rust::Yaml;
+use self::try_map::FallibleMapExt;
+use irc_bot::util;
+use irc_bot::util::to_cow_owned;
+use irc_bot::util::yaml::str::YAML_STR_CHAN;
+use irc_bot::util::yaml::str::YAML_STR_CMD;
+use irc_bot::util::yaml::str::YAML_STR_LIST;
+use irc_bot::util::yaml::str::YAML_STR_MSG;
+use irc_bot::util::yaml::FW_SYNTAX_CHECK_FAIL;
+use self::yaml_rust::Yaml;
 
 pub fn mk() -> Module {
     mk_module("default")

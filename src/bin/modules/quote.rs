@@ -1,66 +1,79 @@
 // TODO: remove this
 #![allow(unused)]
 
-use clockpro_cache::ClockProCache;
-use core::BotCmdAuthLvl as Auth;
-use core::*;
-use inlinable_string::InlinableString;
-use irc::client::data::User as AatxeUser;
-use irc::client::prelude::Client as AatxeClient;
-use itertools::Itertools;
-use quantiles::ckms::CKMS;
-use rando::Rando;
-use ref_slice::ref_slice;
-use regex;
-use serde_yaml;
-use smallbitvec::SmallBitVec;
-use smallvec::SmallVec;
+extern crate clockpro_cache;
+extern crate irc;
+extern crate inlinable_string;
+extern crate itertools;
+extern crate quantiles;
+extern crate rando;
+extern crate ref_slice;
+extern crate serde_yaml;
+extern crate smallbitvec;
+extern crate smallvec;
+extern crate string_cache;
+extern crate strum;
+extern crate try_map;
+extern crate url;
+extern crate url_serde;
+extern crate walkdir;
+extern crate yaml_rust;
+
+use irc_bot::BotCmdAuthLvl as Auth;
+use irc_bot::*;
+use self::irc::client::data::User as AatxeUser;
+use self::irc::client::prelude::Client as AatxeClient;
+use self::itertools::Itertools;
+use self::quantiles::ckms::CKMS;
+use self::rando::Rando;
+use self::ref_slice::ref_slice;
+use self::smallbitvec::SmallBitVec;
+use self::smallvec::SmallVec;
 use std;
 use std::borrow::Cow;
-use std::cell::Cell;
 use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
-use std::iter;
 use std::mem;
 use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str;
 use std::sync::RwLock;
-use std::sync::RwLockReadGuard;
-use string_cache::DefaultAtom;
-use strum::IntoEnumIterator;
-use try_map::FallibleMapExt;
-use try_map::FlipResultExt;
-use url::Url;
-use url_serde::SerdeUrl;
-use util;
-use util::regex::config as rx_cfg;
-use util::regex::Regex;
-use util::yaml::any_to_str;
-use util::yaml::get_arg_by_short_or_long_key;
-use util::yaml::iter_as_seq;
-use util::yaml::scalar_to_str;
-use util::yaml::str::YAML_STR_CMD;
-use util::yaml::str::YAML_STR_ID;
-use util::yaml::str::YAML_STR_R;
-use util::yaml::str::YAML_STR_REGEX;
-use util::yaml::str::YAML_STR_S;
-use util::yaml::str::YAML_STR_STRING;
-use util::yaml::str::YAML_STR_TAG;
-use util::yaml::FW_SYNTAX_CHECK_FAIL;
-use util::MustUse;
-use util::STATIC_REGEX_PARSE_ERR_MSG;
-use walkdir::WalkDir;
-use yaml_rust;
-use yaml_rust::yaml::Hash as YamlHash;
-use yaml_rust::Yaml;
+#[cfg(test)]
+use self::strum::IntoEnumIterator;
+use self::string_cache::DefaultAtom;
+use self::try_map::FallibleMapExt;
+use self::try_map::FlipResultExt;
+use self::url::Url;
+use self::url_serde::SerdeUrl;
+use irc_bot::util;
+use irc_bot::util::regex::config as rx_cfg;
+use irc_bot::util::regex::Regex;
+use irc_bot::util::yaml::any_to_str;
+use irc_bot::util::yaml::get_arg_by_short_or_long_key;
+use irc_bot::util::yaml::iter_as_seq;
+use irc_bot::util::yaml::scalar_to_str;
+use irc_bot::util::yaml::str::YAML_STR_ID;
+use irc_bot::util::yaml::str::YAML_STR_R;
+use irc_bot::util::yaml::str::YAML_STR_REGEX;
+use irc_bot::util::yaml::str::YAML_STR_S;
+use irc_bot::util::yaml::str::YAML_STR_STRING;
+use irc_bot::util::yaml::str::YAML_STR_TAG;
+use irc_bot::util::yaml::FW_SYNTAX_CHECK_FAIL;
+use irc_bot::util::MustUse;
+use irc_bot::util::STATIC_REGEX_PARSE_ERR_MSG;
+use self::walkdir::WalkDir;
+use self::yaml_rust::Yaml;
+
 
 #[cfg(test)]
-use quickcheck as qc;
+extern crate quickcheck;
 
 #[cfg(test)]
-use url_serde::Serde;
+use self::quickcheck as qc;
+
+#[cfg(test)]
+use self::url_serde::Serde;
 
 /// This bot module provides functionality for retrieving quotations from a database thereof.
 ///
@@ -442,6 +455,7 @@ impl QuotationDatabase {
         }
     }
 
+    #[allow(dead_code)]
     fn get_file_metadata_by_id(&self, id: QuotationFileId) -> Option<&QuotationFileMetadata> {
         self.files.get(id.array_index())
     }
@@ -453,7 +467,6 @@ impl QuotationDatabase {
 
 fn quote(ctx: HandlerContext, arg: &Yaml) -> std::result::Result<Reaction, BotCmdResult> {
     let state = ctx.state;
-    let request_metadata = ctx.request_metadata();
     let params = prepare_quote_params(&ctx, arg)?;
     let reply_dest = ctx.guess_reply_dest()?;
     let qdb = read_qdb()?;
@@ -995,7 +1008,7 @@ fn rendered_quotation_byte_len(quotation: &Quotation) -> usize {
 /// candidate quotation, as there are expected to be few files and many quotations.
 fn check_file_permissions(
     QuotationDatabase { files, .. }: &QuotationDatabase,
-    MsgDest { server_id, target }: MsgDest,
+    MsgDest { target, .. }: MsgDest,
 ) -> SmallBitVec {
     // TODO: Account for the server as well as the channel, with a `servers` field in the quotation
     // files.
@@ -1042,7 +1055,6 @@ fn show_qdb_info(ctx: HandlerContext, _: &Yaml) -> Result<Reaction> {
     let qdb = read_qdb()?;
     let reply_dest = ctx.guess_reply_dest()?;
     let file_permissions = check_file_permissions(&qdb, reply_dest);
-    let any_files_are_visible = !file_permissions.is_empty() && !file_permissions.all_false();
 
     Ok(Reaction::Msgs(
         vec![format!(

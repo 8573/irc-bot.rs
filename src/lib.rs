@@ -39,16 +39,12 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
-extern crate strum_macros;
-
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 
 pub use self::core::*;
 
-pub mod modules;
 pub mod util;
 
 mod core;
