@@ -80,7 +80,36 @@ impl State {
         }
     }
 
-    pub(crate) fn read_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
+    /// Runs the given function, passing as argument the `irc` crate `IrcClient` corresponding to
+    /// the given `ServerId`
+    ///
+    /// This function allows access to the [`irc` crate]'s [`IrcClient`] structures that represent
+    /// the IRC connections that the bot is maintaining. If the [`IrcClient`] corresponding to the
+    /// given `ServerId` is found successfully, the given function is run and its result is
+    /// returned. Otherwise, an error is returned.
+    ///
+    /// For this function to be in the public API, the Cargo feature `aatxe-irc` must be enabled.
+    ///
+    /// [`IrcClient`]: <https://docs.rs/irc/*/irc/client/struct.IrcClient.html>
+    /// [`irc` crate]: <https://docs.rs/irc>
+    #[cfg(feature = "aatxe-irc")]
+    pub fn with_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
+    where
+        F: FnOnce(&aatxe::IrcClient) -> Result<T>,
+    {
+        self.with_aatxe_client_private(server_id, f)
+    }
+
+    // TODO: Use a macro to define this function only once.
+    #[cfg(not(feature = "aatxe-irc"))]
+    pub(crate) fn with_aatxe_client<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
+    where
+        F: FnOnce(&aatxe::IrcClient) -> Result<T>,
+    {
+        self.with_aatxe_client_private(server_id, f)
+    }
+
+    fn with_aatxe_client_private<F, T>(&self, server_id: ServerId, f: F) -> Result<T>
     where
         F: FnOnce(&aatxe::IrcClient) -> Result<T>,
     {

@@ -457,7 +457,7 @@ fn quote(ctx: HandlerContext, arg: &Yaml) -> std::result::Result<Reaction, BotCm
     let params = prepare_quote_params(&ctx, arg)?;
     let reply_dest = ctx.guess_reply_dest()?;
     let qdb = read_qdb()?;
-    let channel_users = state.read_aatxe_client(reply_dest.server_id, |aatxe_client| {
+    let channel_users = state.with_aatxe_client(reply_dest.server_id, |aatxe_client| {
         Ok(aatxe_client
             .list_users(reply_dest.target)
             .unwrap_or_default())

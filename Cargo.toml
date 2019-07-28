@@ -51,3 +51,10 @@ foreman = "0.4.0"
 
 [dev-dependencies]
 quickcheck = "0.6.2"
+
+[features]
+# Use aatxe's `irc` crate as the IRC backend.
+aatxe-irc = [
+  # Currently, aatxe's `irc` is the only IRC backend available.
+  #"irc"
+]
