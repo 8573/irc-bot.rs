@@ -5,9 +5,7 @@ servers:
   - name: Mozilla
     host: irc.mozilla.org
     port: 6697
-    channels:
-      - name: '#c74d'
-      - name: '#rust-irc'
+    channels: ["#c74d","#rust-irc"]
 admins:
   - nick: c74d
     user: c74d
