@@ -7,7 +7,6 @@ test:
   before_script:
     - apt-get update -yqq
     - apt-get install -yqq --no-install-recommends build-essential
-    - apt-get install -yqq shellcheck
     - ./scripts/ci/pre-build.sh
   script:
     - ./scripts/ci/build.sh
