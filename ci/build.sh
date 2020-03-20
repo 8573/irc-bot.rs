@@ -2,6 +2,10 @@
 
 set -euv
 
+# Lint our shell scripts.
+find . \( -iname '*.sh' -o -iname '*.bash' -o -iname '*.zsh' \) -print0 |
+    xargs -0t shellcheck --enable=all --check-sourced --external-sources
+
 # Print our rustc and Cargo versions in case that's useful for debugging.
 rustc --version
 cargo --version
