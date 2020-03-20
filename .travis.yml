@@ -10,6 +10,8 @@ matrix:
   allow_failures:
     - rust: nightly
 
+cache: cargo
+
 before_script:
   - rustup component add rustfmt
   - cargo install --force cargo-audit
