@@ -2,7 +2,7 @@
 
 set -euv
 
-. 'ci/examine-env.sh'
+. 'scripts/ci/examine-env.sh'
 
 # Lint our shell scripts.
 find . \( -iname '*.sh' -o -iname '*.bash' -o -iname '*.zsh' \) -print0 |

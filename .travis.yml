@@ -13,7 +13,7 @@ matrix:
 cache: cargo
 
 before_script:
-  - ./ci/pre-build.sh
+  - ./scripts/ci/pre-build.sh
 
 script:
-  - ./ci/build.sh
+  - ./scripts/ci/build.sh
