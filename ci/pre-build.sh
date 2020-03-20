@@ -11,3 +11,6 @@ cargo --version
 rustup component add rustfmt
 cargo install --force cargo-audit
 cargo install --force cargo-tree
+
+# List our dependencies in case that's useful for debugging.
+cargo tree
