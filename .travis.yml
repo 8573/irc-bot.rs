@@ -13,12 +13,7 @@ matrix:
 cache: cargo
 
 before_script:
-  - rustup component add rustfmt
-  - cargo install --force cargo-audit
-  - cargo install --force cargo-tree
+  - ./ci/pre-build.sh
 
 script:
-  - cargo fmt --all -- --check
-  - cargo tree
-  - cargo test --all --verbose
-  - test -r 'Cargo.lock' && cargo audit
+  - ./ci/build.sh
