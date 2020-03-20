@@ -9,7 +9,7 @@ cargo --version
 
 # Install Rust-related tools.
 rustup component add rustfmt
-cargo install --force cargo-audit
+cargo install --force cargo-audit || true
 cargo install --force cargo-tree
 
 # List our dependencies in case that's useful for debugging.
