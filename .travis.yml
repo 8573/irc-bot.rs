@@ -12,6 +12,11 @@ matrix:
 
 cache: cargo
 
+addons:
+  snaps:
+    - name: shellcheck
+      channel: edge
+
 before_script:
   - ./scripts/ci/pre-build.sh
 

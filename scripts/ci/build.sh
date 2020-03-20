@@ -8,7 +8,8 @@ set -euv
 # building documentation.
 shell_lint() {
     find . \( -iname '*.sh' -o -iname '*.bash' -o -iname '*.zsh' \) -print0 |
-        xargs -0t shellcheck --enable=all --check-sourced --external-sources
+        xargs -0t "${shellcheck_cmd}" \
+            --enable=all --check-sourced --external-sources
 }
 case "${ci_platform}" in
     (GitLab) ;;

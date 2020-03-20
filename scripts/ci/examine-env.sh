@@ -16,8 +16,17 @@ elif [ -n "${TRAVIS_RUST_VERSION:-}" ]; then
     rust_version="${TRAVIS_RUST_VERSION}"
 fi
 
+shellcheck_cmd=
+if [ -x '/snap/bin/shellcheck' ]; then
+    shellcheck_cmd='/snap/bin/shellcheck'
+elif command -v shellcheck; then
+    shellcheck_cmd='shellcheck'
+fi
+
 set -v
 
 ci_env="CI:${ci_platform}/Rust:${rust_version}"
 
 echo "${ci_env}"
+
+echo "${shellcheck_cmd}"
