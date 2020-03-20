@@ -6,7 +6,8 @@ set -euv
 find . \( -iname '*.sh' -o -iname '*.bash' -o -iname '*.zsh' \) -print0 |
     xargs -0t shellcheck --enable=all --check-sourced --external-sources
 
-# Print our rustc and Cargo versions in case that's useful for debugging.
+# Print our Rust and Cargo versions in case that's useful for debugging.
+echo "${TRAVIS_RUST_VERSION:-n/a}"
 rustc --version
 cargo --version
 
