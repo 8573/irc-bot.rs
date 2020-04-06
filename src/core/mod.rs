@@ -105,8 +105,9 @@ struct Server {
     socket_addr_string: String,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, CustomDebug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ServerId {
+    #[debug(with = "util::fmt::debug_uuid")]
     uuid: Uuid,
     // TODO: Maybe add a `Weak` pointing to the `State` containing the map of servers, so that
     // `ServerId`'s `Debug` implementation can return some information about the server other than
@@ -121,11 +122,6 @@ impl ServerId {
     }
 }
 
-impl fmt::Debug for ServerId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", stringify!(ServerId), self.uuid.hyphenated())
-    }
-}
 
 impl State {
     fn new<ErrF>(
