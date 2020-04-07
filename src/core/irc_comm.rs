@@ -14,6 +14,7 @@ use super::MsgMetadata;
 use super::MsgPrefix;
 use super::Reaction;
 use super::Result;
+use super::Server;
 use super::ServerId;
 use super::State;
 use irc::client::prelude as aatxe;
@@ -24,7 +25,9 @@ use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt::Display;
+use std::iter;
 use std::sync::Arc;
+use std::sync::RwLockWriteGuard;
 use std::thread;
 
 const UPDATE_MSG_PREFIX_STR: &'static str = "!!! UPDATE MESSAGE PREFIX !!!";
@@ -331,13 +334,45 @@ pub(super) fn handle_msg(
     outbox: &OutboxPort,
     input_msg: Message,
 ) -> Result<()> {
+    let server_socket_addr_dbg_string = state.server_socket_addr_dbg_string(server_id);
+
     trace!(
         "[{}] Received {:?}",
-        state.server_socket_addr_dbg_string(server_id),
+        server_socket_addr_dbg_string,
         input_msg.to_string().trim_end_matches("\r\n")
     );
 
-    match input_msg {
+    // OFTC sends `MODE` messages with the mode(s) in the message suffix. `irc` 0.13.6 doesn't
+    // recognize this as a valid `MODE` message, but, if there's no space in the suffix, then the
+    // suffix doesn't need to be a suffix. <https://github.com/aatxe/irc/pull/199> should obviate
+    // this step.
+    let msg = {
+        let Message {
+            command,
+            prefix,
+            tags,
+        } = input_msg;
+
+        let command = match command {
+            aatxe::Command::Raw(ref cmd, ref args, Some(ref suffix)) if !suffix.contains(" ") => {
+                let args = args
+                    .iter()
+                    .chain(iter::once(suffix))
+                    .map(AsRef::as_ref)
+                    .collect();
+                aatxe::Command::new(cmd, args, None)?
+            }
+            c => c,
+        };
+
+        Message {
+            command,
+            prefix,
+            tags,
+        }
+    };
+
+    match msg {
         Message {
             command: aatxe::Command::PRIVMSG(target, msg),
             prefix,
@@ -351,31 +386,17 @@ pub(super) fn handle_msg(
             msg,
         ),
         Message {
+            command: aatxe::Command::UserMODE(nick, modes),
+            ..
+        } => handle_user_modes_change(state, server_id, outbox, nick, modes),
+        Message {
             command: aatxe::Command::Response(aatxe::Response::RPL_ENDOFMOTD, ..),
             ..
         }
         | Message {
             command: aatxe::Command::Response(aatxe::Response::ERR_NOMOTD, ..),
             ..
-        } => {
-            let join_delay = state.config.join_delay;
-            if join_delay != Default::default() {
-                debug!("[{}] Sleeping before joining channels, for {:?}"
-        state.server_socket_addr_dbg_string(server_id), join_delay);
-                thread::sleep(join_delay);
-            }
-
-            for chan in &state.get_server_config(server_id)?.channels {
-                push_to_outbox(
-                    outbox,
-                    server_id,
-                    LibReaction::RawMsg(
-                        aatxe::Command::JOIN(chan.name.to_string(), None, None).into(),
-                    ),
-                );
-            }
-            Ok(())
-        }
+        } => handle_motd_end(state, server_id, outbox),
         Message {
             command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..),
             ..
@@ -428,6 +449,118 @@ fn handle_privmsg(
             Err(e) => Err(ErrorKind::ThreadSpawnFailure(e).into()),
         }
     }
+}
+
+fn handle_user_modes_change(
+    state: &State,
+    server_id: ServerId,
+    outbox: &OutboxPort,
+    nick: String,
+    modes: Vec<aatxe::Mode<aatxe::UserMode>>,
+) -> Result<()> {
+    for mode in modes.into_iter() {
+        handle_user_mode_change(state, server_id, outbox, &nick, mode)?;
+    }
+    Ok(())
+}
+
+fn handle_user_mode_change(
+    state: &State,
+    server_id: ServerId,
+    outbox: &OutboxPort,
+    nick: &str,
+    mode: aatxe::Mode<aatxe::UserMode>,
+) -> Result<()> {
+    trace!(
+        "[{server}] Handling MODE for user {nick:?}: {mode:?}",
+        server = state.server_socket_addr_dbg_string(server_id),
+        nick = nick,
+        mode = mode
+    );
+
+    match (nick == state.nick(server_id)?, mode) {
+        (true, aatxe::Mode::Plus(aatxe::UserMode::Unknown(ch), _))
+            if Some(ch) == state.get_server_config(server_id)?.await_registration_mode =>
+        {
+            let mut server = state.write_server(server_id)?;
+            server.registration_mode_obtained = true;
+            maybe_join_channels(state, server, outbox)?;
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn handle_motd_end(state: &State, server_id: ServerId, outbox: &OutboxPort) -> Result<()> {
+    trace!(
+        "[{server}] Handling end (or absence) of MotD",
+        server = state.server_socket_addr_dbg_string(server_id)
+    );
+
+    let mut server = state.write_server(server_id)?;
+
+    server.motd_finished = true;
+
+    maybe_join_channels(state, server, outbox)?;
+
+    Ok(())
+}
+
+fn maybe_join_channels(
+    state: &State,
+    server: RwLockWriteGuard<Server>,
+    outbox: &OutboxPort,
+) -> Result<bool> {
+    let server_id = server.id;
+
+    let ready = match (server.motd_finished, server.registration_mode_obtained) {
+        (false, false) => Err(
+            "I don't yet have the mode specified with `await registration mode` \
+             AND I'm not sure the MotD has stopped being sent yet",
+        ),
+        (false, true) => Err("I have the mode specified with `await registration mode` \
+                              BUT I'm not sure the MotD has stopped being sent yet"),
+        (true, false) => {
+            Err("The MotD has stopped being sent \
+                 BUT I don't yet have the mode specified with `await registration mode`")
+        }
+        (true, true) => Ok(()),
+    };
+
+    match ready {
+        Ok(()) => trace!(
+            "[{server}] About to join channels",
+            server = server.socket_addr_string
+        ),
+        Err(info) => {
+            trace!(
+                "[{server}] Not joining channels yet because: {info}",
+                server = server.socket_addr_string,
+                info = info
+            );
+            return Ok(false);
+        }
+    }
+
+    let join_delay = state.config.join_delay;
+    if join_delay != Default::default() {
+        debug!(
+            "[{server}] Sleeping before joining channels, for {delay:?}",
+            server = server.socket_addr_string,
+            delay = join_delay
+        );
+        thread::sleep(join_delay);
+    }
+
+    for chan in &state.get_server_config(server_id)?.channels {
+        push_to_outbox(
+            outbox,
+            server_id,
+            LibReaction::RawMsg(aatxe::Command::JOIN(chan.name.to_string(), None, None).into()),
+        );
+    }
+
+    Ok(true)
 }
 
 fn update_prefix_info(state: &State, _server_id: ServerId, prefix: &MsgPrefix) -> Result<()> {

@@ -12,8 +12,11 @@ use irc::client::prelude as aatxe;
 use rand::StdRng;
 use std::borrow::Cow;
 use std::path::Path;
+use std::sync::LockResult;
 use std::sync::MutexGuard;
+use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
+use std::sync::RwLockWriteGuard;
 
 impl State {
     pub fn nick(&self, server_id: ServerId) -> Result<String> {
@@ -70,8 +73,19 @@ impl State {
     }
 
     pub(super) fn read_server(&self, server_id: ServerId) -> Result<RwLockReadGuard<Server>> {
+        self.read_or_write_server(server_id, RwLock::read)
+    }
+
+    pub(super) fn write_server(&self, server_id: ServerId) -> Result<RwLockWriteGuard<Server>> {
+        self.read_or_write_server(server_id, RwLock::write)
+    }
+
+    fn read_or_write_server<'a, G, F>(&'a self, server_id: ServerId, access: F) -> Result<G>
+    where
+        F: FnOnce(&'a RwLock<Server>) -> LockResult<G>,
+    {
         match self.servers.get(&server_id) {
-            Some(lock) => match lock.read() {
+            Some(lock) => match access(lock) {
                 Ok(guard) => Ok(guard),
                 Err(_) => {
                     Err(ErrorKind::LockPoisoned(format!("server {:?}", server_id).into()).into())

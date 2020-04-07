@@ -105,6 +105,8 @@ struct Server {
     id: ServerId,
     aatxe_config: Arc<aatxe::Config>,
     socket_addr_string: String,
+    motd_finished: bool,
+    registration_mode_obtained: bool,
 }
 
 #[derive(Copy, Clone, CustomDebug, Eq, PartialEq, PartialOrd, Ord)]
@@ -289,6 +291,8 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
             id: server_id,
             aatxe_config: aatxe_config.clone(),
             socket_addr_string,
+            motd_finished: false,
+            registration_mode_obtained: false,
         };
 
         match servers.insert(server_id, RwLock::new(server)) {

@@ -42,6 +42,11 @@ error_chain! {
             display("IRC error: {}", inner)
         }
 
+        IrcCrateMessageParseError(inner: irc::error::MessageParseError) {
+            description("IRC message parsing error")
+            display("IRC message parsing error: {:?}", inner)
+        }
+
         ModuleRegistryClash(old: ModuleInfo, new: ModuleInfo) {
             description("module registry clash")
             display("Failed to load a new module because it would have overwritten an old module. \
@@ -141,5 +146,11 @@ error_chain! {
 impl From<irc::error::IrcError> for Error {
     fn from(orig: irc::error::IrcError) -> Self {
         ErrorKind::IrcCrate(orig).into()
+    }
+}
+
+impl From<irc::error::MessageParseError> for Error {
+    fn from(orig: irc::error::MessageParseError) -> Self {
+        ErrorKind::IrcCrateMessageParseError(orig).into()
     }
 }

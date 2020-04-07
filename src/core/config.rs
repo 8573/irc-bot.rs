@@ -19,7 +19,6 @@ use util::regex::Regex;
 
 mod inner {
     use smallvec::SmallVec;
-    use std::time::Duration;
 
     /// Configuration structure that can be deserialized by Serde.
     ///
@@ -117,6 +116,15 @@ mod inner {
 ///   - `TLS` — The value of this field, if specified, should be `true` or `false`, specifying
 ///   whether the bot should attempt to connect to the server using Transport Layer Security (TLS).
 ///   This field is optional; its value defaults to `true`.
+///
+///   - `await registration mode` — The value of this field, if specified, should be a single
+///   ASCII character, which is to be taken as a user mode expected to be set by the server to mark
+///   the bot as identified to a user account. Setting this field means that the bot should wait
+///   until it receives this mode before joining channels. If both this field and `join delay` are
+///   set, the join delay should not begin until this mode has been received. This field is useful,
+///   e.g., for joining channels that allow only registered users or for waiting for a hostname
+///   cloak to be applied. This is more effective than `join delay`, but it requires that the IRC
+///   server mark identified users with a user mode, which many do not.
 ///
 ///   - `channels` — The value of this field should be a sequence of mappings, which specify IRC
 ///   channels on the server. The fields of these mappings are termed _per-channel settings_ and
@@ -255,6 +263,9 @@ pub(super) struct Server {
 
     #[serde(default)]
     pub channels: SmallVec<[Channel; 24]>,
+
+    #[serde(default, rename = "await registration mode")]
+    pub(super) await_registration_mode: Option<char>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -414,6 +425,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 ref nick_password,
                 ref server_password,
                 channels: _,
+                await_registration_mode: _,
             } = server_cfg;
 
             let server_cfg_idx = i.try_into()?;
