@@ -117,6 +117,14 @@ error_chain! {
             display("Integer overflow: {}", desc)
         }
 
+        ExcessiveServerConfigIndex(idx: usize) {
+            description("attempt to construct an excessively high index into the list of \
+                         configured servers")
+            display("An attempt to construct an index into the list of configured servers failed \
+                     because the desired index ({idx:?}) could not be stored in 16 bits.",
+                    idx = idx)
+        }
+
         Any(inner: Box<Any + Send + 'static>) {
             description("miscellaneous error")
             display("Error: {}", util::fmt::FmtAny(inner.as_ref()))

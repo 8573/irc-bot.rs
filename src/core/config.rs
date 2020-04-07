@@ -2,13 +2,16 @@ use super::aatxe;
 use super::pkg_info;
 use super::ErrorKind;
 use super::Result;
+use super::ServerConfigIndex;
 use serde_yaml;
 use smallvec::SmallVec;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use util::irc::ChannelName;
 use util::lock::RoLock;
 use util::regex::config as rx_cfg;
@@ -16,6 +19,7 @@ use util::regex::Regex;
 
 mod inner {
     use smallvec::SmallVec;
+    use std::time::Duration;
 
     /// Configuration structure that can be deserialized by Serde.
     ///
@@ -29,6 +33,9 @@ mod inner {
 
         #[serde(default)]
         pub(super) realname: String,
+
+        #[serde(default, rename = "join delay")]
+        pub(super) join_delay: u16,
 
         // TODO: admins should be per-server.
         #[serde(default)]
@@ -62,6 +69,12 @@ mod inner {
 /// as the bot's IRC "realname" or "GECOS string", which has even less effect than the username and
 /// often is used to display information about a bot's software. This field is optional; its value
 /// defaults to information about the bot's software.
+///
+/// - `join delay` — The value of this field, if specified, should be a non-negative integer, which
+/// is to be used as a number of seconds to wait between connecting to a server and joining
+/// channels on that server, e.g., to give the server time to issue the bot a hostname cloak. This
+/// field is optional; its value defaults to zero seconds. TODO: This should be overridable
+/// per-server, or even per-channel.
 ///
 /// - `servers` — The value of this field should be a sequence of mappings, which specify IRC
 /// servers to which the bot should attempt to connect. The fields of these mappings are termed
@@ -189,6 +202,7 @@ mod inner {
 /// [YAML]: <https://en.wikipedia.org/wiki/YAML>
 /// [`Config::try_from_path`]: <struct.Config.html#method.try_from_path>
 /// [`Config`]: <struct.Config.html>
+/// [`Duration`]: <https://doc.rust-lang.org/std/time/struct.Duration.html>
 /// [`regex` flag]: <https://docs.rs/regex/*/regex/#grouping-and-flags>
 /// [`regex` syntax]: <https://docs.rs/regex/*/regex/#syntax>
 /// [`regex`]: <https://docs.rs/regex/*/regex/>
@@ -204,7 +218,9 @@ pub struct Config {
 
     pub(super) servers: SmallVec<[Server; 8]>,
 
-    pub(super) aatxe_configs: SmallVec<[Arc<aatxe::Config>; 8]>,
+    pub(super) aatxe_configs: SmallVec<[(ServerConfigIndex, Arc<aatxe::Config>); 8]>,
+
+    pub(super) join_delay: Duration,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -381,11 +397,15 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
         realname,
         admins,
         servers,
+        join_delay,
     } = cfg;
+
+    let join_delay = Duration::from_secs(join_delay.into());
 
     let aatxe_configs = servers
         .iter()
-        .map(|server_cfg| {
+        .enumerate()
+        .map(|(i, server_cfg)| {
             let &Server {
                 name: _,
                 ref host,
@@ -393,10 +413,12 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 tls,
                 ref nick_password,
                 ref server_password,
-                ref channels,
+                channels: _,
             } = server_cfg;
 
-            Arc::new(aatxe::Config {
+            let server_cfg_idx = i.try_into()?;
+
+            let aatxe_config = Arc::new(aatxe::Config {
                 // TODO: Allow nickname etc. to be configured per-server.
                 nickname: Some(nickname.clone()),
                 nick_password: nick_password.clone(),
@@ -406,16 +428,12 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
                 server: Some(host.clone()),
                 port: Some(port),
                 use_ssl: Some(tls),
-                channels: Some(
-                    channels
-                        .iter()
-                        .map(|chan| chan.name.as_ref().into())
-                        .collect(),
-                ),
                 ..Default::default()
-            })
+            });
+
+            Ok((server_cfg_idx, aatxe_config))
         })
-        .collect();
+        .collect::<Result<_>>()?;
 
     Ok(Config {
         nickname,
@@ -424,6 +442,7 @@ fn cook_config(mut cfg: inner::Config) -> Result<Config> {
         admins,
         servers,
         aatxe_configs,
+        join_delay,
     })
 }
 

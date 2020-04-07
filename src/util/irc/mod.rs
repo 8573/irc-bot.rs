@@ -106,6 +106,13 @@ impl ChannelName {
             Err(ErrorKind::InvalidChannelName(name).into())
         }
     }
+
+    /// Returns the channel name as a standard `String`
+    ///
+    /// This is guaranteed to be equivalent to `ToString::to_string`.
+    pub fn to_string(&self) -> String {
+        self.as_ref().to_owned()
+    }
 }
 
 impl Deref for ChannelName {
@@ -136,6 +143,13 @@ impl PartialEq for ChannelName {
 }
 
 impl Eq for ChannelName {}
+
+impl fmt::Display for ChannelName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s: &str = self.as_ref();
+        write!(f, "{}", s)
+    }
+}
 
 impl<'de> Deserialize<'de> for ChannelName {
     fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error>
@@ -215,6 +229,12 @@ mod tests {
             let (a, b, c) = unchecked_channel_names(a, b, c);
 
             !(a > b && b > c) || a > c
+        }
+
+        fn to_string_equiv(s: String) -> bool {
+            let cn = ChannelName(s.into());
+
+            ChannelName::to_string(&cn) == ToString::to_string(&cn)
         }
     }
 }

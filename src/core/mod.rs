@@ -41,12 +41,14 @@ use rand::StdRng;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt;
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
+use util;
 use uuid::Uuid;
 
 pub(crate) mod bot_cmd;
@@ -109,19 +111,35 @@ struct Server {
 pub struct ServerId {
     #[debug(with = "util::fmt::debug_uuid")]
     uuid: Uuid,
+
+    config_idx: ServerConfigIndex,
     // TODO: Maybe add a `Weak` pointing to the `State` containing the map of servers, so that
     // `ServerId`'s `Debug` implementation can return some information about the server other than
     // its UUID, such as its domain name.
 }
 
 impl ServerId {
-    fn new() -> Self {
+    fn new(config_idx: ServerConfigIndex) -> Self {
         ServerId {
             uuid: Uuid::new_v4(),
+            config_idx,
         }
     }
 }
 
+/// The index of a server in the list of servers in the configuration file
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+struct ServerConfigIndex(u16);
+
+impl TryFrom<usize> for ServerConfigIndex {
+    type Error = Error;
+
+    fn try_from(n: usize) -> Result<Self> {
+        n.try_into()
+            .map(ServerConfigIndex)
+            .map_err(|_| ErrorKind::ExcessiveServerConfigIndex(n).into())
+    }
+}
 
 impl State {
     fn new<ErrF>(
@@ -257,8 +275,8 @@ pub fn run<Cfg, ModlData, ErrF, ModlCtor, Modls>(
 
     let mut servers = BTreeMap::new();
 
-    for aatxe_config in &state.config.aatxe_configs {
-        let server_id = ServerId::new();
+    for (i, aatxe_config) in &state.config.aatxe_configs {
+        let server_id = ServerId::new(*i);
 
         let socket_addr_string = match (&aatxe_config.server, aatxe_config.port) {
             (Some(h), Some(p)) => format!("{}:{}", h, p),

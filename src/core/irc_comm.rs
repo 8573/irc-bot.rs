@@ -351,6 +351,32 @@ pub(super) fn handle_msg(
             msg,
         ),
         Message {
+            command: aatxe::Command::Response(aatxe::Response::RPL_ENDOFMOTD, ..),
+            ..
+        }
+        | Message {
+            command: aatxe::Command::Response(aatxe::Response::ERR_NOMOTD, ..),
+            ..
+        } => {
+            let join_delay = state.config.join_delay;
+            if join_delay != Default::default() {
+                debug!("[{}] Sleeping before joining channels, for {:?}"
+        state.server_socket_addr_dbg_string(server_id), join_delay);
+                thread::sleep(join_delay);
+            }
+
+            for chan in &state.get_server_config(server_id)?.channels {
+                push_to_outbox(
+                    outbox,
+                    server_id,
+                    LibReaction::RawMsg(
+                        aatxe::Command::JOIN(chan.name.to_string(), None, None).into(),
+                    ),
+                );
+            }
+            Ok(())
+        }
+        Message {
             command: aatxe::Command::Response(aatxe::Response::RPL_MYINFO, ..),
             ..
         } => {

@@ -5,6 +5,7 @@ use super::ErrorKind;
 use super::MsgPrefix;
 use super::Result;
 use super::Server;
+use super::ServerConfigIndex;
 use super::ServerId;
 use super::State;
 use irc::client::prelude as aatxe;
@@ -78,6 +79,17 @@ impl State {
             },
             None => Err(ErrorKind::UnknownServer(server_id).into()),
         }
+    }
+
+    pub(super) fn get_server_config(&self, server_id: ServerId) -> Result<&config::Server> {
+        let ServerId {
+            config_idx: ServerConfigIndex(idx),
+            ..
+        } = server_id;
+        self.config
+            .servers
+            .get::<usize>(idx.into())
+            .ok_or_else(|| ErrorKind::UnknownServer(server_id).into())
     }
 
     /// Runs the given function, passing as argument the `irc` crate `IrcClient` corresponding to
