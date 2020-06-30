@@ -71,9 +71,7 @@ mod inner {
 ///
 ///   - `name` — The value of this field should be a string that does not include a US-ASCII
 ///   character considered a Common Separator in Unicode (namely `,`, `.`, `/`, or `:`). This field
-///   specifies a name to be used to identify the server. This field's value should be enclosed in
-///   quotation marks (`'...'` or `"..."`) so that any leading `#` character is not interpreted as
-///   the start of a comment.
+///   specifies a name to be used to identify the server.
 ///
 ///     A concept that depends on this field is the **_channel identifier_**. For each server, each
 ///     IRC channel thereon that is known to the bot is assigned a channel identifier, which is a
@@ -106,7 +104,9 @@ mod inner {
 ///   This field is optional; its value defaults to `true`.
 ///
 ///   - `channels` — The value of this field should be a sequence of mappings, which specify IRC
-///   channels on the server. The fields of these mappings are termed _per-channel settings_ and
+///   channels on the server. This field's value should be enclosed in quotation marks
+///   (`'...'` or `"..."`) so that any leading `#` character is not interpreted as
+///   the start of a comment. The fields of these mappings are termed _per-channel settings_ and
 ///   will be documented after the following code example.
 ///
 ///     ```yaml
