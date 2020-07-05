@@ -83,9 +83,7 @@ mod inner {
 ///
 ///   - `name` — The value of this field should be a string that does not include a US-ASCII
 ///   character considered a Common Separator in Unicode (namely `,`, `.`, `/`, or `:`). This field
-///   specifies a name to be used to identify the server. This field's value should be enclosed in
-///   quotation marks (`'...'` or `"..."`) so that any leading `#` character is not interpreted as
-///   the start of a comment.
+///   specifies a name to be used to identify the server.
 ///
 ///     A concept that depends on this field is the **_channel identifier_**. For each server, each
 ///     IRC channel thereon that is known to the bot is assigned a channel identifier, which is a
@@ -184,7 +182,9 @@ mod inner {
 ///     The available per-channel settings for each channel `C` follow, listed by their keys:
 ///
 ///     - `name` — The value of this per-channel setting should be a string, specifying the name of
-///     the channel `C`, such as `##rust`.
+///     the channel `C`, such as `##rust`.  This field's value should be enclosed in quotation
+///     marks (`'...'` or `"..."`) so that any leading `#` character is not interpreted as the
+///     start of a comment.
 ///
 ///     - `autojoin` — The value of this per-channel setting should be `true` or `false`,
 ///     specifying whether the bot should attempt to join the channel `C` upon connecting to the
