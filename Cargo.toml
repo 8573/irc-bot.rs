@@ -35,7 +35,7 @@ serde = "1.0.80"
 serde_derive = "1.0.80"
 serde_yaml = "0.8.4"
 smallbitvec = "2.1.1"
-smallvec = {version = "0.6.5", features = ["serde", "std"]}
+smallvec = {version = "1.4.0", features = ["serde"]}
 string_cache = "0.7.3"
 strum = "0.10.0"
 strum_macros = "0.10.0"
